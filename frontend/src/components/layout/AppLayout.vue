@@ -1,52 +1,28 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-dark-950">
-    <!-- Background Decoration -->
-    <div class="pointer-events-none fixed inset-0 bg-mesh-gradient"></div>
-
-    <!-- Sidebar -->
-    <AppSidebar />
-
-    <!-- Main Content Area -->
-    <div
-      class="relative min-h-screen transition-all duration-300"
-      :class="[sidebarCollapsed ? 'lg:ml-[72px]' : 'lg:ml-64']"
-    >
-      <!-- Header -->
-      <AppHeader />
-
-      <!-- Main Content -->
-      <main class="p-4 md:p-6 lg:p-8">
-        <slot />
-      </main>
-    </div>
-  </div>
+  <AppShell ref="shellRef">
+    <slot />
+  </AppShell>
 </template>
 
 <script setup lang="ts">
-import '@/styles/onboarding.css'
-import { computed, onMounted } from 'vue'
-import { useAppStore } from '@/stores'
-import { useAuthStore } from '@/stores/auth'
-import { useOnboardingTour } from '@/composables/useOnboardingTour'
-import { useOnboardingStore } from '@/stores/onboarding'
-import AppSidebar from './AppSidebar.vue'
-import AppHeader from './AppHeader.vue'
+/**
+ * AppLayout —— 全站唯一的外壳入口。
+ *
+ * 结构级重构（2026-10-17）：
+ *   旧实现 = 贴边固定侧边栏 + 贴顶 header + 平铺内容区（bg-gray-50 / bg-mesh-gradient）
+ *   新实现 = 浮动玻璃侧边栏（分组导航）+ 悬浮玻璃顶栏 + 独立滚动视口（液态背景层）
+ *
+ * 所有页面都通过 `<AppLayout>…</AppLayout>` 包裹，因此只改这里即可让全站换骨架，
+ * 页面内部逻辑与数据零改动。
+ */
+import { ref } from 'vue'
+import AppShell from '@/shell/AppShell.vue'
 
-const appStore = useAppStore()
-const authStore = useAuthStore()
-const sidebarCollapsed = computed(() => appStore.sidebarCollapsed)
-const isAdmin = computed(() => authStore.user?.role === 'admin')
+const shellRef = ref<InstanceType<typeof AppShell> | null>(null)
 
-const { replayTour } = useOnboardingTour({
-  storageKey: isAdmin.value ? 'admin_guide' : 'user_guide',
-  autoStart: true
-})
-
-const onboardingStore = useOnboardingStore()
-
-onMounted(() => {
-  onboardingStore.setReplayCallback(replayTour)
-})
+function replayTour() {
+  shellRef.value?.replayTour?.()
+}
 
 defineExpose({ replayTour })
 </script>

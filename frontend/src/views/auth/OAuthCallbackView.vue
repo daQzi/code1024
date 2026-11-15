@@ -1,39 +1,39 @@
 <template>
-  <div class="min-h-screen bg-gray-50 px-4 py-10 dark:bg-dark-900">
-    <div class="mx-auto max-w-2xl">
-      <div v-if="isProcessing" class="card p-6 text-center">
-        <div class="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></div>
-        <h1 class="mt-4 text-lg font-semibold text-gray-900 dark:text-white">
+  <AuthLayout>
+    <div class="auth-flow oauth-callback">
+      <div v-if="isProcessing" class="auth-form" role="status" aria-live="polite">
+        <div class="oauth-spinner" aria-hidden="true"></div>
+        <h1 class="auth-heading">
           {{ t('auth.oauth.callbackTitle') }}
         </h1>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        <p class="auth-description">
           {{ t('auth.oauth.callbackHint') }}
         </p>
       </div>
 
-      <div v-else-if="needsRegistrationCompletion" class="card p-6">
-        <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+      <div v-else-if="needsRegistrationCompletion" class="auth-form">
+        <h1 class="auth-heading">
           {{ t('auth.oidc.callbackTitle', { providerName }) }}
         </h1>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        <p class="auth-description">
           {{ registrationHint }}
         </p>
 
-        <div class="mt-6 space-y-4">
+        <div class="auth-form">
           <div>
-            <label class="input-label">{{ t('auth.emailLabel') }}</label>
+            <label class="input-label" for="oauth-registration-email">{{ t('auth.emailLabel') }}</label>
             <input
               class="input w-full"
               type="email"
-              :value="registrationEmail"
+              id="oauth-registration-email" :value="registrationEmail"
               readonly
               disabled
             />
           </div>
           <div>
-            <label class="input-label">{{ t('auth.passwordLabel') }}</label>
+            <label class="input-label" for="oauth-registration-password">{{ t('auth.passwordLabel') }}</label>
             <input
-              v-model="password"
+              id="oauth-registration-password" v-model="password"
               type="password"
               class="input w-full"
               :placeholder="t('auth.createPasswordPlaceholder')"
@@ -43,9 +43,9 @@
             />
           </div>
           <div>
-            <label class="input-label">{{ t('auth.confirmPassword') }}</label>
+            <label class="input-label" for="oauth-registration-confirm-password">{{ t('auth.confirmPassword') }}</label>
             <input
-              v-model="confirmPassword"
+              id="oauth-registration-confirm-password" v-model="confirmPassword"
               type="password"
               class="input w-full"
               :placeholder="t('auth.confirmPasswordPlaceholder')"
@@ -55,9 +55,9 @@
             />
           </div>
           <div v-if="invitationRequired">
-            <label class="input-label">{{ t('auth.invitationCodeLabel') }}</label>
+            <label class="input-label" for="oauth-invitation-code">{{ t('auth.invitationCodeLabel') }}</label>
             <input
-              v-model="invitationCode"
+              id="oauth-invitation-code" v-model="invitationCode"
               type="text"
               class="input w-full"
               :placeholder="t('auth.invitationCodePlaceholder')"
@@ -65,7 +65,7 @@
               @keyup.enter="handleSubmitRegistration"
             />
           </div>
-          <p v-if="registrationError" class="text-sm text-red-600 dark:text-red-400">
+          <p v-if="registrationError" class="oauth-error" role="alert">
             {{ registrationError }}
           </p>
           <button
@@ -79,11 +79,11 @@
         </div>
       </div>
 
-      <div v-else-if="invalidCallback" class="card p-6 text-center">
-        <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+      <div v-else-if="invalidCallback" class="auth-form">
+        <h1 class="auth-heading">
           {{ t('auth.oauth.invalidCallbackTitle') }}
         </h1>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        <p class="auth-description">
           {{ t('auth.oauth.invalidCallbackHint') }}
         </p>
         <button class="btn btn-primary mt-6" type="button" @click="router.replace('/login')">
@@ -91,19 +91,19 @@
         </button>
       </div>
 
-      <div v-else class="card p-6">
-        <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
+      <div v-else class="auth-form">
+        <h1 class="auth-heading">
           {{ t('auth.oauth.callbackTitle') }}
         </h1>
-        <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+        <p class="auth-description">
           {{ t('auth.oauth.callbackHint') }}
         </p>
 
-        <div class="mt-6 space-y-4">
+        <div class="auth-form">
           <div>
-            <label class="input-label">{{ t('auth.oauth.code') }}</label>
-            <div class="flex gap-2">
-              <input class="input flex-1 font-mono text-sm" :value="code" readonly />
+            <label class="input-label" for="oauth-code">{{ t('auth.oauth.code') }}</label>
+            <div class="oauth-copy-row">
+              <input class="input flex-1 font-mono text-sm" id="oauth-code" :value="code" readonly />
               <button class="btn btn-secondary" type="button" :disabled="!code" @click="copy(code)">
                 {{ t('common.copy') }}
               </button>
@@ -111,9 +111,9 @@
           </div>
 
           <div>
-            <label class="input-label">{{ t('auth.oauth.state') }}</label>
-            <div class="flex gap-2">
-              <input class="input flex-1 font-mono text-sm" :value="state" readonly />
+            <label class="input-label" for="oauth-state">{{ t('auth.oauth.state') }}</label>
+            <div class="oauth-copy-row">
+              <input class="input flex-1 font-mono text-sm" id="oauth-state" :value="state" readonly />
               <button
                 class="btn btn-secondary"
                 type="button"
@@ -126,9 +126,9 @@
           </div>
 
           <div>
-            <label class="input-label">{{ t('auth.oauth.fullUrl') }}</label>
-            <div class="flex gap-2">
-              <input class="input flex-1 font-mono text-xs" :value="fullUrl" readonly />
+            <label class="input-label" for="oauth-full-url">{{ t('auth.oauth.fullUrl') }}</label>
+            <div class="oauth-copy-row">
+              <input class="input flex-1 font-mono text-xs" id="oauth-full-url" :value="fullUrl" readonly />
               <button
                 class="btn btn-secondary"
                 type="button"
@@ -142,11 +142,12 @@
         </div>
       </div>
     </div>
-  </div>
+  </AuthLayout>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { AuthLayout } from '@/components/layout'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useClipboard } from '@/composables/useClipboard'
@@ -411,3 +412,5 @@ const copy = (value: string) => {
   copyToClipboard(value)
 }
 </script>
+
+<style scoped src="./auth-callback.css"></style>

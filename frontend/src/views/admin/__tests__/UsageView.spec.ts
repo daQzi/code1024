@@ -1,8 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, ref } from 'vue'
 
 import UsageView from '../UsageView.vue'
+
+enableAutoUnmount(afterEach)
+beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 80, 96, 40))
+})
+afterEach(() => vi.restoreAllMocks())
 
 const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listErrorLogs, routeQuery, aoaToSheet, sheetAddAoa, saveAs, xlsxWrite } = vi.hoisted(() => {
   vi.stubGlobal('localStorage', {
@@ -511,9 +517,12 @@ describe('admin UsageView request ID column visibility', () => {
     )
 
     await wrapper.get('button[title="admin.users.columnSettings"]').trigger('click')
-    const requestIdToggle = wrapper.findAll('button').find((button) => button.text() === 'Request ID')
-    expect(requestIdToggle).toBeDefined()
-    await requestIdToggle!.trigger('click')
+    const requestIdElement = document.querySelector<HTMLButtonElement>('[data-testid="usage-column-toggle-request_id"]')!
+    expect(requestIdElement?.parentElement?.parentElement).toBe(document.body)
+    expect(requestIdElement.parentElement?.style.position).toBe('fixed')
+    await new DOMWrapper(requestIdElement).trigger('click')
+    expect(requestIdElement.getAttribute('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="usage-column-settings"]').attributes('aria-expanded')).toBe('true')
 
     expect(usageTable.props('columns')).toEqual(
       expect.arrayContaining([expect.objectContaining({ key: 'request_id', label: 'Request ID' })]),
@@ -556,9 +565,9 @@ describe('admin UsageView request ID column visibility', () => {
     )
 
     await wrapper.get('button[title="admin.users.columnSettings"]').trigger('click')
-    const upstreamToggle = wrapper.findAll('button').find((button) => button.text() === 'Upstream ID')
-    expect(upstreamToggle).toBeDefined()
-    await upstreamToggle!.trigger('click')
+    const upstreamToggle = document.querySelector<HTMLButtonElement>('[data-testid="usage-column-toggle-upstream_request_id"]')!
+    expect(upstreamToggle?.parentElement?.parentElement).toBe(document.body)
+    await new DOMWrapper(upstreamToggle).trigger('click')
 
     expect(usageTable.props('columns')).toEqual(
       expect.arrayContaining([expect.objectContaining({ key: 'upstream_request_id', label: 'Upstream ID' })]),

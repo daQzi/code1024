@@ -130,6 +130,7 @@
     </div>
 
     <!-- 删除确认：吊销凭据需验证当前密码，防止被窃会话静默移除 Passkey -->
+    <Teleport to="body">
     <div v-if="deleteTarget" class="fixed inset-0 z-50 overflow-y-auto">
       <div class="flex min-h-full items-center justify-center p-4">
         <div class="fixed inset-0 bg-black/50 transition-opacity" @click="closeDeleteDialog"></div>
@@ -139,7 +140,7 @@
           <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('profile.passkey.deleteTitle') }}
           </h3>
-          <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p class="mt-2 break-words text-sm text-gray-500 dark:text-gray-400">
             {{ t('profile.passkey.deleteConfirm', { name: deleteTarget.name }) }}
           </p>
           <form class="mt-4 space-y-4" @submit.prevent="confirmDelete">
@@ -173,6 +174,7 @@
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>
 

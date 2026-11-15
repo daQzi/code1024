@@ -32,6 +32,10 @@ const {
   apiPostMock: vi.fn(),
 }))
 
+vi.mock('@/components/layout', () => ({
+  AuthLayout: { template: '<div><slot /></div>' },
+}))
+
 vi.mock('vue-router', () => ({
   useRoute: () => routeState,
   useRouter: () => ({

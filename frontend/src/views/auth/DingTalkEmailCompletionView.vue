@@ -1,11 +1,11 @@
 <template>
   <AuthLayout>
-    <div class="space-y-6">
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+    <div class="auth-flow oauth-callback">
+      <div class="auth-heading">
+        <h1>
           {{ t('auth.dingtalk.createAccountTitle') }}
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        </h1>
+        <p class="auth-description">
           {{ t('auth.oauthFlow.createAccountHint') }}
         </p>
       </div>
@@ -137,3 +137,5 @@ function handleSwitchToBind(email: string) {
   navigateToBindLogin(email)
 }
 </script>
+
+<style scoped src="./auth-callback.css"></style>

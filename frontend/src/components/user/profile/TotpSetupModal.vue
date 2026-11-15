@@ -1,4 +1,5 @@
 <template>
+  <Teleport to="body">
   <div class="fixed inset-0 z-50 overflow-y-auto" @click.self="$emit('close')">
     <div class="flex min-h-full items-center justify-center p-4">
       <div class="fixed inset-0 bg-black/50 transition-opacity" @click="$emit('close')"></div>
@@ -26,13 +27,13 @@
             <div v-if="verificationMethod === 'email'" class="space-y-4">
               <div>
                 <label class="input-label">{{ t('profile.totp.emailCode') }}</label>
-                <div class="flex gap-2">
+                <div class="flex flex-wrap gap-2">
                   <input
                     v-model="verifyForm.emailCode"
                     type="text"
                     maxlength="6"
                     inputmode="numeric"
-                    class="input flex-1"
+                    class="input min-w-0 flex-1 basis-32"
                     :placeholder="t('profile.totp.enterEmailCode')"
                   />
                   <button
@@ -92,12 +93,12 @@
                 {{ t('profile.totp.manualEntry') }}
               </p>
               <div class="flex items-center justify-center gap-2">
-                <code class="rounded bg-gray-100 px-3 py-2 font-mono text-sm dark:bg-dark-700">
+                <code class="min-w-0 break-all rounded bg-gray-100 px-3 py-2 font-mono text-sm dark:bg-dark-700">
                   {{ setupData.secret }}
                 </code>
                 <button
                   type="button"
-                  class="rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-dark-700"
+                  class="shrink-0 rounded p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-dark-700"
                   @click="copySecret"
                 >
                   <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -130,7 +131,7 @@
               <label class="input-label text-center block mb-3">
                 {{ t('profile.totp.enterCode') }}
               </label>
-              <div class="flex justify-center gap-2">
+              <div class="grid grid-cols-6 gap-1.5 sm:gap-2">
                 <input
                   v-for="(_, index) in 6"
                   :key="index"
@@ -140,7 +141,7 @@
                   maxlength="1"
                   inputmode="numeric"
                   pattern="[0-9]"
-                  class="h-12 w-10 rounded-lg border border-gray-300 text-center text-lg font-semibold focus:border-primary-500 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700"
+                  class="h-12 w-full min-w-0 rounded-lg border border-gray-300 text-center text-lg font-semibold focus:border-primary-500 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700"
                   @input="handleCodeInput($event, index)"
                   @keydown="handleKeydown($event, index)"
                   @paste="handlePaste"
@@ -165,6 +166,7 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

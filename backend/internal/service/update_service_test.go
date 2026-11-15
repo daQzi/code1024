@@ -185,3 +185,9 @@ func TestUpdateServiceRollbackToVersionAcceptsVPrefix(t *testing.T) {
 	require.NotErrorIs(t, err, ErrRollbackVersionNotAllowed)
 	require.Contains(t, err.Error(), "no compatible release found")
 }
+
+func TestCustomBuildCannotInstallOfficialReleaseAssets(t *testing.T) {
+	svc := NewUpdateService(nil, nil, "0.2.21", "custom")
+	err := svc.applyReleaseAssets(context.Background(), nil)
+	require.ErrorContains(t, err, "custom builds must be upgraded from their source repository")
+}

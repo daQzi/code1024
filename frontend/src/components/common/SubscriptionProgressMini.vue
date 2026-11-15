@@ -2,7 +2,10 @@
   <div v-if="subscriptionFeatureEnabled && hasActiveSubscriptions" class="relative" ref="containerRef">
     <!-- Mini Progress Display -->
     <button
+      ref="triggerRef"
+      type="button"
       @click="toggleTooltip"
+      :aria-expanded="tooltipOpen"
       class="flex cursor-pointer items-center gap-2 rounded-xl bg-purple-50 px-3 py-1.5 transition-colors hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30"
       :title="t('subscriptionProgress.viewDetails')"
     >
@@ -24,12 +27,15 @@
     </button>
 
     <!-- Hover/Click Tooltip -->
+    <Teleport to="body">
     <transition name="dropdown">
       <div
         v-if="tooltipOpen"
-        class="absolute right-0 z-50 mt-2 w-[340px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800"
+        ref="panelRef"
+        :style="panelStyle"
+        class="flex min-w-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800"
       >
-        <div class="border-b border-gray-100 p-3 dark:border-dark-700">
+        <div class="shrink-0 border-b border-gray-100 p-3 dark:border-dark-700">
           <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
             {{ t('subscriptionProgress.title') }}
           </h3>
@@ -38,14 +44,14 @@
           </p>
         </div>
 
-        <div class="max-h-64 overflow-y-auto">
+        <div class="min-h-0 max-h-64 overflow-y-auto overscroll-contain">
           <div
             v-for="subscription in displaySubscriptions"
             :key="subscription.id"
             class="border-b border-gray-50 p-3 last:border-b-0 dark:border-dark-700/50"
           >
-            <div class="mb-2 flex items-center justify-between">
-              <span class="text-sm font-medium text-gray-900 dark:text-white">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span class="min-w-0 break-words text-sm font-medium text-gray-900 dark:text-white">
                 {{ subscription.group?.name || `Group #${subscription.group_id}` }}
               </span>
               <span
@@ -163,10 +169,10 @@
           </div>
         </div>
 
-        <div class="border-t border-gray-100 p-2 dark:border-dark-700">
+        <div class="shrink-0 border-t border-gray-100 p-2 dark:border-dark-700">
           <router-link
             to="/subscriptions"
-            @click="closeTooltip"
+            @click="closeTooltip()"
             class="block w-full py-1 text-center text-xs text-primary-600 hover:underline dark:text-primary-400"
           >
             {{ t('subscriptionProgress.viewAll') }}
@@ -174,24 +180,28 @@
         </div>
       </div>
     </transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import { useSubscriptionStore } from '@/stores'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import type { UserSubscription } from '@/types'
 import { getExpirationDateRelation } from '@/utils/subscriptionQuota'
+import { useFloatingDropdown } from '@/composables/useFloatingDropdown'
 
 const { t } = useI18n()
 
 const subscriptionStore = useSubscriptionStore()
 
-const containerRef = ref<HTMLElement | null>(null)
-const tooltipOpen = ref(false)
+const {
+  containerRef, triggerRef, panelRef, panelStyle, isOpen: tooltipOpen,
+  toggle: toggleTooltip, close: closeTooltip,
+} = useFloatingDropdown({ width: 340, maxHeight: 400 })
 
 // Use store data instead of local state
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
@@ -283,22 +293,7 @@ function getDaysRemainingClass(expiresAt: string): string {
   return 'text-gray-500 dark:text-dark-400'
 }
 
-function toggleTooltip() {
-  tooltipOpen.value = !tooltipOpen.value
-}
-
-function closeTooltip() {
-  tooltipOpen.value = false
-}
-
-function handleClickOutside(event: MouseEvent) {
-  if (containerRef.value && !containerRef.value.contains(event.target as Node)) {
-    closeTooltip()
-  }
-}
-
 onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
   // Trigger initial fetch if not already loaded
   // The actual data loading is handled by App.vue globally
   if (!subscriptionFeatureEnabled.value) return
@@ -307,9 +302,6 @@ onMounted(() => {
   })
 })
 
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
 </script>
 
 <style scoped>

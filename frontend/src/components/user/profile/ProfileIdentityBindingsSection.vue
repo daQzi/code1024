@@ -39,6 +39,7 @@
                 size="sm"
                 class="text-current"
               />
+              <img v-else-if="item.provider === 'oidc' && oidcProviderIcon(props.oidcProviderName)" :src="oidcProviderIcon(props.oidcProviderName)" alt="" aria-hidden="true" width="32" height="32" class="h-8 w-8" />
               <span v-else>{{ providerInitial(item.provider) }}</span>
             </div>
 
@@ -211,6 +212,7 @@ import {
   unbindAuthIdentity,
 } from '@/api/user'
 import Icon from '@/components/icons/Icon.vue'
+import { oidcProviderIcon } from '@/utils/oidcProviderIcon'
 import { useAppStore, useAuthStore } from '@/stores'
 import type { User, UserAuthBindingStatus, UserAuthProvider } from '@/types'
 

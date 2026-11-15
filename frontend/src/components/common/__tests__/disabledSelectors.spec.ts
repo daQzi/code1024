@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, mount } from '@vue/test-utils'
 import Select from '../Select.vue'
 import ProxySelector from '../ProxySelector.vue'
@@ -7,6 +7,10 @@ import type { Proxy } from '@/types'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/api/admin', () => ({ adminAPI: { proxies: { testProxy: vi.fn() } } }))
 enableAutoUnmount(afterEach)
+beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 80, 300, 40))
+})
+afterEach(() => { vi.restoreAllMocks() })
 
 describe('selectors disabled while open', () => {
   it('closes an open Select and can reopen when enabled again', async () => {
@@ -27,7 +31,7 @@ describe('selectors disabled while open', () => {
   it('closes an open proxy picker when the account form becomes disabled', async () => {
     const wrapper = mount(ProxySelector, {
       props: { modelValue: null, proxies: [{ id: 1, name: 'Proxy', host: 'localhost', port: 8080, protocol: 'http' } as Proxy] },
-      global: { stubs: { Transition: true } },
+      global: { stubs: { Transition: true, Teleport: true } },
     })
     await wrapper.get('.select-trigger').trigger('click')
     expect(wrapper.find('.select-dropdown').exists()).toBe(true)

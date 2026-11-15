@@ -1,20 +1,21 @@
 <template>
-  <div class="space-y-4">
-    <button type="button" :disabled="disabled" class="btn btn-secondary w-full" @click="startLogin">
-      <span
-        class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+  <div class="oauth-provider space-y-4">
+    <button type="button" :disabled="disabled" class="oauth-provider-button btn btn-secondary w-full" @click="startLogin">
+      <img v-if="providerIcon" :src="providerIcon" alt="" aria-hidden="true" class="h-6 w-6 shrink-0" width="24" height="24" />
+      <span v-else
+        class="oauth-provider-initial" aria-hidden="true"
       >
         {{ providerInitial }}
       </span>
       {{ t('auth.oidc.signIn', { providerName: normalizedProviderName }) }}
     </button>
 
-    <div v-if="showDivider" class="flex items-center gap-3">
-      <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-      <span class="text-xs text-gray-500 dark:text-dark-400">
+    <div v-if="showDivider" class="oauth-divider">
+      <div class="oauth-divider-line" aria-hidden="true"></div>
+      <span class="oauth-divider-label">
         {{ t('auth.oauthOrContinue') }}
       </span>
-      <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+      <div class="oauth-divider-line" aria-hidden="true"></div>
     </div>
   </div>
 </template>
@@ -25,6 +26,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { OAuthLoginStart } from '@/api/auth'
 import { resolveAffiliateReferralCode, storeOAuthAffiliateCode } from '@/utils/oauthAffiliate'
+import { oidcProviderIcon } from '@/utils/oidcProviderIcon'
 
 const props = withDefaults(defineProps<{
   disabled?: boolean
@@ -48,6 +50,7 @@ const normalizedProviderName = computed(() => {
 })
 
 const providerInitial = computed(() => normalizedProviderName.value.charAt(0).toUpperCase() || 'O')
+const providerIcon = computed(() => oidcProviderIcon(normalizedProviderName.value))
 
 function startLogin(): void {
   const redirectTo = (route.query.redirect as string) || '/dashboard'
@@ -55,3 +58,5 @@ function startLogin(): void {
   emit('start', { provider: 'oidc', params: { redirect: redirectTo } })
 }
 </script>
+
+<style scoped src="./oauth-controls.css"></style>

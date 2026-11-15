@@ -1,6 +1,6 @@
 <template>
-  <div class="space-y-4">
-    <button type="button" :disabled="disabled" class="btn btn-secondary w-full" @click="startLogin">
+  <div class="oauth-provider space-y-4">
+    <button type="button" :disabled="disabled" class="oauth-provider-button btn btn-secondary w-full" @click="startLogin">
       <svg
         class="icon mr-2"
         viewBox="0 0 16 16"
@@ -29,12 +29,12 @@
       {{ t('auth.linuxdo.signIn') }}
     </button>
 
-    <div v-if="showDivider" class="flex items-center gap-3">
-      <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-      <span class="text-xs text-gray-500 dark:text-dark-400">
+    <div v-if="showDivider" class="oauth-divider">
+      <div class="oauth-divider-line" aria-hidden="true"></div>
+      <span class="oauth-divider-label">
         {{ t('auth.oauthOrContinue') }}
       </span>
-      <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+      <div class="oauth-divider-line" aria-hidden="true"></div>
     </div>
   </div>
 </template>
@@ -71,3 +71,5 @@ function startLogin(): void {
   emit('start', { provider: 'linuxdo', params })
 }
 </script>
+
+<style scoped src="./oauth-controls.css"></style>

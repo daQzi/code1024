@@ -1,4 +1,5 @@
 <template>
+  <Teleport to="body">
   <div class="fixed inset-0 z-50 overflow-y-auto" @click.self="$emit('close')">
     <div class="flex min-h-full items-center justify-center p-4">
       <div class="fixed inset-0 bg-black/50 transition-opacity" @click="$emit('close')"></div>
@@ -28,13 +29,13 @@
           <!-- Email verification -->
           <div v-if="verificationMethod === 'email'">
             <label class="input-label">{{ t('profile.totp.emailCode') }}</label>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap gap-2">
               <input
                 v-model="form.emailCode"
                 type="text"
                 maxlength="6"
                 inputmode="numeric"
-                class="input flex-1"
+                class="input min-w-0 flex-1 basis-32"
                 :placeholder="t('profile.totp.enterEmailCode')"
               />
               <button
@@ -64,7 +65,7 @@
           </div>
 
           <!-- Actions -->
-          <div class="flex justify-end gap-3 pt-4">
+          <div class="flex flex-wrap justify-end gap-3 pt-4">
             <button type="button" class="btn btn-secondary" @click="$emit('close')">
               {{ t('common.cancel') }}
             </button>
@@ -80,6 +81,7 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

@@ -360,4 +360,38 @@ onUnmounted(() => {
   width: 1rem;
   flex-shrink: 0;
 }
+
+/* Match public entry controls without changing the SDK or console surfaces. */
+.public-glass .aliyun-captcha-wrapper .aliyun-captcha-button,
+.dark .public-glass .aliyun-captcha-wrapper .aliyun-captcha-button,
+:root.dark .public-glass .aliyun-captcha-wrapper .aliyun-captcha-button {
+  min-height: 44px;
+  border: 1px solid var(--glass-control-edge);
+  border-radius: .95rem;
+  background: var(--glass-control-fill);
+  color: var(--glass-control-ink);
+  box-shadow: var(--glass-control-shadow);
+  -webkit-backdrop-filter: var(--glass-control-blur);
+  backdrop-filter: var(--glass-control-blur);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms var(--ui-ease-out, cubic-bezier(.23, 1, .32, 1));
+}
+.public-glass .aliyun-captcha-wrapper .aliyun-captcha-button:focus-visible {
+  outline: 3px solid var(--glass-accent);
+  outline-offset: 3px;
+}
+.public-glass .aliyun-captcha-wrapper .aliyun-captcha-button:disabled { cursor: default; }
+.public-glass .aliyun-captcha-wrapper .aliyun-captcha-button:active:not(:disabled):not(:focus-visible) { transform: scale(.98); }
+@media (hover: hover) and (pointer: fine) {
+  .public-glass .aliyun-captcha-wrapper .aliyun-captcha-button:hover:not(:disabled),
+  .dark .public-glass .aliyun-captcha-wrapper .aliyun-captcha-button:hover:not(:disabled) {
+    background: var(--glass-control-hover);
+    border-color: var(--glass-control-edge);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .public-glass .aliyun-captcha-wrapper .aliyun-captcha-button { transition: none; }
+  .public-glass .aliyun-captcha-wrapper .aliyun-captcha-button:active:not(:disabled):not(:focus-visible) { transform: none; }
+}
 </style>

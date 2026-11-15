@@ -6,8 +6,15 @@ vi.mock('@/stores', () => ({ useSubscriptionStore: () => store }))
 vi.mock('@/utils/featureFlags', () => ({ FeatureFlags: { subscription: 'subscription' }, isFeatureFlagEnabled: () => true }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
-beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 8, 22, 12)) })
-afterEach(() => vi.useRealTimers())
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 8, 22, 12))
+  store.fetchActiveSubscriptions.mockResolvedValue(undefined)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 20, y: 20, left: 20, right: 100, top: 20, bottom: 60, width: 80, height: 40, toJSON: () => ({}),
+  })
+})
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 describe('subscription expiry calendar labels', () => {
   it.each([
     [new Date(2026, 8, 22, 18), 'expiresToday'],
@@ -16,7 +23,7 @@ describe('subscription expiry calendar labels', () => {
     [new Date(2026, 8, 25, 12), 'daysRemaining'],
   ])('labels %s as %s', async (expires, label) => {
     store.activeSubscriptions = [{ id: 1, group_id: 1, expires_at: expires.toISOString(), group: { name: 'Plan' } }]
-    const w = mount(SubscriptionProgressMini, { global: { stubs: { Icon: true, RouterLink: true } } })
+    const w = mount(SubscriptionProgressMini, { global: { stubs: { Icon: true, RouterLink: true, Teleport: true } } })
     await w.get('button').trigger('click')
     expect(w.text()).toContain('subscriptionProgress.' + label)
   })

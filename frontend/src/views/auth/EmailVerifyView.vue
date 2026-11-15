@@ -1,40 +1,32 @@
 <template>
   <AuthLayout>
-    <div class="space-y-6">
-      <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-          {{ t('auth.verifyYourEmail') }}
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-          {{ t('auth.sendCodeDesc') }}
-          <span class="font-medium text-gray-700 dark:text-gray-300">{{ email }}</span>
+    <div class="auth-flow">
+      <header class="auth-heading">
+        <h1>{{ t('auth.verifyYourEmail') }}</h1>
+        <p class="auth-description">
+          <template v-if="hasRegisterData">
+            {{ t('auth.sendCodeDesc') }}
+            <strong class="auth-email">{{ email }}</strong>
+          </template>
         </p>
+      </header>
+      <div v-if="!hasRegisterData" class="auth-notice auth-notice--warning" role="status">
+        <h2>{{ t('auth.sessionExpired') }}</h2>
+        <p>{{ t('auth.sessionExpiredDesc') }}</p>
       </div>
-
-      <!-- No Data Warning -->
-      <div
-        v-if="!hasRegisterData"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
+      <form
+        ref="formRef"
+        class="auth-form"
+        novalidate
+        @submit.prevent="handleVerify"
+        :aria-busy="isLoading"
+        v-else
       >
-        <div class="flex items-start gap-3">
-          <div class="flex-shrink-0">
-            <Icon name="exclamationCircle" size="md" class="text-amber-500" />
-          </div>
-          <div class="text-sm text-amber-700 dark:text-amber-400">
-            <p class="font-medium">{{ t('auth.sessionExpired') }}</p>
-            <p class="mt-1">{{ t('auth.sessionExpiredDesc') }}</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Verification Form -->
-      <form v-else @submit.prevent="handleVerify" class="space-y-5">
-        <!-- Verification Code Input -->
-        <div>
-          <label for="code" class="input-label text-center">
-            {{ t('auth.verificationCode') }}
-          </label>
+        <p v-if="errorMessage" class="auth-notice auth-error" role="alert">
+          {{ errorMessage }}
+        </p>
+        <div class="auth-field">
+          <label for="code" class="input-label">{{ t('auth.verificationCode') }}</label>
           <input
             id="code"
             v-model="verifyCode"
@@ -42,32 +34,29 @@
             required
             autocomplete="one-time-code"
             inputmode="numeric"
+            pattern="[0-9]{6}"
             maxlength="6"
             :disabled="isLoading"
-            class="input py-3 text-center font-mono text-xl tracking-[0.5em]"
+            class="input auth-code"
             :class="{ 'input-error': errors.code }"
             placeholder="000000"
+            :aria-invalid="!!errors.code"
+            :aria-describedby="errors.code ? 'code-error code-hint' : 'code-hint'"
           />
-          <p class="input-hint text-center">{{ t('auth.verificationCodeHint') }}</p>
+          <p id="code-hint" class="auth-hint">
+            {{ t('auth.verificationCodeHint') }}
+          </p>
+          <p v-if="errors.code" id="code-error" class="auth-error">
+            {{ errors.code }}
+          </p>
         </div>
-
-        <!-- Code Status -->
+        <p v-if="codeSent" class="auth-notice auth-notice--success" role="status">
+          {{ t('auth.codeSentSuccess') }}
+        </p>
         <div
-          v-if="codeSent"
-          class="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20"
+          v-if="actionCaptchaEnabled || (turnstileEnabled && showResendTurnstile)"
+          class="auth-captcha"
         >
-          <div class="flex items-start gap-3">
-            <div class="flex-shrink-0">
-              <Icon name="checkCircle" size="md" class="text-green-500" />
-            </div>
-            <p class="text-sm text-green-700 dark:text-green-400">
-              {{ t('auth.codeSentSuccess') }}
-            </p>
-          </div>
-        </div>
-
-        <!-- Turnstile Widget for Resend -->
-        <div v-if="actionCaptchaEnabled || (turnstileEnabled && showResendTurnstile)">
           <TurnstileWidget
             ref="turnstileRef"
             :site-key="turnstileSiteKey"
@@ -85,8 +74,7 @@
             @error="onTurnstileError"
           />
         </div>
-
-        <div v-if="pendingOAuthCreateCaptchaEnabled" class="space-y-2">
+        <div v-if="pendingOAuthCreateCaptchaEnabled" class="auth-captcha">
           <TurnstileWidget
             ref="createAccountTurnstileRef"
             :site-key="turnstileSiteKey"
@@ -104,55 +92,34 @@
             @error="onCreateAccountTurnstileError"
           />
         </div>
-
-        <!-- Submit Button -->
+        <p v-if="errors.turnstile" class="auth-error" role="alert">
+          {{ errors.turnstile }}
+        </p>
         <button
           type="submit"
-          :disabled="isLoading || !verifyCode || (pendingOAuthCreateTurnstileRequired && !createAccountTurnstileToken)"
-          class="btn btn-primary w-full"
+          :disabled="
+            isLoading ||
+            !verifyCode ||
+            (pendingOAuthCreateTurnstileRequired && !createAccountTurnstileToken)
+          "
+          :aria-busy="isLoading"
+          class="primary-btn btn btn-primary"
         >
-          <svg
-            v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            ></circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          <Icon v-else name="checkCircle" size="md" class="mr-2" />
+          <span v-if="isLoading" class="auth-spinner" aria-hidden="true"></span>
           {{ isLoading ? t('auth.verifying') : t('auth.verifyAndCreate') }}
         </button>
-
-        <!-- Resend Code -->
-        <div class="text-center">
-          <button
-            v-if="countdown > 0"
-            type="button"
-            disabled
-            class="cursor-not-allowed text-sm text-gray-400 dark:text-dark-500"
-          >
+        <div class="auth-secondary">
+          <button v-if="countdown > 0" type="button" disabled class="auth-text-action">
             {{ t('auth.resendCountdown', { countdown }) }}
           </button>
           <button
             v-else
             type="button"
+            class="auth-text-action"
             @click="handleResendCode"
             :disabled="
               isSendingCode || (turnstileEnabled && showResendTurnstile && !resendTurnstileToken)
             "
-            class="text-sm text-primary-600 transition-colors hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:text-primary-300"
           >
             <span v-if="isSendingCode">{{ t('auth.sendingCode') }}</span>
             <span v-else-if="captchaEnabled && !showResendTurnstile">
@@ -163,14 +130,9 @@
         </div>
       </form>
     </div>
-
-    <!-- Footer -->
     <template #footer>
-      <button
-        @click="handleBack"
-        class="flex items-center gap-2 text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-gray-300"
-      >
-        <Icon name="arrowLeft" size="sm" />
+      <button type="button" class="auth-text-action" @click="handleBack">
+        <Icon name="arrowLeft" size="sm" aria-hidden="true" />
         {{ t('auth.backToRegistration') }}
       </button>
     </template>
@@ -178,7 +140,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { nextTick, computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
@@ -191,7 +153,7 @@ import {
   isOAuthLoginCompletion,
   type PendingOAuthSendVerifyCodeResponse,
   sendPendingOAuthVerifyCode,
-  sendVerifyCode,
+  sendVerifyCode
 } from '@/api/auth'
 import { apiClient } from '@/api/client'
 import { buildAuthErrorMessage } from '@/utils/authError'
@@ -216,6 +178,13 @@ const authStore = useAuthStore()
 const appStore = useAppStore()
 
 // ==================== State ====================
+
+const formRef = ref<HTMLFormElement | null>(null)
+
+async function focusFirstInvalidField(): Promise<void> {
+  await nextTick()
+  formRef.value?.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus()
+}
 
 const isLoading = ref<boolean>(false)
 const isSendingCode = ref<boolean>(false)
@@ -292,12 +261,10 @@ const aliyunCaptchaReady = computed(
 // 动作触发式验证码（腾讯/阿里云）：重发验证码、创建账号时弹窗验证
 const actionCaptchaEnabled = computed(
   () =>
-    (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
+    (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) || aliyunCaptchaReady.value
 )
 const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
+  () => (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
 )
 
 const errors = ref({
@@ -305,9 +272,7 @@ const errors = ref({
   turnstile: ''
 })
 
-const validationToastMessage = computed(
-  () => errors.value.code || errors.value.turnstile || ''
-)
+const validationToastMessage = computed(() => errors.value.code || errors.value.turnstile || '')
 const pendingOAuthCreateTurnstileRequired = computed(
   () => isPendingOAuthFlow() && turnstileEnabled.value
 )
@@ -340,7 +305,10 @@ onMounted(async () => {
       invitationCode.value = registerData.invitation_code || ''
       affCode.value = registerData.aff_code || loadAffiliateReferralCode()
       pendingAuthToken.value = registerData.pending_auth_token || activePendingSession?.token || ''
-      pendingAuthTokenField.value = registerData.pending_auth_token_field || activePendingSession?.token_field || 'pending_auth_token'
+      pendingAuthTokenField.value =
+        registerData.pending_auth_token_field ||
+        activePendingSession?.token_field ||
+        'pending_auth_token'
       pendingProvider.value = registerData.pending_provider || activePendingSession?.provider || ''
       pendingRedirect.value = registerData.pending_redirect || activePendingSession?.redirect || ''
       pendingAdoptionDecision.value = registerData.pending_adoption_decision
@@ -510,7 +478,7 @@ function isPendingOAuthSessionResponse(data: PendingOAuthCreateAccountResponse):
 }
 
 function getPendingOAuthSendCodeSessionResponse(
-  data: PendingOAuthSendVerifyCodeResponse,
+  data: PendingOAuthSendVerifyCodeResponse
 ): PendingOAuthSendVerifyCodeResponse | null {
   return data.auth_result === 'pending_session' ? data : null
 }
@@ -520,7 +488,7 @@ function persistPendingOAuthSession(provider: string, redirect?: string): void {
     token: pendingAuthToken.value,
     token_field: pendingAuthTokenField.value,
     provider: provider.trim() || pendingProvider.value.trim(),
-    redirect: redirect || pendingRedirect.value || undefined,
+    redirect: redirect || pendingRedirect.value || undefined
   })
 }
 
@@ -533,7 +501,10 @@ async function sendCode(): Promise<void> {
   let captchaProofUsed = false
 
   try {
-    if (!shouldBypassRegistrationEmailPolicy() && !isRegistrationEmailSuffixAllowed(email.value, registrationEmailSuffixWhitelist.value)) {
+    if (
+      !shouldBypassRegistrationEmailPolicy() &&
+      !isRegistrationEmailSuffixAllowed(email.value, registrationEmailSuffixWhitelist.value)
+    ) {
       errorMessage.value = buildEmailSuffixNotAllowedMessage()
       appStore.showError(errorMessage.value)
       return
@@ -569,10 +540,10 @@ async function sendCode(): Promise<void> {
       sessionStorage.removeItem('register_data')
       persistPendingOAuthSession(
         pendingSendCodeSession.provider || pendingProvider.value,
-        pendingSendCodeSession.redirect,
+        pendingSendCodeSession.redirect
       )
       await router.push(
-        resolvePendingOAuthCallbackRoute(pendingSendCodeSession.provider || pendingProvider.value),
+        resolvePendingOAuthCallbackRoute(pendingSendCodeSession.provider || pendingProvider.value)
       )
       return
     }
@@ -657,10 +628,14 @@ async function handleVerify(): Promise<void> {
   errorMessage.value = ''
 
   if (!validateForm()) {
+    await focusFirstInvalidField()
     return
   }
 
-  if (!shouldBypassRegistrationEmailPolicy() && !isRegistrationEmailSuffixAllowed(email.value, registrationEmailSuffixWhitelist.value)) {
+  if (
+    !shouldBypassRegistrationEmailPolicy() &&
+    !isRegistrationEmailSuffixAllowed(email.value, registrationEmailSuffixWhitelist.value)
+  ) {
     errorMessage.value = buildEmailSuffixNotAllowedMessage()
     appStore.showError(errorMessage.value)
     return
@@ -686,9 +661,9 @@ async function handleVerify(): Promise<void> {
           ? {
               tencent_captcha_ticket: createAccountTurnstileToken.value,
               tencent_captcha_randstr: createAccountTencentCaptchaRandstr.value
-          }
+            }
           : {}),
-        ...oauthAffiliatePayload(affCode.value || loadAffiliateReferralCode()),
+        ...oauthAffiliatePayload(affCode.value || loadAffiliateReferralCode())
       }
       if (invitationCode.value) {
         payload.invitation_code = invitationCode.value
@@ -727,8 +702,12 @@ async function handleVerify(): Promise<void> {
           turnstileEnabled.value || aliyunCaptchaEnabled.value
             ? initialTurnstileToken.value || undefined
             : undefined,
-        tencent_captcha_ticket: tencentCaptchaEnabled.value ? initialTurnstileToken.value || undefined : undefined,
-        tencent_captcha_randstr: tencentCaptchaEnabled.value ? initialTencentCaptchaRandstr.value || undefined : undefined,
+        tencent_captcha_ticket: tencentCaptchaEnabled.value
+          ? initialTurnstileToken.value || undefined
+          : undefined,
+        tencent_captcha_randstr: tencentCaptchaEnabled.value
+          ? initialTencentCaptchaRandstr.value || undefined
+          : undefined,
         promo_code: promoCode.value || undefined,
         invitation_code: invitationCode.value || undefined,
         ...(affCode.value ? { aff_code: affCode.value } : {})
@@ -773,7 +752,11 @@ function buildEmailSuffixNotAllowedMessage(): string {
   if (normalizedWhitelist.length === 0) {
     return t('auth.emailSuffixNotAllowed')
   }
-  const separator = String(locale.value || '').toLowerCase().startsWith('zh') ? '、' : ', '
+  const separator = String(locale.value || '')
+    .toLowerCase()
+    .startsWith('zh')
+    ? '、'
+    : ', '
   return t('auth.emailSuffixNotAllowedWithAllowed', {
     suffixes: formatRegistrationEmailSuffixWhitelistForMessage(normalizedWhitelist, {
       separator,
@@ -792,16 +775,3 @@ function buildRegistrationErrorMessage(error: unknown, fallback: string): string
   return buildAuthErrorMessage(error, { fallback })
 }
 </script>
-
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-</style>

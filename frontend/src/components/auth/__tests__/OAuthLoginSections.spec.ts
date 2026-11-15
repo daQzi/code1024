@@ -60,4 +60,12 @@ describe('OAuth login sections', () => {
       }
     })
   })
+
+  it('uses the supplied Linux.SB icon while other OIDC providers retain their fallback', () => {
+    const linuxsb = mount(OidcOAuthSection, { props: { providerName: 'Linux.SB' } })
+    expect(linuxsb.get('img').attributes('src')).toBe('/provider-icons/linux-sb.svg')
+    const other = mount(OidcOAuthSection, { props: { providerName: 'ExampleID' } })
+    expect(other.find('img').exists()).toBe(false)
+    expect(other.get('.oauth-provider-initial').text()).toBe('E')
+  })
 })

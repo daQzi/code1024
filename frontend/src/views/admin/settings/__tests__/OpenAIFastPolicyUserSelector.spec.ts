@@ -1,4 +1,4 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import OpenAIFastPolicyUserSelector from '../OpenAIFastPolicyUserSelector.vue'
@@ -40,15 +40,19 @@ vi.mock('@/api/admin', () => ({
   },
 }))
 
+enableAutoUnmount(afterEach)
+
 describe('OpenAIFastPolicyUserSelector', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 80, 300, 40))
     mockSearchUsers.mockReset()
     mockGetUserById.mockReset()
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('hydrates existing IDs to email labels without changing the saved IDs', async () => {
@@ -60,7 +64,7 @@ describe('OpenAIFastPolicyUserSelector', () => {
 
     const wrapper = mount(OpenAIFastPolicyUserSelector, {
       props: { modelValue: [7] },
-      global: { stubs: { Icon: true } },
+      global: { stubs: { Icon: true, Teleport: true } },
     })
     await flushPromises()
 
@@ -77,7 +81,7 @@ describe('OpenAIFastPolicyUserSelector', () => {
 
     const wrapper = mount(OpenAIFastPolicyUserSelector, {
       props: { modelValue: [] },
-      global: { stubs: { Icon: true } },
+      global: { stubs: { Icon: true, Teleport: true } },
     })
     const input = wrapper.get('input')
     await input.trigger('focus')
@@ -101,7 +105,7 @@ describe('OpenAIFastPolicyUserSelector', () => {
 
     const wrapper = mount(OpenAIFastPolicyUserSelector, {
       props: { modelValue: [42] },
-      global: { stubs: { Icon: true } },
+      global: { stubs: { Icon: true, Teleport: true } },
     })
     await flushPromises()
 

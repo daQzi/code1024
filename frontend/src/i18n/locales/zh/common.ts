@@ -188,6 +188,16 @@ export default {
     ops: '运维监控',
     promoCodes: '优惠码',
     settings: '系统设置',
+    sectionWorkspace: '工作台',
+    sectionResources: '资源',
+    sectionAccount: '账户',
+    sectionOverview: '总览',
+    sectionPeople: '用户与权限',
+    sectionInfra: '模型与渠道',
+    sectionCommerce: '商业化',
+    sectionSystem: '系统',
+    pelican: '鹈鹕测智',
+    sectionCustom: '自定义',
     myAccount: '我的账户',
     lightMode: '浅色模式',
     darkMode: '深色模式',
@@ -218,7 +228,27 @@ export default {
 
   // Auth
   auth: {
-    welcomeBack: '欢迎回来',
+    // CF_V2_I18N
+    v2: {
+      eyebrow: 'AI API 网关',
+      headlineLine1: '一个密钥，',
+      headlineLine2: '接上所有主流模型',
+      lede: '不用维护多套订阅，也不用到处申请账号。按 token 计费，余额与每一笔调用都能在控制台查到。',
+      point1Title: '双协议兼容',
+      point1Desc: '同一个密钥同时支持 OpenAI 的 /v1/chat/completions 与 Anthropic 的 /v1/messages。',
+      point2Title: '余额与用量透明',
+      point2Desc: '每次调用都能查到 token 数与费用明细，不做黑盒计费。',
+      point3Title: '多通道自动容灾',
+      point3Desc: '上游异常自动切换通道，不会因为单个账号限流就中断服务。',
+      statRate: '充值比例',
+      statBilling: '结算方式',
+      statBillingValue: '按 token',
+      statPayment: '支付方式',
+      statPaymentValue: '支付宝',
+      loginTitle: '欢迎回来',
+      loginSubtitle: '登录后即可管理密钥、查看用量与充值。'
+    },
+
     signInToAccount: '登录您的账户以继续',
     signIn: '登录',
     signingIn: '登录中...',

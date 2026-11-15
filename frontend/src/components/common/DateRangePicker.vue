@@ -20,8 +20,9 @@
       </span>
     </button>
 
-    <Transition name="date-picker-dropdown">
-      <div v-if="isOpen" class="date-picker-dropdown">
+    <Teleport to="body">
+      <Transition name="date-picker-dropdown">
+        <div v-if="isOpen" ref="dropdownRef" class="date-picker-dropdown" :style="dropdownStyle">
         <!-- Quick presets -->
         <div class="date-picker-presets">
           <button
@@ -70,15 +71,18 @@
             {{ t('dates.apply') }}
           </button>
         </div>
-      </div>
-    </Transition>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import { getFloatingPanelPosition } from '@/utils/floatingPanel'
+import { getPopoverLayer } from '@/utils/overlayLayer'
 
 interface DatePreset {
   labelKey: string
@@ -104,6 +108,43 @@ const { t, locale } = useI18n()
 
 const isOpen = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
+const dropdownRef = ref<HTMLElement | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
+
+// 下拉已 Teleport 到 body，位置只能自己算：跟随触发器，贴底/贴边时自动翻转。
+const DROPDOWN_MIN_WIDTH = 320
+const DROPDOWN_GAP = 8
+const VIEWPORT_PAD = 8
+
+const updateDropdownPosition = () => {
+  const trigger = containerRef.value?.querySelector('.date-picker-trigger') as HTMLElement | null
+  if (!trigger) return
+  const rect = trigger.getBoundingClientRect()
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  const position = getFloatingPanelPosition(rect, vw, vh, {
+    viewportPadding: VIEWPORT_PAD,
+    gap: DROPDOWN_GAP,
+    maxWidth: DROPDOWN_MIN_WIDTH,
+    maxHeightRatio: 1,
+    mobileBreakpoint: 0,
+    minComfortableHeight: 340,
+  })
+
+  dropdownStyle.value = {
+    position: 'fixed',
+    ...(position.top !== null ? { top: `${position.top}px` } : { bottom: `${position.bottom}px` }),
+    left: `${position.left}px`,
+    width: `${position.width}px`,
+    maxHeight: `${position.maxHeight}px`,
+    zIndex: String(getPopoverLayer(trigger)),
+  }
+}
+
+const onViewportChange = () => {
+  if (isOpen.value) updateDropdownPosition()
+}
 const localStartDate = ref(props.startDate)
 const localEndDate = ref(props.endDate)
 const activePreset = ref<string | null>('last24Hours')
@@ -258,6 +299,13 @@ const onDateChange = () => {
 
 const toggle = () => {
   isOpen.value = !isOpen.value
+  if (isOpen.value) {
+    // 等下拉挂载后拿到真实高度再定位，避免翻转判断用估算值
+    nextTick(() => {
+      updateDropdownPosition()
+      nextTick(updateDropdownPosition)
+    })
+  }
 }
 
 const apply = () => {
@@ -272,7 +320,9 @@ const apply = () => {
 }
 
 const handleClickOutside = (event: MouseEvent) => {
-  if (containerRef.value && !containerRef.value.contains(event.target as Node)) {
+  const target = event.target as Node
+  if (dropdownRef.value && dropdownRef.value.contains(target)) return
+  if (containerRef.value && !containerRef.value.contains(target)) {
     isOpen.value = false
   }
 }
@@ -282,6 +332,16 @@ const handleEscape = (event: KeyboardEvent) => {
     isOpen.value = false
   }
 }
+
+onMounted(() => {
+  window.addEventListener('scroll', onViewportChange, true)
+  window.addEventListener('resize', onViewportChange)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onViewportChange, true)
+  window.removeEventListener('resize', onViewportChange)
+})
 
 // Restore the applied range after dismissal, including parent updates from Apply.
 watch(isOpen, (open) => {
@@ -351,13 +411,12 @@ onUnmounted(() => {
 }
 
 .date-picker-dropdown {
-  @apply absolute left-0 z-[100] mt-2;
+  @apply fixed;
   @apply bg-white dark:bg-dark-800;
   @apply rounded-xl;
   @apply border border-gray-200 dark:border-dark-700;
   @apply shadow-lg shadow-black/10 dark:shadow-black/30;
-  @apply overflow-hidden;
-  @apply min-w-[320px];
+  @apply min-w-0 overflow-y-auto overscroll-contain;
 }
 
 .date-picker-presets {

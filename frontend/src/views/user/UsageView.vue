@@ -136,29 +136,40 @@
               <button
                 type="button"
                 data-testid="usage-column-settings"
-                @click="showColumnDropdown = !showColumnDropdown"
+                ref="columnTriggerRef"
+                :aria-expanded="showColumnDropdown"
+                :aria-label="t('admin.users.columnSettings')"
+                @click="toggleColumnDropdown"
                 class="btn btn-secondary px-2 md:px-3"
                 :title="t('admin.users.columnSettings')"
               >
                 <Icon name="grid" size="sm" />
                 <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
               </button>
-              <div
-                v-if="showColumnDropdown"
-                class="absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
-              >
-                <button
-                  v-for="col in currentToggleableColumns"
-                  :key="col.key"
-                  type="button"
-                  :data-testid="`usage-column-toggle-${col.key}`"
-                  @click="toggleCurrentColumn(col.key)"
-                  class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              <Teleport to="body">
+                <div
+                  v-if="showColumnDropdown"
+                  ref="columnPanelRef"
+                  :style="columnPanelStyle"
+                  role="group"
+                  tabindex="-1"
+                  :aria-label="t('admin.users.columnSettings')"
+                  class="overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
                 >
-                  <span>{{ col.label }}</span>
-                  <Icon v-if="isCurrentColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
-                </button>
-              </div>
+                  <button
+                    v-for="col in currentToggleableColumns"
+                    :key="col.key"
+                    type="button"
+                    :aria-pressed="isCurrentColumnVisible(col.key)"
+                    :data-testid="`usage-column-toggle-${col.key}`"
+                    @click="toggleCurrentColumn(col.key)"
+                    class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                  >
+                    <span>{{ col.label }}</span>
+                    <Icon v-if="isCurrentColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
+                  </button>
+                </div>
+              </Teleport>
             </div>
             <button v-if="activeTab !== 'errors'" type="button" @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
               {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
@@ -237,6 +248,7 @@ import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { useFloatingDropdown } from '@/composables/useFloatingDropdown'
 import { formatReasoningEffort } from '@/utils/format'
 import { getBillingModeLabel, getDisplayBillingMode as resolveDisplayBillingMode } from '@/utils/billingMode'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
@@ -828,13 +840,17 @@ const toggleCurrentColumn = (key: string) => {
   else toggleColumn(key)
 }
 
-const showColumnDropdown = ref(false)
-const columnDropdownRef = ref<HTMLElement | null>(null)
-const handleColumnClickOutside = (event: MouseEvent) => {
-  if (columnDropdownRef.value && !columnDropdownRef.value.contains(event.target as HTMLElement)) {
-    showColumnDropdown.value = false
-  }
-}
+// Escape the filter card's backdrop-filter stacking context without changing card styles.
+const {
+  isOpen: showColumnDropdown,
+  containerRef: columnDropdownRef,
+  triggerRef: columnTriggerRef,
+  panelRef: columnPanelRef,
+  panelStyle: columnPanelStyle,
+  toggle: toggleColumnDropdown,
+  close: closeColumnDropdown,
+} = useFloatingDropdown({ width: 192, maxHeight: 320, focusPanelOnOpen: true })
+watch(activeTab, () => closeColumnDropdown())
 
 const loadApiKeys = async () => {
   const firstPage = await keysAPI.list(1, 100)
@@ -921,14 +937,12 @@ const switchToErrors = () => {
 onMounted(() => {
   loadSavedColumns()
   loadSavedErrColumns()
-  document.addEventListener('click', handleColumnClickOutside)
   void loadFilterOptions()
   refreshData()
 })
 
 onUnmounted(() => {
   abortController?.abort()
-  document.removeEventListener('click', handleColumnClickOutside)
 })
 
 watch(endpointDistributionSource, () => {

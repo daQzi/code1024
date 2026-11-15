@@ -1,11 +1,11 @@
 <template>
-  <div v-if="hasProviders" class="space-y-4">
-    <div v-if="showDivider" class="flex items-center gap-3">
-      <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-      <span class="text-xs text-gray-500 dark:text-dark-400">
+  <div v-if="hasProviders" class="oauth-provider space-y-4">
+    <div v-if="showDivider" class="oauth-divider">
+      <div class="oauth-divider-line" aria-hidden="true"></div>
+      <span class="oauth-divider-label">
         {{ t('auth.oauthOrContinue') }}
       </span>
-      <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+      <div class="oauth-divider-line" aria-hidden="true"></div>
     </div>
 
     <div :class="providerGridClass">
@@ -14,11 +14,11 @@
         :key="provider"
         type="button"
         :disabled="disabled"
-        class="btn btn-secondary h-12 w-full justify-center gap-2"
+        class="oauth-provider-button btn btn-secondary h-12 w-full justify-center gap-2"
         @click="startLogin(provider)"
       >
-        <GitHubMark v-if="provider === 'github'" class="h-5 w-5 text-gray-800 dark:text-gray-100" />
-        <GoogleMark v-else class="h-5 w-5" />
+        <GitHubMark v-if="provider === 'github'" class="h-5 w-5 oauth-provider-mark" aria-hidden="true" />
+        <GoogleMark v-else class="h-5 w-5" aria-hidden="true" />
         <span class="font-medium">{{ providerLabel(provider) }}</span>
       </button>
     </div>
@@ -91,3 +91,5 @@ function startLogin(provider: EmailOAuthProvider): void {
   emit('start', { provider, params })
 }
 </script>
+
+<style scoped src="./oauth-controls.css"></style>

@@ -1,50 +1,54 @@
 <template>
   <AuthLayout>
-    <div class="space-y-6">
-      <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-          {{ t('auth.welcomeBack') }}
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-          {{ t('auth.signInToAccount') }}
+    <div class="auth-flow">
+      <header class="auth-heading">
+        <h1>{{ t('auth.v2.loginTitle') }}</h1>
+        <p class="auth-description">{{ t('auth.signInToAccount') }}</p>
+      </header>
+      <form
+        ref="formRef"
+        class="auth-form"
+        novalidate
+        @submit.prevent="handleLogin"
+        :aria-busy="isLoading"
+      >
+        <p v-if="errorMessage" class="auth-notice auth-error" role="alert">
+          {{ errorMessage }}
         </p>
-      </div>
-      <!-- Login Form -->
-      <form @submit.prevent="handleLogin" class="space-y-5">
-        <!-- Email Input -->
-        <div>
-          <label for="email" class="input-label">
-            {{ t('auth.emailLabel') }}
-          </label>
-          <div class="relative">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
-            </div>
-            <input
-              id="email"
-              v-model="formData.email"
-              type="email"
-              required
-              autofocus
-              autocomplete="email"
-              :disabled="authActionDisabled"
-              class="input pl-11"
-              :class="{ 'input-error': errors.email }"
-              :placeholder="t('auth.emailPlaceholder')"
-            />
-          </div>
+        <div class="auth-field">
+          <label for="email" class="input-label">{{ t('auth.emailLabel') }}</label>
+          <input
+            id="email"
+            v-model="formData.email"
+            type="email"
+            required
+            autocomplete="email"
+            inputmode="email"
+            autocapitalize="none"
+            :spellcheck="false"
+            :disabled="authActionDisabled"
+            class="input"
+            :class="{ 'input-error': errors.email }"
+            :aria-invalid="!!errors.email"
+            :aria-describedby="errors.email ? 'email-error' : undefined"
+            :placeholder="t('auth.emailPlaceholder')"
+          />
+          <p v-if="errors.email" id="email-error" class="auth-error">
+            {{ errors.email }}
+          </p>
         </div>
-
-        <!-- Password Input -->
-        <div>
-          <label for="password" class="input-label">
-            {{ t('auth.passwordLabel') }}
-          </label>
-          <div class="relative">
-            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
-            </div>
+        <div class="auth-field">
+          <div class="auth-label-row">
+            <label for="password" class="input-label">{{ t('auth.passwordLabel') }}</label>
+            <router-link
+              v-if="passwordResetEnabled && !backendModeEnabled"
+              to="/forgot-password"
+              class="auth-link"
+            >
+              {{ t('auth.forgotPassword') }}
+            </router-link>
+          </div>
+          <div class="auth-control">
             <input
               id="password"
               v-model="formData.password"
@@ -52,34 +56,29 @@
               required
               autocomplete="current-password"
               :disabled="authActionDisabled"
-              class="input pl-11 pr-11"
+              class="input auth-input-action"
               :class="{ 'input-error': errors.password }"
+              :aria-invalid="!!errors.password"
+              :aria-describedby="errors.password ? 'password-error' : undefined"
               :placeholder="t('auth.passwordPlaceholder')"
             />
             <button
               type="button"
-              @click="showPassword = !showPassword"
+              class="auth-reveal"
               :disabled="authActionDisabled"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              :aria-label="t(showPassword ? 'glass.auth.hidePassword' : 'glass.auth.showPassword')"
+              :aria-pressed="showPassword"
+              aria-controls="password"
+              @click="showPassword = !showPassword"
             >
-              <Icon v-if="showPassword" name="eyeOff" size="md" />
-              <Icon v-else name="eye" size="md" />
+              <Icon :name="showPassword ? 'eyeOff' : 'eye'" size="md" aria-hidden="true" />
             </button>
           </div>
-          <div class="mt-1 flex items-center justify-between">
-            <span></span>
-            <router-link
-              v-if="passwordResetEnabled && !backendModeEnabled"
-              to="/forgot-password"
-              class="text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-            >
-              {{ t('auth.forgotPassword') }}
-            </router-link>
-          </div>
+          <p v-if="errors.password" id="password-error" class="auth-error">
+            {{ errors.password }}
+          </p>
         </div>
-
-        <!-- Turnstile Widget -->
-        <div v-if="captchaEnabled">
+        <div v-if="captchaEnabled" class="auth-captcha">
           <TurnstileWidget
             ref="turnstileRef"
             :turnstile-enabled="turnstileEnabled"
@@ -96,37 +95,9 @@
             @error="onTurnstileError"
           />
         </div>
-
-        <!-- Submit Button -->
-        <button
-          type="submit"
-          :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
-        >
-          <svg
-            v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            ></circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          <Icon v-else name="login" size="md" class="mr-2" />
-          {{ isLoading ? t('auth.signingIn') : t('auth.signIn') }}
-        </button>
-
+        <p v-if="errors.turnstile" class="auth-error" role="alert">
+          {{ errors.turnstile }}
+        </p>
         <LoginAgreementPrompt
           v-if="loginAgreementEnabled"
           :accepted="agreementAccepted"
@@ -138,27 +109,33 @@
           @reject="rejectLoginAgreement"
           @open="showAgreementModal = true"
         />
-
-        <div v-if="showPasskeyLogin || showOAuthLogin" class="space-y-3 pt-1">
-          <div class="flex items-center gap-3">
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-            <span class="text-xs text-gray-500 dark:text-dark-400">
-              {{ t('auth.oauthOrContinue') }}
-            </span>
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
-          </div>
-
-          <button
-            v-if="showPasskeyLogin"
-            type="button"
-            class="btn btn-secondary w-full"
-            :disabled="authActionDisabled"
-            @click="handlePasskeyLogin"
-          >
-            <Icon name="key" size="md" class="mr-2" />
-            {{ passkeyLoading ? t('auth.passkeySigningIn') : t('auth.passkeySignIn') }}
-          </button>
-
+        <button
+          type="submit"
+          :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
+          :aria-busy="isLoading"
+          class="primary-btn btn btn-primary"
+        >
+          <span v-if="isLoading" class="auth-spinner" aria-hidden="true"></span>
+          {{ isLoading ? t('auth.signingIn') : t('auth.signIn') }}
+        </button>
+      </form>
+      <div v-if="showPasskeyLogin || showOAuthLogin" class="auth-alternatives">
+        <div class="auth-divider">
+          <span>{{ t('auth.oauthOrContinue') }}</span>
+        </div>
+        <button
+          v-if="showPasskeyLogin"
+          type="button"
+          class="secondary-btn auth-secondary login__passkey"
+          :disabled="authActionDisabled"
+          :aria-busy="passkeyLoading"
+          @click="handlePasskeyLogin"
+        >
+          <span v-if="passkeyLoading" class="auth-spinner" aria-hidden="true"></span>
+          <Icon v-else name="key" size="md" aria-hidden="true" />
+          {{ passkeyLoading ? t('auth.passkeySigningIn') : t('auth.passkeySignIn') }}
+        </button>
+        <div class="auth-providers">
           <EmailOAuthButtons
             :disabled="authActionDisabled"
             :github-enabled="githubOAuthEnabled"
@@ -166,7 +143,6 @@
             :show-divider="false"
             @start="handleOAuthStart"
           />
-
           <LinuxDoOAuthSection
             v-if="linuxdoOAuthEnabled"
             :disabled="authActionDisabled"
@@ -193,24 +169,18 @@
             @start="handleOAuthStart"
           />
         </div>
-      </form>
+      </div>
     </div>
-
-    <!-- Footer -->
     <template v-if="!backendModeEnabled && publicSettingsLoaded && registrationEnabled" #footer>
-      <p class="text-gray-500 dark:text-dark-400">
+      <p>
         {{ t('auth.dontHaveAccount') }}
-        <router-link
-          to="/register"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-        >
-          {{ t('auth.signUp') }}
-        </router-link>
+        <router-link to="/register" class="auth-link">{{ t('auth.signUp') }}</router-link>
+      </p>
+      <p v-if="invitationCodeEnabled" class="auth-footer-note">
+        {{ t('accessGuide.login.invitationNote') }}
       </p>
     </template>
   </AuthLayout>
-
-  <!-- 2FA Modal -->
   <TotpLoginModal
     v-if="show2FAModal"
     ref="totpModalRef"
@@ -222,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted, watch } from 'vue'
+import { nextTick, computed, ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
@@ -244,11 +214,7 @@ import {
   startOAuthLogin,
   type OAuthLoginStart
 } from '@/api/auth'
-import type {
-  ActionCaptchaRequestProof,
-  LoginAgreementDocument,
-  TotpLoginResponse
-} from '@/types'
+import type { ActionCaptchaRequestProof, LoginAgreementDocument, TotpLoginResponse } from '@/types'
 import { extractI18nErrorMessage } from '@/utils/apiError'
 import { clearAllAffiliateReferralCodes } from '@/utils/oauthAffiliate'
 
@@ -263,6 +229,13 @@ const appStore = useAppStore()
 
 // ==================== State ====================
 
+const formRef = ref<HTMLFormElement | null>(null)
+
+async function focusFirstInvalidField(): Promise<void> {
+  await nextTick()
+  formRef.value?.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus()
+}
+
 const isLoading = ref<boolean>(false)
 const passkeyLoading = ref<boolean>(false)
 const errorMessage = ref<string>('')
@@ -271,6 +244,7 @@ const publicSettingsLoaded = ref<boolean>(false)
 
 // Public settings
 const registrationEnabled = ref<boolean>(false)
+const invitationCodeEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const tencentCaptchaEnabled = ref<boolean>(false)
@@ -311,12 +285,10 @@ const aliyunCaptchaReady = computed(
 // 动作触发式验证码（腾讯/阿里云）：提交、OAuth 启动、passkey 时弹窗验证
 const actionCaptchaEnabled = computed(
   () =>
-    (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
+    (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) || aliyunCaptchaReady.value
 )
 const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
+  () => (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
 )
 
 // 2FA state
@@ -340,12 +312,14 @@ const validationToastMessage = computed(
   () => errors.email || errors.password || errors.turnstile || ''
 )
 
-const agreementGateActive = computed(
-  () => loginAgreementEnabled.value && !agreementAccepted.value
-)
+const agreementGateActive = computed(() => loginAgreementEnabled.value && !agreementAccepted.value)
 
 const authActionDisabled = computed(
-  () => isLoading.value || passkeyLoading.value || !publicSettingsLoaded.value || agreementGateActive.value
+  () =>
+    isLoading.value ||
+    passkeyLoading.value ||
+    !publicSettingsLoaded.value ||
+    agreementGateActive.value
 )
 
 const showPasskeyLogin = computed(
@@ -383,6 +357,7 @@ onMounted(async () => {
   try {
     const settings = await getPublicSettings()
     registrationEnabled.value = settings.registration_enabled === true
+    invitationCodeEnabled.value = settings.invitation_code_enabled === true
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
@@ -433,9 +408,12 @@ function applyLoginAgreementSettings(settings: {
     settings.login_agreement_revision ||
     `${loginAgreementUpdatedAt.value}:${documents.map((doc) => `${doc.id}:${doc.title}`).join('|')}`
 
-  agreementAccepted.value = !loginAgreementEnabled.value || hasAcceptedLoginAgreement(loginAgreementRevision.value)
+  agreementAccepted.value =
+    !loginAgreementEnabled.value || hasAcceptedLoginAgreement(loginAgreementRevision.value)
   showAgreementModal.value =
-    loginAgreementEnabled.value && !agreementAccepted.value && loginAgreementMode.value !== 'checkbox'
+    loginAgreementEnabled.value &&
+    !agreementAccepted.value &&
+    loginAgreementMode.value !== 'checkbox'
 }
 
 function hasAcceptedLoginAgreement(revision: string): boolean {
@@ -566,6 +544,7 @@ async function handleLogin(): Promise<void> {
 
   // Validate form
   if (!validateForm()) {
+    await focusFirstInvalidField()
     return
   }
 
@@ -583,9 +562,7 @@ async function handleLogin(): Promise<void> {
       turnstile_token:
         turnstileEnabled.value || aliyunCaptchaEnabled.value ? turnstileToken.value : undefined,
       tencent_captcha_ticket: tencentCaptchaEnabled.value ? turnstileToken.value : undefined,
-      tencent_captcha_randstr: tencentCaptchaEnabled.value
-        ? tencentCaptchaRandstr.value
-        : undefined
+      tencent_captcha_randstr: tencentCaptchaEnabled.value ? tencentCaptchaRandstr.value : undefined
     })
 
     // Check if 2FA is required
@@ -647,9 +624,10 @@ async function handlePasskeyLogin(): Promise<void> {
     const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
     await router.push(redirectTo)
   } catch (error: unknown) {
-    const fallback = error instanceof DOMException && error.name === 'NotAllowedError'
-      ? t('auth.passkeyCancelled')
-      : t('auth.passkeyFailed')
+    const fallback =
+      error instanceof DOMException && error.name === 'NotAllowedError'
+        ? t('auth.passkeyCancelled')
+        : t('auth.passkeyFailed')
     errorMessage.value = extractI18nErrorMessage(error, t, 'auth.errors', fallback)
     appStore.showError(errorMessage.value)
   } finally {
@@ -684,12 +662,7 @@ async function handleOAuthStart(request: OAuthLoginStart): Promise<void> {
     )
     window.location.href = result.authorize_url
   } catch (error: unknown) {
-    errorMessage.value = extractI18nErrorMessage(
-      error,
-      t,
-      'auth.errors',
-      t('auth.turnstileFailed')
-    )
+    errorMessage.value = extractI18nErrorMessage(error, t, 'auth.errors', t('auth.turnstileFailed'))
     appStore.showError(errorMessage.value)
   } finally {
     resetCaptchaProof()
@@ -716,7 +689,10 @@ async function handle2FAVerify(code: string): Promise<void> {
     const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
     await router.push(redirectTo)
   } catch (error: unknown) {
-    const err = error as { message?: string; response?: { data?: { message?: string } } }
+    const err = error as {
+      message?: string
+      response?: { data?: { message?: string } }
+    }
     const message = err.response?.data?.message || err.message || t('profile.totp.loginFailed')
 
     if (totpModalRef.value) {
@@ -732,16 +708,3 @@ function handle2FACancel(): void {
   totpUserEmailMasked.value = ''
 }
 </script>
-
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-</style>

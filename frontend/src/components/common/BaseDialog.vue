@@ -5,6 +5,7 @@
         v-if="show"
         class="modal-overlay"
         :style="zIndexStyle"
+        :data-dialog-layer="layer"
         :aria-labelledby="dialogId"
         role="dialog"
         aria-modal="true"
@@ -20,7 +21,7 @@
             <button
               v-if="showCloseButton"
               @click="emit('close')"
-              class="-mr-2 rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 focus-visible:ring-offset-2 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-dark-300 dark:focus-visible:ring-offset-dark-900"
+              class="-mr-2 shrink-0 rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/30 focus-visible:ring-offset-2 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-dark-300 dark:focus-visible:ring-offset-dark-900"
               aria-label="Close modal"
             >
               <Icon name="x" size="md" />
@@ -44,12 +45,12 @@
 
 <script lang="ts">
 let dialogIdCounter = 0
-const openDialogs = new Set<string>()
 </script>
 
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
+import { useDialogLayer } from '@/composables/useDialogLayer'
 
 // 生成唯一ID以避免多个对话框时ID冲突
 const dialogId = `modal-title-${++dialogIdCounter}`
@@ -85,10 +86,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
-// Custom z-index style (overrides the default z-50 from CSS)
-const zIndexStyle = computed(() => {
-  return props.zIndex !== 50 ? { zIndex: props.zIndex } : undefined
-})
+const { layer, isTopmost } = useDialogLayer(() => props.show, () => props.zIndex)
+const zIndexStyle = computed(() => ({ zIndex: layer.value }))
 
 const widthClasses = computed(() => {
   // Width guidance: narrow=confirm/short prompts, normal=standard forms,
@@ -111,15 +110,9 @@ const handleClose = () => {
 }
 
 const handleEscape = (event: KeyboardEvent) => {
-  if (props.show && props.closeOnEscape && event.key === 'Escape' && [...openDialogs].pop() === dialogId) {
+  if (props.show && props.closeOnEscape && event.key === 'Escape' && !event.defaultPrevented && !event.isComposing && isTopmost.value) {
     emit('close')
   }
-}
-
-const updateScrollLock = (isOpen: boolean) => {
-  if (isOpen) openDialogs.add(dialogId)
-  else openDialogs.delete(dialogId)
-  document.body.classList.toggle('modal-open', openDialogs.size > 0)
 }
 
 // Prevent body scroll when modal is open and manage focus
@@ -129,9 +122,6 @@ watch(
     if (isOpen) {
       // 保存当前焦点元素
       previousActiveElement = document.activeElement as HTMLElement
-      // 使用CSS类而不是直接操作style,更易于管理多个对话框
-      updateScrollLock(true)
-
       // 等待DOM更新后设置焦点到对话框
       await nextTick()
       if (modalBodyRef.value) {
@@ -144,7 +134,6 @@ watch(
         firstFocusable?.focus()
       }
     } else {
-      updateScrollLock(false)
       // 恢复之前的焦点
       if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
         previousActiveElement.focus()
@@ -161,7 +150,5 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleEscape)
-  // 确保组件卸载时移除滚动锁定
-  updateScrollLock(false)
 })
 </script>

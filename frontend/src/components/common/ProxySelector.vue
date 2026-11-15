@@ -1,9 +1,12 @@
 <template>
   <div class="relative" ref="containerRef">
     <button
+      ref="triggerRef"
       type="button"
       @click="toggle"
       :disabled="disabled"
+      :aria-expanded="isOpen"
+      aria-haspopup="true"
       :class="[
         'select-trigger',
         isOpen && 'select-trigger-open',
@@ -22,8 +25,9 @@
       </span>
     </button>
 
+    <Teleport to="body">
     <Transition name="select-dropdown">
-      <div v-if="isOpen" class="select-dropdown">
+      <div v-if="isOpen" ref="panelRef" class="select-dropdown" :style="panelStyle">
         <!-- Search and Batch Test Header -->
         <div class="select-header">
           <div class="select-search">
@@ -164,11 +168,13 @@
         </div>
       </div>
     </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed } from 'vue'
+import { useFloatingDropdown } from '@/composables/useFloatingDropdown'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import Icon from '@/components/icons/Icon.vue'
@@ -200,10 +206,13 @@ const emit = defineEmits<{
   'update:modelValue': [value: number | null]
 }>()
 
-const isOpen = ref(false)
 const searchQuery = ref('')
-const containerRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
+const { isOpen, containerRef, triggerRef, panelRef, panelStyle, toggle, close } = useFloatingDropdown({
+  disabled: () => props.disabled,
+  focusOnOpen: searchInputRef,
+  onClose: () => { searchQuery.value = '' }
+})
 
 // Test state
 const testResults = reactive<Record<number, ProxyTestResult>>({})
@@ -235,27 +244,10 @@ const filteredProxies = computed(() => {
   })
 })
 
-const toggle = () => {
-  if (props.disabled) return
-  isOpen.value = !isOpen.value
-  if (isOpen.value) {
-    nextTick(() => {
-      searchInputRef.value?.focus()
-    })
-  }
-}
-
-watch(() => props.disabled, (disabled) => {
-  if (disabled) {
-    isOpen.value = false
-    searchQuery.value = ''
-  }
-})
-
 const selectOption = (value: number | null) => {
+  if (props.disabled) return
   emit('update:modelValue', value)
-  isOpen.value = false
-  searchQuery.value = ''
+  close(true)
 }
 
 const handleTestProxy = async (proxy: Proxy) => {
@@ -287,29 +279,6 @@ const handleBatchTest = async () => {
   batchTesting.value = false
 }
 
-const handleClickOutside = (event: MouseEvent) => {
-  if (containerRef.value && !containerRef.value.contains(event.target as Node)) {
-    isOpen.value = false
-    searchQuery.value = ''
-  }
-}
-
-const handleEscape = (event: KeyboardEvent) => {
-  if (event.key === 'Escape' && isOpen.value) {
-    isOpen.value = false
-    searchQuery.value = ''
-  }
-}
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-  document.addEventListener('keydown', handleEscape)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-  document.removeEventListener('keydown', handleEscape)
-})
 </script>
 
 <style scoped>
@@ -342,7 +311,7 @@ onUnmounted(() => {
 }
 
 .select-dropdown {
-  @apply absolute z-[100] mt-2 w-full;
+  @apply flex flex-col;
   @apply bg-white dark:bg-dark-800;
   @apply rounded-xl;
   @apply border border-gray-200 dark:border-dark-700;
@@ -351,7 +320,7 @@ onUnmounted(() => {
 }
 
 .select-header {
-  @apply flex items-center gap-2 px-3 py-2;
+  @apply flex shrink-0 items-center gap-2 px-3 py-2;
   @apply border-b border-gray-100 dark:border-dark-700;
 }
 
@@ -374,7 +343,7 @@ onUnmounted(() => {
 }
 
 .select-options {
-  @apply max-h-60 overflow-y-auto py-1;
+  @apply min-h-0 max-h-60 overflow-y-auto overscroll-contain py-1;
 }
 
 .select-option {

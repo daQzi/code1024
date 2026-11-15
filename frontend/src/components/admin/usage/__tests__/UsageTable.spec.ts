@@ -144,6 +144,9 @@ const baseImageRow = {
   image_size_breakdown: null,
 }
 
+// These API fields are required by the token cells; older fixtures predated those cells.
+const tokenFields = { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 }
+
 describe('admin UsageTable tooltip', () => {
   it('shows the two OpenAI cache-write buckets without Anthropic lifetime labels', async () => {
     const row = { ...baseImageRow, image_count: 0, billing_mode: 'token', cache_creation_tokens: 2399, cache_creation_30m_tokens: 9, cache_creation_12h_tokens: 2390 }
@@ -307,6 +310,7 @@ describe('admin UsageTable tooltip', () => {
 
   it('shows service tier and billing breakdown in cost tooltip', async () => {
     const row = {
+      ...tokenFields,
       request_id: 'req-admin-1',
       actual_cost: 0.092883,
       total_cost: 0.092883,
@@ -404,6 +408,7 @@ describe('admin UsageTable tooltip', () => {
 
   it('shows requested and upstream models separately for admin rows', () => {
     const row = {
+      ...tokenFields,
       request_id: 'req-admin-model-1',
       model: 'claude-sonnet-4',
       upstream_model: 'claude-sonnet-4-20250514',
@@ -444,6 +449,7 @@ describe('admin UsageTable tooltip', () => {
     const wrapper = mount(UsageTable, {
       props: {
         data: [{
+          ...tokenFields,
           request_id: 'req-admin-effort-1',
           model: 'gpt-5.4',
           reasoning_effort: 'max',
@@ -472,6 +478,7 @@ describe('admin UsageTable tooltip', () => {
     const wrapper = mount(UsageTable, {
       props: {
         data: [{
+          ...tokenFields,
           request_id: 'req-admin-effort-2',
           model: 'gpt-5.6-sol',
           reasoning_effort: 'max',
@@ -498,6 +505,7 @@ describe('admin UsageTable tooltip', () => {
     const wrapper = mount(UsageTable, {
       props: {
         data: [{
+          ...tokenFields,
           request_id: 'req-user-effort-1',
           model: 'gpt-5.4',
           reasoning_effort: 'max',
@@ -535,6 +543,7 @@ describe('admin UsageTable tooltip', () => {
 		const wrapper = mount(UsageTable, {
 			props: {
 				data: [{
+					...tokenFields,
 					request_id: `req-${responseModel}`,
 					model: 'gpt-5.6-sol',
 					upstream_model: 'gpt-5.5',
@@ -866,6 +875,7 @@ const DataTableStubWithUser = {
 describe('admin UsageTable deleted-user badge', () => {
   it('renders deleted badge for a soft-deleted user row', () => {
     const row = {
+      ...tokenFields,
       request_id: 'req-deleted-user-1',
       model: 'claude-3',
       user_id: 2,
@@ -901,6 +911,7 @@ describe('admin UsageTable deleted-user badge', () => {
 
   it('does NOT render deleted badge for an active user row', () => {
     const row = {
+      ...tokenFields,
       request_id: 'req-active-user-1',
       model: 'claude-3',
       user_id: 3,

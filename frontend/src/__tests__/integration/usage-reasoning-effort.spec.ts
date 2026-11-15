@@ -264,6 +264,7 @@ describe('usage reasoning effort page display', () => {
       global: {
         stubs: {
           ...sharedPageStubs,
+          teleport: true,
           UsageFilters: adminFiltersStub,
           UsageExportProgress: true,
           UsageCleanupDialog: true,
@@ -278,7 +279,9 @@ describe('usage reasoning effort page display', () => {
 
     expect(wrapper.find('[data-testid="reasoning-effort-cell"]').exists()).toBe(false)
 
-    await wrapper.get('[data-testid="usage-column-settings"]').trigger('click')
+    const trigger = wrapper.get('[data-testid="usage-column-settings"]')
+    vi.spyOn(trigger.element, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 20, 100, 36))
+    await trigger.trigger('click')
     await wrapper.get('[data-testid="usage-column-toggle-reasoning_effort"]').trigger('click')
     await flushPromises()
 
@@ -299,6 +302,7 @@ describe('usage reasoning effort page display', () => {
       global: {
         stubs: {
           ...sharedPageStubs,
+          teleport: true,
           UsageFilters: adminFiltersStub,
           UsageExportProgress: true,
           UsageCleanupDialog: true,
@@ -311,7 +315,9 @@ describe('usage reasoning effort page display', () => {
     })
     await flushPromises()
 
-    await wrapper.get('[data-testid="usage-column-settings"]').trigger('click')
+    const trigger = wrapper.get('[data-testid="usage-column-settings"]')
+    vi.spyOn(trigger.element, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 20, 100, 36))
+    await trigger.trigger('click')
     await wrapper.get('[data-testid="usage-column-toggle-reasoning_effort"]').trigger('click')
     await flushPromises()
 

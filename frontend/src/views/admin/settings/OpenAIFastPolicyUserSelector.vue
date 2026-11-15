@@ -35,19 +35,26 @@
         class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
       />
       <input
+        ref="triggerRef"
         v-model="searchQuery"
+        :aria-expanded="showDropdown && !!searchQuery.trim()"
+        aria-haspopup="true"
         type="text"
         autocomplete="off"
         class="input input-sm w-full pl-9"
         :placeholder="t('admin.settings.openaiFastPolicy.userSearchPlaceholder')"
         @input="debounceSearch"
-        @focus="showDropdown = true"
+        @focus="openDropdown"
+        @click="openDropdown"
       />
     </div>
 
+    <Teleport to="body">
     <div
       v-if="showDropdown && searchQuery.trim()"
-      class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-dark-600 dark:bg-dark-700"
+      ref="panelRef"
+      :style="panelStyle"
+      class="overflow-auto overscroll-contain rounded-lg border border-gray-200 bg-white shadow-lg dark:border-dark-600 dark:bg-dark-700"
     >
       <div v-if="searchLoading" class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
         {{ t("common.loading") }}
@@ -76,11 +83,13 @@
         </button>
       </template>
     </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
+import { useFloatingDropdown } from "@/composables/useFloatingDropdown";
 import { useI18n } from "vue-i18n";
 import { adminAPI } from "@/api/admin";
 import type { SimpleUser } from "@/api/admin/usage";
@@ -95,11 +104,13 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const containerRef = ref<HTMLElement | null>(null);
 const searchQuery = ref("");
 const searchResults = ref<SimpleUser[]>([]);
 const searchLoading = ref(false);
-const showDropdown = ref(false);
+const {
+  isOpen: showDropdown, containerRef, triggerRef, panelRef, panelStyle,
+  open: openDropdown, close: closeDropdown,
+} = useFloatingDropdown({ maxHeight: 240 });
 const selectedUsers = ref<Record<number, SimpleUser>>({});
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchSequence = 0;
@@ -165,7 +176,7 @@ function selectUser(user: SimpleUser): void {
   searchQuery.value = "";
   searchResults.value = [];
   searchLoading.value = false;
-  showDropdown.value = false;
+  closeDropdown(true);
 }
 
 function removeUser(userId: number): void {
@@ -203,13 +214,6 @@ async function hydrateSelectedUsers(userIds: number[]): Promise<void> {
   selectedUsers.value = next;
 }
 
-function handleDocumentClick(event: MouseEvent): void {
-  const target = event.target as Node | null;
-  if (target && !containerRef.value?.contains(target)) {
-    showDropdown.value = false;
-  }
-}
-
 watch(
   selectedUserIds,
   (userIds) => {
@@ -218,12 +222,5 @@ watch(
   { immediate: true },
 );
 
-onMounted(() => {
-  document.addEventListener("click", handleDocumentClick);
-});
-
-onUnmounted(() => {
-  clearPendingSearch();
-  document.removeEventListener("click", handleDocumentClick);
-});
+onUnmounted(clearPendingSearch);
 </script>

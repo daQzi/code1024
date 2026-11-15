@@ -1,18 +1,24 @@
 <template>
-  <form class="space-y-3" @submit.prevent="handleSubmit">
+  <form class="auth-form pending-oauth-form" :aria-busy="isSubmitting || isSendingCode" @submit.prevent="handleSubmit">
+    <label class="input-label" :for="`${testIdPrefix}-account-email`">{{ t('auth.emailLabel') }}</label>
     <input
+      :id="`${testIdPrefix}-account-email`"
+      autocomplete="email"
       v-model="email"
       :data-testid="`${testIdPrefix}-create-account-email`"
       type="email"
-      class="input w-full"
+      class="input glass-control w-full"
       :placeholder="t('auth.emailPlaceholder')"
       :disabled="isSubmitting || isSendingCode"
     />
+    <label class="input-label" :for="`${testIdPrefix}-account-password`">{{ t('auth.passwordLabel') }}</label>
     <input
+      :id="`${testIdPrefix}-account-password`"
+      autocomplete="new-password"
       v-model="password"
       :data-testid="`${testIdPrefix}-create-account-password`"
       type="password"
-      class="input w-full"
+      class="input glass-control w-full"
       :placeholder="t('auth.passwordPlaceholder')"
       :disabled="isSubmitting"
     />
@@ -34,21 +40,24 @@
         @error="onTurnstileError"
       />
     </div>
-    <div v-if="emailVerifyEnabled" class="flex gap-3">
+    <label v-if="emailVerifyEnabled" class="input-label" :for="`${testIdPrefix}-account-verify-code`">{{ t('auth.verificationCode') }}</label>
+    <div v-if="emailVerifyEnabled" class="pending-code-row">
       <input
         v-model="verifyCode"
+        :id="`${testIdPrefix}-account-verify-code`"
+        autocomplete="one-time-code"
         :data-testid="`${testIdPrefix}-create-account-verify-code`"
         type="text"
         inputmode="numeric"
         maxlength="6"
-        class="input min-w-0 flex-1"
+        class="input glass-control min-w-0 flex-1"
         placeholder="123456"
         :disabled="isSubmitting"
       />
       <button
         :data-testid="`${testIdPrefix}-create-account-send-code`"
         type="button"
-        class="btn btn-secondary shrink-0"
+        class="btn glass-control btn-secondary shrink-0"
         :disabled="isSubmitting || isSendingCode || countdown > 0 || !email.trim() || (turnstileEnabled && !turnstileToken)"
         @click="handleSendCode"
       >
@@ -61,25 +70,28 @@
         }}
       </button>
     </div>
-    <p v-if="emailVerifyEnabled && sendCodeSuccess" class="text-sm text-green-600 dark:text-green-400">
+    <p v-if="emailVerifyEnabled && sendCodeSuccess" class="pending-code-success" role="status">
       {{ t('auth.codeSentSuccess') }}
     </p>
-    <p v-else-if="emailVerifyEnabled" class="text-xs text-gray-500 dark:text-dark-400">
+    <p v-else-if="emailVerifyEnabled" class="pending-help">
       {{ t('auth.verificationCodeHint') }}
     </p>
+    <label v-if="invitationCodeEnabled" class="input-label" :for="`${testIdPrefix}-account-invitation`">{{ t('auth.invitationCodeLabel') }}</label>
     <input
+      :id="`${testIdPrefix}-account-invitation`"
+      autocomplete="off"
       v-if="invitationCodeEnabled"
       v-model="invitationCode"
       :data-testid="`${testIdPrefix}-create-account-invitation-code`"
       type="text"
-      class="input w-full"
+      class="input glass-control w-full"
       :placeholder="t('auth.invitationCodePlaceholder')"
       :disabled="isSubmitting"
     />
     <button
       :data-testid="`${testIdPrefix}-create-account-submit`"
       type="button"
-      class="btn btn-primary w-full"
+      class="btn glass-control btn-primary w-full"
       :disabled="isSubmitting || !email.trim() || password.length < 6 || (invitationCodeEnabled && !invitationCode.trim()) || (turnstileEnabled && !turnstileToken)"
       @click="handleSubmit"
     >
@@ -87,7 +99,7 @@
     </button>
     <button
       type="button"
-      class="btn btn-secondary w-full"
+      class="btn glass-control btn-secondary w-full"
       :disabled="isSubmitting"
       @click="emitSwitchToBind"
     >
@@ -381,14 +393,29 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
+.pending-oauth-form { min-width: 0; }
+.pending-oauth-form :is(.btn, .input) {
+  min-height: 2.75rem;
+  border: 1px solid var(--glass-control-edge);
+  background: var(--glass-control-fill);
+  color: var(--glass-control-ink);
+  box-shadow: var(--glass-control-shadow);
+  -webkit-backdrop-filter: var(--glass-control-blur);
+  backdrop-filter: var(--glass-control-blur);
 }
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
+.pending-oauth-form .btn-primary { color: var(--glass-action-ink); }
+.pending-oauth-form .input { font-size: 1rem; }
+.pending-oauth-form .btn { touch-action: manipulation; }
+.pending-oauth-form :is(.btn, .input):focus-visible { outline: 3px solid var(--glass-accent, #0071e3); outline-offset: 3px; }
+.pending-oauth-form :is(.btn, .input):disabled { opacity: .5; cursor: not-allowed; }
+@media (hover: hover) and (pointer: fine) {
+  .pending-oauth-form .btn:hover:not(:disabled) { background: var(--glass-control-hover); }
 }
+.pending-oauth-form .input-label { margin-bottom: -.5rem; }
+.pending-code-row { display: flex; flex-wrap: wrap; gap: .75rem; }
+.pending-code-row .input { min-width: min(100%, 8rem); flex: 1 1 8rem; }
+.pending-code-row .btn { flex: 0 1 auto; width: auto; }
+.pending-code-success { color: #18734c; font-size: .875rem; line-height: 1.6; }
+.dark .pending-code-success { color: #8ae0b8; }
+.pending-help { color: var(--glass-muted, #53647a); font-size: .8125rem; line-height: 1.6; }
 </style>

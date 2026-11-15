@@ -7,14 +7,19 @@ const testProxy = vi.hoisted(() => vi.fn())
 vi.mock('@/api/admin', () => ({ adminAPI: { proxies: { testProxy } } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => {
+  vi.clearAllMocks()
+  // jsdom has no layout; use a visible anchor for positioning guards.
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 80, 300, 40))
+})
+afterEach(() => { vi.restoreAllMocks() })
 
 async function openSelector() {
   const wrapper = mount(ProxySelector, {
     props: { modelValue: null, proxies: [1, 2].map(id => ({
       id, name: `Proxy ${id}`, host: 'localhost', port: 8080, protocol: 'http'
     } as Proxy)) },
-    global: { stubs: { Icon: true } }
+    global: { stubs: { Icon: true, Teleport: true } }
   })
   await wrapper.get('.select-trigger').trigger('click')
   return wrapper

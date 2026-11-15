@@ -1,3 +1,7 @@
+# code1024
+
+> 本工作区以官方 v0.2.21 为基础，移植独立 UI 与鹈鹕测智；维护范围、构建和后续同步方式见 [二开维护说明](docs/customization/UPSTREAM.md)，来源见 [第三方说明](docs/customization/THIRD_PARTY.md)。测智用于人工比较，不是自动降智鉴定。
+
 <div align="center">
 
 <img src="assets/logo.svg" alt="Sub2API Logo" width="128" />

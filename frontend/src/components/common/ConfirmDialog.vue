@@ -1,12 +1,12 @@
 <template>
   <BaseDialog :show="show" :title="title" width="narrow" @close="handleCancel">
     <div class="space-y-4">
-      <p class="text-sm text-gray-600 dark:text-gray-400">{{ message }}</p>
+      <p class="break-words text-sm text-gray-600 dark:text-gray-400">{{ message }}</p>
       <slot></slot>
     </div>
 
     <template #footer>
-      <div class="flex justify-end space-x-3">
+      <div class="flex min-w-0 flex-wrap justify-end gap-3">
         <button
           @click="handleCancel"
           type="button"

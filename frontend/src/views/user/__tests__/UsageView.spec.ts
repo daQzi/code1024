@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 
 import UsageView from '../UsageView.vue'
 import Select, { type SelectOption } from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
+
+enableAutoUnmount(afterEach)
+beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(40, 80, 96, 40))
+})
+afterEach(() => vi.restoreAllMocks())
 
 const {
   query,
@@ -215,6 +221,28 @@ describe('user UsageView', () => {
     listMyErrorRequests.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
     list.mockResolvedValue({ items: [{ id: 1, name: 'demo-key' }], total: 1, page: 1, page_size: 100, pages: 1 })
     getAvailable.mockResolvedValue([{ id: 1, name: 'default' }])
+  })
+
+  it('renders column controls outside the card and keeps multiple toggles open', async () => {
+    const wrapper = mountUsageView()
+    await flushPromises()
+    const trigger = wrapper.get('[data-testid="usage-column-settings"]')
+    await trigger.trigger('click')
+    const element = document.querySelector<HTMLButtonElement>('[data-testid="usage-column-toggle-group"]')!
+    expect(element?.parentElement?.parentElement).toBe(document.body)
+    expect(element.parentElement?.style.position).toBe('fixed')
+    expect(element.parentElement?.style.width).toBe('192px')
+    const before = element.getAttribute('aria-pressed')
+    await new DOMWrapper(element).trigger('click')
+    expect(element.getAttribute('aria-pressed')).not.toBe(before)
+    expect(trigger.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findComponent(UsageTable).props('columns').map((column: { key: string }) => column.key)).not.toContain('group')
+    await new DOMWrapper(element).trigger('click')
+    expect(element.getAttribute('aria-pressed')).toBe(before)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.vm.$nextTick()
+    expect(document.querySelector('[data-testid="usage-column-toggle-group"]')).toBeNull()
+    expect(trigger.attributes('aria-expanded')).toBe('false')
   })
 
   it('loads logs, stats, model stats, and snapshot on first render', async () => {

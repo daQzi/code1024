@@ -347,6 +347,9 @@ export default {
     totalRequests: '总请求数',
     totalTokens: '总 Token',
     cacheTotal: '缓存',
+    cacheHitRateHint:
+      '缓存命中率 = 缓存读取 ÷ (输入 + 缓存创建 + 缓存读取)。本请求：{read} ÷ ({input} + {creation} + {read}) = {rate}%',
+    cacheHitRateNoData: '本请求没有输入 Token，无法计算缓存命中率',
     cacheBreakdown: '缓存 Token 明细',
     cacheCreationTokensLabel: '缓存创建',
     cacheReadTokensLabel: '缓存读取',

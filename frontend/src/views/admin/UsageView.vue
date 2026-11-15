@@ -88,7 +88,11 @@
             <div v-if="activeTab !== 'ranking'" class="relative" ref="columnDropdownRef">
               <button
                 data-testid="usage-column-settings"
-                @click="showColumnDropdown = !showColumnDropdown"
+                type="button"
+                ref="columnTriggerRef"
+                :aria-expanded="showColumnDropdown"
+                :aria-label="t('admin.users.columnSettings')"
+                @click="toggleColumnDropdown"
                 class="btn btn-secondary px-2 md:px-3"
                 :title="t('admin.users.columnSettings')"
               >
@@ -97,27 +101,36 @@
                 </svg>
                 <span class="hidden md:inline">{{ t('admin.users.columnSettings') }}</span>
               </button>
-              <div
-                v-if="showColumnDropdown"
-                class="absolute right-0 top-full z-50 mt-1 max-h-80 w-48 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
-              >
-                <button
-                  v-for="col in currentToggleableColumns"
-                  :key="col.key"
-                  :data-testid="`usage-column-toggle-${col.key}`"
-                  @click="toggleCurrentColumn(col.key)"
-                  class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+              <Teleport to="body">
+                <div
+                  v-if="showColumnDropdown"
+                  ref="columnPanelRef"
+                  :style="columnPanelStyle"
+                  role="group"
+                  tabindex="-1"
+                  :aria-label="t('admin.users.columnSettings')"
+                  class="overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-600 dark:bg-dark-800"
                 >
-                  <span>{{ col.label }}</span>
-                  <Icon
-                    v-if="isCurrentColumnVisible(col.key)"
-                    name="check"
-                    size="sm"
-                    class="text-primary-500"
-                    :stroke-width="2"
-                  />
-                </button>
-              </div>
+                  <button
+                    v-for="col in currentToggleableColumns"
+                    :key="col.key"
+                    type="button"
+                    :aria-pressed="isCurrentColumnVisible(col.key)"
+                    :data-testid="`usage-column-toggle-${col.key}`"
+                    @click="toggleCurrentColumn(col.key)"
+                    class="flex w-full items-center justify-between px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
+                  >
+                    <span>{{ col.label }}</span>
+                    <Icon
+                      v-if="isCurrentColumnVisible(col.key)"
+                      name="check"
+                      size="sm"
+                      class="text-primary-500"
+                      :stroke-width="2"
+                    />
+                  </button>
+                </div>
+              </Teleport>
             </div>
           </template>
         </UsageFilters>
@@ -190,6 +203,7 @@ import { saveAs } from 'file-saver'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'; import { adminAPI } from '@/api/admin'; import { adminUsageAPI } from '@/api/admin/usage'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { useFloatingDropdown } from '@/composables/useFloatingDropdown'
 import { formatReasoningEffort } from '@/utils/format'
 import { resolveUsageRequestType, requestTypeToLegacyStream } from '@/utils/usageRequestType'
 import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination from '@/components/common/Pagination.vue'; import Select from '@/components/common/Select.vue'; import DateRangePicker from '@/components/common/DateRangePicker.vue'
@@ -855,14 +869,17 @@ const onErrPage = (p: number) => { errPage.value = p; loadAdminErrors() }
 const onErrPageSize = (s: number) => { errPageSize.value = s; errPage.value = 1; loadAdminErrors() }
 const openError = (id: number) => { selectedErrorId.value = id; showErrorModal.value = true }
 
-const showColumnDropdown = ref(false)
-const columnDropdownRef = ref<HTMLElement | null>(null)
-
-const handleColumnClickOutside = (event: MouseEvent) => {
-  if (columnDropdownRef.value && !columnDropdownRef.value.contains(event.target as HTMLElement)) {
-    showColumnDropdown.value = false
-  }
-}
+// Escape card stacking contexts; keep column state and persistence in this view.
+const {
+  isOpen: showColumnDropdown,
+  containerRef: columnDropdownRef,
+  triggerRef: columnTriggerRef,
+  panelRef: columnPanelRef,
+  panelStyle: columnPanelStyle,
+  toggle: toggleColumnDropdown,
+  close: closeColumnDropdown,
+} = useFloatingDropdown({ width: 192, maxHeight: 320, focusPanelOnOpen: true })
+watch(activeTab, () => closeColumnDropdown())
 
 onMounted(() => {
   applyRouteQueryFilters()
@@ -875,9 +892,8 @@ onMounted(() => {
   }, 120)
   loadSavedColumns()
   loadSavedErrColumns()
-  document.addEventListener('click', handleColumnClickOutside)
 })
-onUnmounted(() => { abortController?.abort(); exportAbortController?.abort(); document.removeEventListener('click', handleColumnClickOutside) })
+onUnmounted(() => { abortController?.abort(); exportAbortController?.abort() })
 
 watch(modelDistributionSource, (source) => {
   void loadModelStats(source)

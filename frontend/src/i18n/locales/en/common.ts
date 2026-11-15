@@ -188,6 +188,16 @@ export default {
     ops: 'Ops',
     promoCodes: 'Promo Codes',
     settings: 'Settings',
+    sectionWorkspace: 'Workspace',
+    sectionResources: 'Resources',
+    sectionAccount: 'Account',
+    sectionOverview: 'Overview',
+    sectionPeople: 'Users & Access',
+    sectionInfra: 'Models & Channels',
+    sectionCommerce: 'Commerce',
+    sectionSystem: 'System',
+    pelican: 'Pelican Test',
+    sectionCustom: 'Custom',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
     darkMode: 'Dark Mode',
@@ -218,7 +228,27 @@ export default {
 
   // Auth
   auth: {
-    welcomeBack: 'Welcome Back',
+    // CF_V2_I18N
+    v2: {
+      eyebrow: 'AI API Gateway',
+      headlineLine1: 'One key,',
+      headlineLine2: 'every major model',
+      lede: 'No multiple subscriptions, no scattered accounts. Pay per token, with every call and balance visible in the console.',
+      point1Title: 'Dual protocol',
+      point1Desc: 'A single key serves both OpenAI /v1/chat/completions and Anthropic /v1/messages.',
+      point2Title: 'Transparent billing',
+      point2Desc: 'Token counts and cost breakdown are queryable for every request. No black-box pricing.',
+      point3Title: 'Automatic failover',
+      point3Desc: 'Requests switch upstream channels on failure instead of breaking when one account is rate limited.',
+      statRate: 'Top-up rate',
+      statBilling: 'Billing',
+      statBillingValue: 'Per token',
+      statPayment: 'Payment',
+      statPaymentValue: 'Alipay',
+      loginTitle: 'Welcome back',
+      loginSubtitle: 'Sign in to manage keys, review usage and top up.'
+    },
+
     signInToAccount: 'Sign in to your account to continue',
     signIn: 'Sign In',
     signingIn: 'Signing in...',

@@ -1,16 +1,19 @@
 <template>
   <AuthLayout>
-    <div class="space-y-6">
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+    <div class="auth-flow oauth-callback">
+      <div class="auth-heading">
+        <h1>
           {{ t('auth.dingtalk.callbackTitle') }}
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        </h1>
+        <p class="auth-description">
           {{ isProcessing ? t('auth.dingtalk.callbackProcessing') : t('auth.dingtalk.callbackHint') }}
         </p>
       </div>
 
-      <transition name="fade">
+      <div v-if="isProcessing" class="oauth-progress" role="status" :aria-label="t('common.processing')">
+        <span class="oauth-spinner" aria-hidden="true"></span>
+      </div>
+
         <div
           v-if="
             needsInvitation ||
@@ -20,32 +23,33 @@
             needsBindLogin ||
             needsTotpChallenge
           "
-          class="space-y-4"
+          class="auth-form"
+          :aria-busy="isSubmitting"
         >
           <div
             v-if="adoptionRequired && (suggestedDisplayName || suggestedAvatarUrl)"
-            class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-600 dark:bg-dark-800/60"
+            class="oauth-choice"
           >
             <div class="space-y-3">
               <div class="space-y-1">
-                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                <p class="oauth-section-title">
                   {{ t('auth.oauthFlow.profileDetailsTitle', { providerName }) }}
                 </p>
-                <p class="text-xs text-gray-500 dark:text-dark-400">
+                <p class="oauth-help">
                   {{ t('auth.oauthFlow.profileDetailsDescription', { providerName }) }}
                 </p>
               </div>
 
               <label
                 v-if="suggestedDisplayName"
-                class="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 text-sm dark:border-dark-600 dark:bg-dark-900/50"
+                class="oauth-profile-option"
               >
                 <input v-model="adoptDisplayName" type="checkbox" class="mt-1 h-4 w-4" />
                 <span class="space-y-1">
-                  <span class="block font-medium text-gray-900 dark:text-white">
+                  <span class="block font-medium">
                     {{ t('auth.oauthFlow.useDisplayName') }}
                   </span>
-                  <span class="block text-gray-500 dark:text-dark-400">
+                  <span class="oauth-help block">
                     {{ suggestedDisplayName }}
                   </span>
                 </span>
@@ -53,19 +57,19 @@
 
               <label
                 v-if="suggestedAvatarUrl"
-                class="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 text-sm dark:border-dark-600 dark:bg-dark-900/50"
+                class="oauth-profile-option"
               >
                 <input v-model="adoptAvatar" type="checkbox" class="mt-1 h-4 w-4" />
                 <img
                   :src="suggestedAvatarUrl"
                   :alt="t('auth.oauthFlow.avatarAlt', { providerName })"
-                  class="h-10 w-10 rounded-full border border-gray-200 object-cover dark:border-dark-600"
+                  class="oauth-avatar"
                 />
                 <span class="space-y-1">
-                  <span class="block font-medium text-gray-900 dark:text-white">
+                  <span class="block font-medium">
                     {{ t('auth.oauthFlow.useAvatar') }}
                   </span>
-                  <span class="block break-all text-gray-500 dark:text-dark-400">
+                  <span class="oauth-help block break-all">
                     {{ suggestedAvatarUrl }}
                   </span>
                 </span>
@@ -74,11 +78,14 @@
           </div>
 
           <template v-if="needsInvitation">
-            <p class="text-sm text-gray-700 dark:text-gray-300">
+            <p class="oauth-copy">
               {{ t('auth.dingtalk.invitationRequired') }}
             </p>
             <div>
+              <label class="input-label" for="dingtalk-invitation-code">{{ t('auth.invitationCodeLabel') }}</label>
               <input
+                id="dingtalk-invitation-code"
+                autocomplete="off"
                 v-model="invitationCode"
                 type="text"
                 class="input w-full"
@@ -97,7 +104,7 @@
           </template>
 
           <template v-else-if="needsAdoptionConfirmation">
-            <p class="text-sm text-gray-700 dark:text-gray-300">
+            <p class="oauth-copy">
               {{ t('auth.oauthFlow.reviewProfileBeforeContinue', { providerName }) }}
             </p>
             <button class="btn btn-primary w-full" :disabled="isSubmitting" @click="handleContinueLogin">
@@ -106,13 +113,13 @@
           </template>
 
           <template v-else-if="needsChooser">
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-600 dark:bg-dark-800/60">
+            <div class="oauth-choice">
               <div class="space-y-4">
                 <div class="space-y-1">
-                  <p class="text-sm font-medium text-gray-900 dark:text-white">
+                  <p class="oauth-section-title">
                     {{ t('auth.oauthFlow.chooseHowToContinue') }}
                   </p>
-                  <p class="text-xs text-gray-500 dark:text-dark-400">
+                  <p class="oauth-help">
                     {{
                       pendingAccountEmail
                         ? t('auth.oauthFlow.suggestedEmail', { email: pendingAccountEmail })
@@ -121,7 +128,7 @@
                   </p>
                 </div>
 
-                <div class="grid gap-3 sm:grid-cols-2">
+                <div class="oauth-action-grid">
                   <button
                     class="btn btn-secondary w-full"
                     :disabled="isSubmitting"
@@ -142,7 +149,7 @@
           </template>
 
           <template v-else-if="needsCreateAccount">
-            <p class="text-sm text-gray-700 dark:text-gray-300">
+            <p class="oauth-copy">
               {{ t('auth.oauthFlow.createAccountHint') }}
             </p>
             <PendingOAuthCreateAccountForm
@@ -156,11 +163,14 @@
           </template>
 
           <template v-else-if="needsBindLogin">
-            <p class="text-sm text-gray-700 dark:text-gray-300">
+            <p class="oauth-copy">
               {{ t('auth.oauthFlow.bindLoginHint', { providerName }) }}
             </p>
             <div class="space-y-3">
+              <label class="input-label" for="dingtalk-bind-email">{{ t('auth.emailLabel') }}</label>
               <input
+                id="dingtalk-bind-email"
+                autocomplete="email"
                 v-model="bindLoginEmail"
                 data-testid="dingtalk-bind-login-email"
                 type="email"
@@ -169,7 +179,10 @@
                 :disabled="isSubmitting"
                 @keyup.enter="handleBindLogin"
               />
+              <label class="input-label" for="dingtalk-bind-password">{{ t('auth.passwordLabel') }}</label>
               <input
+                id="dingtalk-bind-password"
+                autocomplete="current-password"
                 v-model="bindLoginPassword"
                 data-testid="dingtalk-bind-login-password"
                 type="password"
@@ -198,7 +211,7 @@
           </template>
 
           <template v-else-if="needsTotpChallenge">
-            <p class="text-sm text-gray-700 dark:text-gray-300">
+            <p class="oauth-copy">
               {{
                 t('auth.oauthFlow.totpHint', {
                   providerName,
@@ -207,7 +220,10 @@
               }}
             </p>
             <div class="space-y-3">
+              <label class="input-label" for="dingtalk-totp-code">{{ t('auth.verificationCode') }}</label>
               <input
+                id="dingtalk-totp-code"
+                autocomplete="one-time-code"
                 v-model="totpCode"
                 data-testid="dingtalk-bind-login-totp"
                 type="text"
@@ -229,7 +245,6 @@
             </div>
           </template>
         </div>
-      </transition>
     </div>
   </AuthLayout>
 </template>
@@ -845,15 +860,4 @@ onMounted(async () => {
 })
 </script>
 
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-</style>
+<style scoped src="./auth-callback.css"></style>

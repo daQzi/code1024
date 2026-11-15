@@ -125,6 +125,8 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import { getFloatingPanelPosition } from '@/utils/floatingPanel'
+import { getPopoverLayer } from '@/utils/overlayLayer'
 
 const { t } = useI18n()
 
@@ -190,7 +192,6 @@ const triggerRef = ref<HTMLButtonElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const optionsListRef = ref<HTMLElement | null>(null)
-const dropdownPosition = ref<'bottom' | 'top'>('bottom')
 const triggerRect = ref<DOMRect | null>(null)
 const dropdownViewportPadding = 8
 const dropdownMinimumWidth = 200
@@ -216,27 +217,25 @@ const dropdownStyle = computed(() => {
   if (!triggerRect.value) return {}
 
   const rect = triggerRect.value
-  const viewportRight = Math.max(dropdownViewportPadding, window.innerWidth - dropdownViewportPadding)
-  const left = Math.min(
-    Math.max(dropdownViewportPadding, rect.left),
-    viewportRight
-  )
-  const availableWidth = Math.max(0, viewportRight - left)
-  const preferredMinWidth = Math.max(dropdownMinimumWidth, rect.width)
-  const minWidth = Math.min(preferredMinWidth, availableWidth)
+  const position = getFloatingPanelPosition(rect, window.innerWidth, window.innerHeight, {
+    viewportPadding: dropdownViewportPadding,
+    gap: 4,
+    maxWidth: Math.max(dropdownMinimumWidth, rect.width),
+    maxHeightRatio: 1,
+    mobileBreakpoint: 0,
+    minComfortableHeight: 360,
+  })
   const style: Record<string, string> = {
     position: 'fixed',
-    left: `${left}px`,
-    minWidth: `${minWidth}px`,
-    maxWidth: `${availableWidth}px`,
-    zIndex: '100000020'
+    left: `${position.left}px`,
+    width: `${position.width}px`,
+    minWidth: '0',
+    maxHeight: `${position.maxHeight}px`,
+    zIndex: String(getPopoverLayer(triggerRef.value)),
   }
 
-  if (dropdownPosition.value === 'top') {
-    style.bottom = `${window.innerHeight - rect.top + 4}px`
-  } else {
-    style.top = `${rect.bottom + 4}px`
-  }
+  if (position.bottom !== null) style.bottom = `${position.bottom}px`
+  if (position.top !== null) style.top = `${position.top}px`
 
   return style
 })
@@ -355,19 +354,6 @@ const updateTriggerRect = () => {
 const calculateDropdownPosition = () => {
   if (!containerRef.value) return
   updateTriggerRect()
-
-  nextTick(() => {
-    if (!dropdownRef.value || !triggerRect.value) return
-    const dropdownHeight = dropdownRef.value.offsetHeight || 240
-    const spaceBelow = window.innerHeight - triggerRect.value.bottom
-    const spaceAbove = triggerRect.value.top
-
-    if (spaceBelow < dropdownHeight && spaceAbove > dropdownHeight) {
-      dropdownPosition.value = 'top'
-    } else {
-      dropdownPosition.value = 'bottom'
-    }
-  })
 }
 
 const toggle = () => {
@@ -467,6 +453,7 @@ const onDropdownKeyDown = (e: KeyboardEvent) => {
       break
     case 'Escape':
       e.preventDefault()
+      e.stopPropagation()
       isOpen.value = false
       triggerRef.value?.focus()
       break
@@ -559,7 +546,7 @@ onUnmounted(() => {
 
 <style>
 .select-dropdown-portal {
-  @apply w-max min-w-[200px];
+  @apply flex min-w-0 flex-col;
   @apply bg-white dark:bg-dark-800;
   @apply rounded-xl;
   @apply border border-gray-200 dark:border-dark-700;
@@ -569,19 +556,19 @@ onUnmounted(() => {
 }
 
 .select-dropdown-portal .select-search {
-  @apply flex items-center gap-2 px-3 py-2;
+  @apply flex shrink-0 items-center gap-2 px-3 py-2;
   @apply border-b border-gray-100 dark:border-dark-700;
 }
 
 .select-dropdown-portal .select-search-input {
-  @apply flex-1 bg-transparent text-sm;
+  @apply min-w-0 flex-1 bg-transparent text-sm;
   @apply text-gray-900 dark:text-gray-100;
   @apply placeholder:text-gray-400 dark:placeholder:text-dark-400;
   @apply focus:outline-none;
 }
 
 .select-dropdown-portal .select-options {
-  @apply max-h-80 overflow-y-auto py-1 outline-none;
+  @apply min-h-0 max-h-80 overflow-y-auto overscroll-contain py-1 outline-none;
 }
 
 .select-dropdown-portal .select-option {
