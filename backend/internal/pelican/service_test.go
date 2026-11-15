@@ -62,7 +62,12 @@ func TestRunOneUsesGroupBoundKeyAndFixedPrompt(t *testing.T) {
 		require.Equal(t, "test-model", payload["model"])
 		require.Equal(t, "high", payload["reasoning_effort"])
 		require.Equal(t, false, payload["stream"])
-		require.Equal(t, DefaultPrompt, payload["messages"].([]any)[0].(map[string]any)["content"])
+		messages, ok := payload["messages"].([]any)
+		require.True(t, ok)
+		require.NotEmpty(t, messages)
+		firstMessage, ok := messages[0].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, DefaultPrompt, firstMessage["content"])
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"content":"<svg></svg>"}}],"usage":{"prompt_tokens":10,"completion_tokens":20}}`))}, nil
 	})}
 	mock.ExpectExec("INSERT INTO pelican_results").WithArgs(int64(7), "test-model", "high", "ok", "<svg></svg>", "", sqlmock.AnyArg(), 10, 20).WillReturnResult(sqlmock.NewResult(1, 1))
