@@ -100,9 +100,18 @@ git merge <verified-release-tag>
 - Chromium 实测公共首页 1440px/390px 无横向溢出、登录表单可见、深色切换有效；管理员测智空态和配置面板可打开，零模型请求。该界面验收使用隔离响应 fixture，并非真实认证/数据库端到端验收。
 - Chromium 在父页 nonce CSP 下实测：模型脚本与尺寸桥接执行，父页 DOM 访问失败，外部 fetch 被阻止。
 - Wire 重新生成成功，应用依赖版本及锁文件未修改。
-- `go test -tags unit ./internal/service -run 'Test(CustomBuild|UpdateService)'` 通过，定制构建拒绝官方二进制覆盖的保护通过。
+- `go test -tags unit ./internal/service -run 'Test(CustomBuild|UpdateService|CheckCode1024)'` 通过，更新器只认 `daQzi/code1024` 的 Release。
 - `go test -tags unit ./internal/server ./cmd/server ./internal/web` 通过。
-- 完整 Go embed 构建通过，实际执行 `bin/server -version` 返回版本号本身。
+- 完整 Go embed 构建通过，实际执行 `bin/server -version` 返回 `0.2.22`。
 - 使用空临时数据目录在 `127.0.0.1:5182` 启动实际 embed 二进制，`/setup/status` 返回 200 / needs_setup=true，嵌入前端在浏览器可加载。未提交安装向导，无数据库写入；验收进程已停止。
 - 2026-11-15 使用独立 PostgreSQL 18 / Redis 8 完成全新初始化及官方迁移流程，确认 `pelican_results` / `pelican_config` 存在，`/health` 返回 200、`/setup/status` 为已完成，实际首页与浏览器管理员登录无页面异常。官方部署运营承诺保留为使用者本人确认；未确认前后台管理/测智配置接口按官方规则阻止访问。
 - 测智没有配置渠道或启用定时，未执行收费模型调用；配置保存/真实生成尚待使用者确认承诺并提供授权渠道后验收。未构建应用 Docker 镜像，未部署到服务器。
+
+## 2026-11-16 发布验收
+
+- 仓库已转为公开，`main` 为默认分支与发布主线；官方 v0.2.21 仍在同一历史中作为 tag 可追溯。
+- `v0.2.22` 已发布：Release 为 Latest、`prerelease=false`、`draft=false`，资产含 5 个平台包与 `checksums.txt`，下载校验值与 `checksums.txt` 一致。
+- GHCR `ghcr.io/daqzi/code1024` 的 `latest` / `0.2.22` / `0.2` / `0` 均可匿名拉取 manifest（200）。
+- 无 token 实测更新链路：以 `0.2.22` 查询返回 `hasUpdate=false` 且无 warning；以 `0.2.21` 查询返回 `hasUpdate=true`、`latest=0.2.22`，资产里包含 `checksums.txt` 与当前平台包。
+- `raw.githubusercontent.com/daQzi/code1024/main/deploy/install.sh` 可匿名访问且 `GITHUB_REPO="daQzi/code1024"`。
+- 未执行会覆盖二进制的真实就地升级；该路径仍需在隔离主机上验收。
