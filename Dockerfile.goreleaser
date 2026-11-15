@@ -12,9 +12,9 @@ FROM ${POSTGRES_IMAGE} AS pg-client
 
 FROM ${ALPINE_IMAGE}
 
-LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
-LABEL description="Sub2API - AI API Gateway Platform"
-LABEL org.opencontainers.image.source="https://github.com/Wei-Shaw/sub2api"
+LABEL maintainer="daQzi <github.com/daQzi>"
+LABEL description="code1024 - Sub2API derivative with custom UI and Pelican benchmark"
+LABEL org.opencontainers.image.source="https://github.com/daQzi/code1024"
 
 # Install runtime dependencies
 RUN apk add --no-cache \

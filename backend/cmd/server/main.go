@@ -34,7 +34,7 @@ var (
 	Version   = ""
 	Commit    = "unknown"
 	Date      = "unknown"
-	BuildType = "custom" // Derivative builds are upgraded by merging upstream and rebuilding.
+	BuildType = "source" // "source" for manual builds, "release" for CI builds (set by ldflags)
 )
 
 func init() {

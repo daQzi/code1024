@@ -30,7 +30,9 @@ var (
 const (
 	updateCacheKey = "update_check_cache"
 	updateCacheTTL = 1200 // 20 minutes
-	githubRepo     = "Wei-Shaw/sub2api"
+	// Releases are published from code1024. Keeping the update source here means
+	// the updater only ever installs artifacts built from this repository.
+	githubRepo = "daQzi/code1024"
 
 	// Security: allowed download domains for updates
 	allowedDownloadHost = "github.com"
@@ -179,9 +181,6 @@ func (s *UpdateService) PerformUpdate(ctx context.Context) error {
 // verifies its checksum, and atomically swaps the running binary.
 // Shared by PerformUpdate (latest) and RollbackToVersion (specific older version).
 func (s *UpdateService) applyReleaseAssets(ctx context.Context, releaseAssets []Asset) error {
-	if s.buildType == "custom" {
-		return fmt.Errorf("custom builds must be upgraded from their source repository; official binaries would overwrite the UI and benchmark module")
-	}
 	// Find matching archive and checksum for current platform
 	archiveName := s.getArchiveName()
 	var downloadURL string

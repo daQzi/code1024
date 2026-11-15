@@ -31,9 +31,11 @@ type updateServiceGitHubClientStub struct {
 	release        *GitHubRelease
 	recentReleases []*GitHubRelease
 	recentErr      error
+	latestRepo     string
 }
 
-func (s *updateServiceGitHubClientStub) FetchLatestRelease(context.Context, string) (*GitHubRelease, error) {
+func (s *updateServiceGitHubClientStub) FetchLatestRelease(_ context.Context, repo string) (*GitHubRelease, error) {
+	s.latestRepo = repo
 	return s.release, nil
 }
 
@@ -186,8 +188,16 @@ func TestUpdateServiceRollbackToVersionAcceptsVPrefix(t *testing.T) {
 	require.Contains(t, err.Error(), "no compatible release found")
 }
 
-func TestCustomBuildCannotInstallOfficialReleaseAssets(t *testing.T) {
-	svc := NewUpdateService(nil, nil, "0.2.21", "custom")
-	err := svc.applyReleaseAssets(context.Background(), nil)
-	require.ErrorContains(t, err, "custom builds must be upgraded from their source repository")
+func TestUpdateServiceChecksCode1024Releases(t *testing.T) {
+	client := &updateServiceGitHubClientStub{
+		release: &GitHubRelease{TagName: "v0.2.23"},
+	}
+	svc := NewUpdateService(&updateServiceCacheStub{}, client, "0.2.22", "release")
+
+	info, err := svc.CheckUpdate(context.Background(), true)
+
+	require.NoError(t, err)
+	require.Equal(t, "daQzi/code1024", client.latestRepo)
+	require.True(t, info.HasUpdate)
+	require.Equal(t, "0.2.23", info.LatestVersion)
 }

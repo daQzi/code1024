@@ -2,9 +2,11 @@
 set -euo pipefail
 : "${RELEASE_VERSION:?}" "${RELEASE_SHA:?}" "${GITHUB_REPOSITORY:?}" "${RUNNER_TEMP:?}"
 owner=${GITHUB_REPOSITORY%%/*}
-registries=("ghcr.io/${owner,,}/sub2api")
+# ${var,,} needs Bash 4; keep this portable so the script also runs on macOS Bash 3.2.
+repository_lower=$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+registries=("ghcr.io/${repository_lower}")
 if [[ ${SIMPLE_RELEASE:-false} != true && ${DOCKERHUB_USERNAME:-skip} != skip ]]; then
-  registries+=("${DOCKERHUB_USERNAME}/sub2api")
+  registries+=("${DOCKERHUB_USERNAME}/${GITHUB_REPOSITORY#*/}")
 fi
 arches=(amd64 arm64)
 if [[ ${SIMPLE_RELEASE:-false} == true ]]; then arches=(amd64); fi
@@ -20,7 +22,7 @@ for arch in "${arches[@]}"; do
     fi
   done
   if [[ ${DRY_RUN:-false} == true ]]; then
-    args+=(--output "type=oci,dest=$RUNNER_TEMP/sub2api-$arch.oci.tar")
+    args+=(--output "type=oci,dest=$RUNNER_TEMP/${GITHUB_REPOSITORY#*/}-$arch.oci.tar")
   else
     args+=(--push)
   fi
