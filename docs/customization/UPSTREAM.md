@@ -23,7 +23,7 @@
 
 ## 构建与运行
 
-按官方约束使用 Go **1.27.3** 和 **pnpm 9**，本次安装使用 pnpm 9.15.9。不要用 pnpm 11 重新生成 lockfile。
+使用 Go **1.27.4**（在官方 1.27 系列上升级安全补丁） 和 **pnpm 9**，本次安装使用 pnpm 9.15.9。不要用 pnpm 11 重新生成 lockfile。
 
 ```sh
 # 仓库根目录
@@ -115,6 +115,9 @@ git merge <verified-release-tag>
 
 本地验证：前端 ESLint、类型检查、34 个测试文件 / 639 项关键测试及生产构建通过；
 Go 1.27.3 的 `go test ./internal/server ./cmd/server` 通过，Wire 重新生成仅移除鹈鹕依赖。
-历史迁移、go.mod、go.sum 和 pnpm-lock.yaml 均未改变。
+历史迁移、go.sum 和 pnpm-lock.yaml 均未改变；go.mod 的 Go 最低版本升级至 1.27.4。
 独立巡检另通过 315 项 Python、43 项 Node 测试以及本地 HTTPS 模拟上游/浏览器验收；
 生产已同步元数据，未发起真实模型请求。
+
+发版安全检查发现现有 Go 1.27.3 的 `net/http` 存在 GO-2026-6859（HTTP/1 MaxBytesReader header race 导致服务崩溃）。
+本版同步升级 go.mod、Docker 构建默认镜像、CI、安全扫描与 Release 版本断言至 Go 1.27.4，不改变业务依赖版本。
