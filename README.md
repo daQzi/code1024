@@ -1,6 +1,6 @@
 # code1024
 
-> 本工作区以官方 v0.2.21 为基础，移植独立 UI 与鹈鹕测智；维护范围、构建和后续同步方式见 [二开维护说明](docs/customization/UPSTREAM.md)，来源见 [第三方说明](docs/customization/THIRD_PARTY.md)。测智用于人工比较，不是自动降智鉴定。
+> 本工作区以官方 v0.2.21 为基础，移植独立 UI，质量巡检通过独立服务嵌入；维护范围、构建和后续同步方式见 [二开维护说明](docs/customization/UPSTREAM.md)，来源见 [第三方说明](docs/customization/THIRD_PARTY.md)。v0.2.23 已移除内置鹈鹕测智，质量检测在独立服务中配置与展示。
 
 <div align="center">
 

@@ -145,7 +145,6 @@ export function useShellNav() {
         icon: 'bolt',
         featureFlag: flagChannelMonitor,
       },
-      { path: '/pelican', label: t('nav.pelican'), icon: 'lightbulb' },
       { path: '/settings/mcp', label: t('mcp.title'), icon: 'mcp', featureFlag: flagMCP },
     ]
 
@@ -286,7 +285,6 @@ export function useShellNav() {
         ],
       },
       { path: '/admin/accounts', label: t('nav.accounts'), icon: 'server' },
-      { path: '/pelican', label: t('nav.pelican'), icon: 'lightbulb' },
       { path: '/settings/mcp', label: t('mcp.title'), icon: 'mcp', featureFlag: flagMCP },
       { path: '/admin/proxies', label: t('nav.proxies'), icon: 'cloud' },
       {
@@ -390,7 +388,6 @@ export function useShellNav() {
       { path: '/admin/proxies', label: t('nav.proxies'), icon: 'cloud' },
       { path: '/admin/usage', label: t('nav.usage'), icon: 'trendingUp' },
       { path: '/keys', label: t('nav.apiKeys'), icon: 'key' },
-      { path: '/pelican', label: t('nav.pelican'), icon: 'lightbulb' },
       { path: '/settings/mcp', label: t('mcp.title'), icon: 'mcp', featureFlag: flagMCP },
       { path: '/admin/settings', label: t('nav.settings'), icon: 'cog' },
     ]

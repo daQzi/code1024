@@ -196,7 +196,6 @@ export default {
     sectionInfra: '模型与渠道',
     sectionCommerce: '商业化',
     sectionSystem: '系统',
-    pelican: '鹈鹕测智',
     sectionCustom: '自定义',
     myAccount: '我的账户',
     lightMode: '浅色模式',

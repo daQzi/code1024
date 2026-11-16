@@ -1,7 +1,6 @@
 .PHONY: build build-backend build-frontend test test-backend test-frontend test-frontend-critical
 
 FRONTEND_CRITICAL_VITEST := \
-	src/utils/__tests__/pelicanPreview.spec.ts \
 	src/shell/__tests__/ShellRail.theme.spec.ts \
 	src/composables/__tests__/useTheme.spec.ts \
 	src/components/common/__tests__/BaseDialog.layers.spec.ts \

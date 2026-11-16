@@ -109,7 +109,7 @@ FROM ${ALPINE_IMAGE}
 
 # Labels
 LABEL maintainer="daQzi <github.com/daQzi>"
-LABEL description="code1024 - Sub2API derivative with custom UI and Pelican benchmark"
+LABEL description="code1024 - Sub2API derivative with custom UI and independent quality inspection"
 LABEL org.opencontainers.image.source="https://github.com/daQzi/code1024"
 
 # Install runtime dependencies

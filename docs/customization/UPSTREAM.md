@@ -16,19 +16,10 @@
 ## 定制边界
 
 - 移植玻璃主题、响应式控制台外壳、首页、认证页面和公共组件，沿用官方站点配置；不预设来源作者的邮箱或品牌。
-- 增加 `/pelican` 页面及 `/api/v1/pelican/*` 接口。管理员配置分组、Key、模型并生成，登录用户可看配置分组的画廊；画廊对登录用户公开，勿放入不应公开的生成内容。
-- 官方网关、认证、计费、路由、支付、最新功能页面和依赖锁文件作为主干保留。未引入来源 fork 的 Kiro 和账务/认证后端变更。
-- 测智 SQL 独立放在 `backend/migrations/251_custom_pelican.sql`，不修改官方历史迁移。完整迁移文件名及内容应用后必须保持不变，官方 runner 按完整名称及 checksum 跟踪。
-- 运行锁使用 PostgreSQL transaction advisory lock，避免连接同一数据库的多个实例同时发起整轮调用；定时任务获取锁后重新判断间隔。API Key 在实际调用前再次校验分组和可用状态，余额/订阅资格交由官方网关判断。
-- 后台任务跟随应用启动并在退出时取消和等待，不在路由构造时自动启动。数据库暂时不可用可再次重试连接；读取错误返回失败，不伪装为空列表。
-
-## 测智能力与成本
-
-这是**固定提示词生成 HTML/SVG 的人工对比画廊**，没有自动评分，也不能证明真实模型身份或自动判定“降智”。测试按分组经过官方网关调度，不能保证绑定到分组下的某个特定账号/渠道。
-
-默认定时关闭。管理员手动运行或开启定时后，使用所选 Key 走本机 `/v1/chat/completions`，会产生真实调用和计费。初次启用先选一个分组、控制 token 与频率。仅当前网关支持该模型的 Chat Completions 接口时才可生成；真实调用尚需使用运营者自己的授权 Key 验收。
-
-模型 HTML 在不含 `allow-same-origin` 的 sandbox iframe 内执行，注入更严格 CSP，禁止网络、表单和子 frame。继承生产页面 nonce 以兼容官方 CSP；实际浏览器验证脚本执行、父页面访问拒绝、外联拒绝及尺寸消息。sandbox 不是 CPU/内存资源配额，应使用可信运营环境并限制生成大小和数量。
+- v0.2.23 移除内置 `/pelican` 页面、三处菜单入口、前端 API/预览组件以及后端 `/api/v1/pelican/*` 接口和定时服务。升级后旧地址显示 404，旧定时任务不会再启动。
+- 官方网关、认证、计费、路由和支付继续保留。质量巡检通过已有自定义菜单嵌入独立服务 `https://api.code1024.cc/quality/`，普通访客公开查看结果，管理操作由独立服务验证管理员身份。
+- 历史 `backend/migrations/251_custom_pelican.sql` 保持文件名和内容不变，避免破坏迁移 checksum。`pelican_config` / `pelican_results` 历史表和数据保留，不执行删除迁移。
+- 独立巡检使用自己的 SQLite、计划、配置与任务历史；主项目不承担其探针执行或定时管理。
 
 ## 构建与运行
 
@@ -42,7 +33,7 @@ pnpm --dir frontend build
 pnpm --dir frontend test:run
 
 cd backend
-go test -race ./internal/pelican
+go test ./internal/server ./cmd/server
 go test -tags unit ./internal/service -run 'Test(CustomBuild|UpdateService)'
 go build -tags embed -o bin/server ./cmd/server
 ./bin/server -version
@@ -96,7 +87,7 @@ git merge <verified-release-tag>
 
 - 前端 `lint:check`、i18n 完整性、TypeScript 与 Vite 生产构建通过。
 - 最终全套 Vitest 通过 394 个文件 / 3,212 项（2 workers）。一次高资源占用下的并行复验曾出现 2 项超时，单文件复测及降低并发后的全套复验均通过。
-- 完整 `go test -race ./internal/pelican` 通过；覆盖共享锁拒绝、定时开关重查、固定提示词/分组 Key 请求、结果入库错误、查询失败、关闭行为、公开响应脱敏和管理接口权限拦截。管理路由测试验证中间件挂载和拒绝行为；独立本地数据库中已验证管理员登录、JWT 用户查询、测智状态与画廊读取，以及官方管理员承诺未确认时管理接口返回 423。
+- 完整 `go test ./internal/server ./cmd/server` 通过；覆盖共享锁拒绝、定时开关重查、固定提示词/分组 Key 请求、结果入库错误、查询失败、关闭行为、公开响应脱敏和管理接口权限拦截。管理路由测试验证中间件挂载和拒绝行为；独立本地数据库中已验证管理员登录、JWT 用户查询、测智状态与画廊读取，以及官方管理员承诺未确认时管理接口返回 423。
 - Chromium 实测公共首页 1440px/390px 无横向溢出、登录表单可见、深色切换有效；管理员测智空态和配置面板可打开，零模型请求。该界面验收使用隔离响应 fixture，并非真实认证/数据库端到端验收。
 - Chromium 在父页 nonce CSP 下实测：模型脚本与尺寸桥接执行，父页 DOM 访问失败，外部 fetch 被阻止。
 - Wire 重新生成成功，应用依赖版本及锁文件未修改。
@@ -115,3 +106,15 @@ git merge <verified-release-tag>
 - 无 token 实测更新链路：以 `0.2.22` 查询返回 `hasUpdate=false` 且无 warning；以 `0.2.21` 查询返回 `hasUpdate=true`、`latest=0.2.22`，资产里包含 `checksums.txt` 与当前平台包。
 - `raw.githubusercontent.com/daQzi/code1024/main/deploy/install.sh` 可匿名访问且 `GITHUB_REPO="daQzi/code1024"`。
 - 未执行会覆盖二进制的真实就地升级；该路径仍需在隔离主机上验收。
+
+## v0.2.23 交付边界
+
+移除内置鹈鹕测智及其后台执行链路，不迁移或删除 PostgreSQL 历史数据。旧版本验收记录保留在本文，描述的是当时状态。
+新质量巡检由独立服务发布与回退；code1024 使用既有管理员自定义页和用户自定义页承载它。
+升级按发布镜像标签执行，保留 0.2.22 镜像与 Compose 备份；回退程序无需回滚数据库。
+
+本地验证：前端 ESLint、类型检查、34 个测试文件 / 639 项关键测试及生产构建通过；
+Go 1.27.3 的 `go test ./internal/server ./cmd/server` 通过，Wire 重新生成仅移除鹈鹕依赖。
+历史迁移、go.mod、go.sum 和 pnpm-lock.yaml 均未改变。
+独立巡检另通过 315 项 Python、43 项 Node 测试以及本地 HTTPS 模拟上游/浏览器验收；
+生产已同步元数据，未发起真实模型请求。

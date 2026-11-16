@@ -177,12 +177,6 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/pelican',
-    name: 'Pelican',
-    component: () => import('@/views/PelicanView.vue'),
-    meta: { requiresAuth: true, requiresAdmin: false, title: 'Pelican IQ Test', titleKey: 'pelican.title' }
-  },
-  {
     path: '/model-plaza',
     name: 'ModelPlaza',
     component: () => import('@/views/ModelPlazaView.vue'),

@@ -196,7 +196,6 @@ export default {
     sectionInfra: 'Models & Channels',
     sectionCommerce: 'Commerce',
     sectionSystem: 'System',
-    pelican: 'Pelican Test',
     sectionCustom: 'Custom',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
