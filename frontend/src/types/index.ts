@@ -193,6 +193,7 @@ export interface CustomMenuItem {
   page_slug?: string
   hide_open_button?: boolean
   visibility: 'user' | 'admin'
+  section_key?: string
   sort_order: number
 }
 

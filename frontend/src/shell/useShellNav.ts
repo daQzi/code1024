@@ -104,6 +104,37 @@ export function useShellNav() {
       .sort((a, b) => a.sort_order - b.sort_order)
   })
 
+  function menuSectionKey(item: { section_key?: string }, visibility: 'user' | 'admin'): string {
+    const key = item.section_key || 'custom'
+    const allowed = visibility === 'user'
+      ? ['workspace', 'resources', 'account', 'custom']
+      : ['overview', 'people', 'infra', 'commerce', 'system', 'personal', 'custom']
+    return allowed.includes(key) ? key : 'custom'
+  }
+
+  function appendCustomItems(
+    sections: ShellNavSection[],
+    items: Array<{ id: string; label: string; icon_svg?: string; section_key?: string }>,
+    visibility: 'user' | 'admin',
+  ): ShellNavSection[] {
+    const bySection = new Map<string, ShellNavItem[]>()
+    for (const item of items) {
+      const key = menuSectionKey(item, visibility)
+      const list = bySection.get(key) || []
+      list.push({ path: `/custom/${item.id}`, label: item.label, icon: null, iconSvg: item.icon_svg })
+      bySection.set(key, list)
+    }
+    const result = sections.map((section) => ({
+      ...section,
+      items: [...section.items, ...(bySection.get(section.key) || [])],
+    }))
+    const custom = bySection.get('custom') || []
+    if (custom.length && !result.some((section) => section.key === 'custom')) {
+      result.push({ key: 'custom', title: t('nav.sectionCustom'), items: custom })
+    }
+    return result
+  }
+
   function finalize(items: ShellNavItem[]): ShellNavItem[] {
     const visible = applyFeatureFlags(items)
     return isSimpleMode.value ? visible.filter((i) => !i.hideInSimpleMode) : visible
@@ -111,13 +142,6 @@ export function useShellNav() {
 
   // ---------------------------------------------------------------- 用户端
   const userSections = computed<ShellNavSection[]>(() => {
-    const custom: ShellNavItem[] = customMenuItemsForUser.value.map((item) => ({
-      path: `/custom/${item.id}`,
-      label: item.label,
-      icon: null,
-      iconSvg: item.icon_svg,
-    }))
-
     const workspace: ShellNavItem[] = [
       { path: '/dashboard', label: t('nav.dashboard'), icon: 'grid' },
       { path: '/usage', label: t('nav.usage'), icon: 'chartBar', hideInSimpleMode: true },
@@ -186,10 +210,8 @@ export function useShellNav() {
       { key: 'resources', title: t('nav.sectionResources'), items: finalize(resources) },
       { key: 'account', title: t('nav.sectionAccount'), items: finalize(account) },
     ]
-    if (custom.length) {
-      sections.push({ key: 'custom', title: t('nav.sectionCustom'), items: custom })
-    }
-    return sections.filter((s) => s.items.length > 0)
+    return appendCustomItems(sections, customMenuItemsForUser.value, 'user')
+      .filter((s) => s.items.length > 0)
   })
 
   // 管理员「我的账户」区（不含仪表盘）
@@ -228,18 +250,15 @@ export function useShellNav() {
       { path: '/redeem', label: t('nav.redeem'), icon: 'gift', hideInSimpleMode: true },
       { path: '/profile', label: t('nav.profile'), icon: 'user' },
     ])
-    return items.length ? { key: 'personal', title: t('nav.myAccount'), items } : null
+    const custom = customMenuItemsForAdmin.value
+      .filter((item) => menuSectionKey(item, 'admin') === 'personal')
+      .map((item) => ({ path: `/custom/${item.id}`, label: item.label, icon: null, iconSvg: item.icon_svg }))
+    const all = [...items, ...custom]
+    return all.length ? { key: 'personal', title: t('nav.myAccount'), items: all } : null
   })
 
   // ---------------------------------------------------------------- 管理端
   const adminSections = computed<ShellNavSection[]>(() => {
-    const custom: ShellNavItem[] = customMenuItemsForAdmin.value.map((item) => ({
-      path: `/custom/${item.id}`,
-      label: item.label,
-      icon: null,
-      iconSvg: item.icon_svg,
-    }))
-
     const overview: ShellNavItem[] = [
       { path: '/admin/dashboard', label: t('nav.dashboard'), icon: 'grid' },
       {
@@ -365,10 +384,8 @@ export function useShellNav() {
       { key: 'commerce', title: t('nav.sectionCommerce'), items: finalize(commerce) },
       { key: 'system', title: t('nav.sectionSystem'), items: finalize(system) },
     ]
-    if (custom.length) {
-      sections.push({ key: 'custom', title: t('nav.sectionCustom'), items: custom })
-    }
-    return sections.filter((s) => s.items.length > 0)
+    return appendCustomItems(sections, customMenuItemsForAdmin.value, 'admin')
+      .filter((s) => s.items.length > 0)
   })
 
   // 简单模式下的管理员导航：保留旧行为（扁平 + 密钥 + 设置 + 自定义）

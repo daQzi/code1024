@@ -15,6 +15,9 @@ type CustomMenuItem struct {
 	URL            string `json:"url"`
 	PageSlug       string `json:"page_slug,omitempty"`
 	Visibility     string `json:"visibility"` // "user" or "admin"
+	// SectionKey controls the first-level shell section. Empty/unknown values
+	// are kept compatible by the frontend as the legacy custom section.
+	SectionKey     string `json:"section_key,omitempty"`
 	SortOrder      int    `json:"sort_order"`
 	HideOpenButton bool   `json:"hide_open_button,omitempty"`
 }

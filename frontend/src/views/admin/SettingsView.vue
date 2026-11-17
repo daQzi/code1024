@@ -6847,6 +6847,31 @@
                     </select>
                   </div>
 
+                  <!-- First-level section -->
+                  <div>
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ localText("所属一级菜单", "First-level section") }}
+                    </label>
+                    <select v-model="item.section_key" class="input text-sm">
+                      <option value="custom">{{ localText("自定义", "Custom") }}</option>
+                      <template v-if="item.visibility === 'user'">
+                        <option value="workspace">{{ localText("工作区", "Workspace") }}</option>
+                        <option value="resources">{{ localText("资源", "Resources") }}</option>
+                        <option value="account">{{ localText("我的账户", "My account") }}</option>
+                      </template>
+                      <template v-else>
+                        <option value="overview">{{ localText("概览", "Overview") }}</option>
+                        <option value="people">{{ localText("用户与分组", "People") }}</option>
+                        <option value="infra">{{ localText("基础设施", "Infrastructure") }}</option>
+                        <option value="commerce">{{ localText("商业", "Commerce") }}</option>
+                        <option value="system">{{ localText("系统", "System") }}</option>
+                        <option value="personal">{{ localText("我的账户", "My account") }}</option>
+                      </template>
+                    </select>
+                  </div>
+
                   <!-- URL (full width) -->
                   <div class="sm:col-span-2">
                     <label
@@ -9822,6 +9847,7 @@ const form = reactive<SettingsForm>({
     visibility: "user" | "admin";
     sort_order: number;
     hide_open_button?: boolean;
+    section_key?: string;
   }>,
   custom_endpoints: [] as Array<{
     name: string;
@@ -10814,6 +10840,7 @@ function addMenuItem() {
     icon_svg: "",
     url: "",
     visibility: "user",
+    section_key: "custom",
     sort_order: form.custom_menu_items.length,
   });
 }

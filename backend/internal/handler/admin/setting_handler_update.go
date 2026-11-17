@@ -1282,6 +1282,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			return
 		}
 		for i, item := range items {
+			item.SectionKey = strings.TrimSpace(item.SectionKey)
+			if item.SectionKey == "" {
+				item.SectionKey = "custom"
+			}
 			if strings.TrimSpace(item.Label) == "" {
 				response.BadRequest(c, "Custom menu item label is required")
 				return
@@ -1316,6 +1320,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 				response.BadRequest(c, "Custom menu item visibility must be 'user' or 'admin'")
 				return
 			}
+			validSections := map[string]bool{"custom": true}
+			if item.Visibility == "user" {
+				validSections["workspace"], validSections["resources"], validSections["account"] = true, true, true
+			} else {
+				validSections["overview"], validSections["people"], validSections["infra"] = true, true, true
+				validSections["commerce"], validSections["system"], validSections["personal"] = true, true, true
+			}
+			if !validSections[item.SectionKey] {
+				response.BadRequest(c, "Custom menu item section is not available for this visibility")
+				return
+			}
+			items[i] = item
 			if len(item.IconSVG) > maxMenuItemIconSVGLen {
 				response.BadRequest(c, "Custom menu item icon SVG is too large (max 10KB)")
 				return
