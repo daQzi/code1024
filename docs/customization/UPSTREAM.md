@@ -5,9 +5,9 @@
 | 项目 | 基线 |
 | --- | --- |
 | 官方 | https://github.com/Wei-Shaw/sub2api |
-| 正式版本 | v0.2.21，2026-11-11 发布，2026-11-15 核实为最新正式版 |
-| 官方提交 | `10ba8f9b4dc2e6023d4a9879ab77b21841babd10` |
-| 官方 tree | `9ef0bd47419e611c09d11be3513c2161e8decf6f` |
+| 正式版本 | v0.2.23，2026-11-18 发布 |
+| 官方提交 | `5af9afb588c4b014b3df9db7d4073af1f8ae01b6` |
+| 官方 tree | `58ae0aff60632e214abdb4dec8e7a70e169b2f1e` |
 | UI / 测智来源 | https://github.com/Callia218/clawai-sub2api |
 | 来源提交 | `cf59fd96c4c73318d41c52098965eb549e37fbe1` |
 
@@ -51,7 +51,7 @@ go build -tags embed -o bin/server ./cmd/server
 
 Wire 变更在 `backend/cmd/server/wire.go` 维护并重新生成 `wire_gen.go`。
 
-首次运行需要 PostgreSQL、Redis、官方安装向导/配置和管理员账户；不要连接生产库做试运行。数据库迁移由官方启动流程执行，正式升级先备份数据库。仅添加测智表不改变官方业务表；回滚应用版本可保留这两张表，删除会丢失测智配置和历史。
+首次运行需要 PostgreSQL、Redis、官方安装向导/配置和管理员账户；不要连接生产库做试运行。数据库迁移由官方启动流程执行，正式升级先备份数据库。仅添加测智表不改变官方业务表；回滚应用版本可保留这两张表，删除会丢失测智配置和历史。code1024 v0.2.25 另合入三个官方迁移，分别新增分组 Ultra Fast 开关、更新分组日汇总状态及触发器函数、增加渠道 Ultra Fast 倍率。
 
 自行构建 Docker 镜像：
 
@@ -67,12 +67,12 @@ docker build -t code1024:0.2.22 .
 
 1. 先 `git status --short`，保存并审查定制变更；从 `main` 创建升级分支，不要在脏工作区直接 merge。
 2. 从官方 Releases 核实目标正式 tag，不以 main HEAD 代替正式版；记录其 commit。
-3. 获取目标 tag，在独立升级分支合并，保留 upstream ancestry。例如将占位值替换为已核实 tag：
+3. 将官方 tag 获取到独立的本地引用，避免与 code1024 的同名发布 tag 冲突。在独立升级分支合并并保留上游提交历史。例如将占位值替换为已核实 tag：
 
 ```sh
-git fetch upstream tag <verified-release-tag>
+git fetch --no-tags upstream 'refs/tags/<verified-release-tag>:refs/upstream/tags/<verified-release-tag>'
 git switch -c upgrade/<verified-release-tag>
-git merge <verified-release-tag>
+git merge refs/upstream/tags/<verified-release-tag>
 ```
 
 本地已补全官方历史；若其他环境使用 shallow clone，历史不足以计算共同祖先时，先针对官方补足历史（必要时 `git fetch --unshallow upstream`），不要使用 `--allow-unrelated-histories` 或重新复制全仓覆盖。
@@ -83,7 +83,14 @@ git merge <verified-release-tag>
 7. 在本文件更新官方 tag / commit 和验证记录，保留来源及许可证说明。
 8. 发布下一个 code1024 版本：提升 `backend/cmd/server/VERSION` 并打 `vX.Y.Z` tag 推送，由 Actions 产出 Release、二进制和镜像。
 
-## 验证记录
+## v0.2.25 同步官方 v0.2.23
+
+- 完整合入官方 v0.2.22 和 v0.2.23，包含 GPT-6.2 Sol / Astra、OpenAI 流式换号、批量扣费、调度快照和缓存写入计费修复。
+- 分组 Ultra Fast 开关默认关闭，渠道倍率为空时使用模型默认定价。历史迁移 `251_custom_pelican.sql` 原样保留，官方脚本按完整文件名登记。
+- 此版本同时包含 v0.2.24 的自定义菜单挂载功能，在线更新继续使用 code1024 发布源。
+- 本地 Go 单元测试、前端 396 个文件 / 3,244 项测试、生产构建及嵌入式后端构建通过。独立 PostgreSQL 验证 v0.2.24 旧库升级后迁移记录由 303 条增至 306 条，并通过重跑校验、历史数据留存和 Chromium 实际登录检查。
+
+## 初次二开验证记录
 
 - 前端 `lint:check`、i18n 完整性、TypeScript 与 Vite 生产构建通过。
 - 最终全套 Vitest 通过 394 个文件 / 3,212 项（2 workers）。一次高资源占用下的并行复验曾出现 2 项超时，单文件复测及降低并发后的全套复验均通过。
