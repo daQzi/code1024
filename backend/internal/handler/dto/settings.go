@@ -9,12 +9,12 @@ import (
 
 // CustomMenuItem represents a user-configured custom menu entry.
 type CustomMenuItem struct {
-	ID             string `json:"id"`
-	Label          string `json:"label"`
-	IconSVG        string `json:"icon_svg"`
-	URL            string `json:"url"`
-	PageSlug       string `json:"page_slug,omitempty"`
-	Visibility     string `json:"visibility"` // "user" or "admin"
+	ID         string `json:"id"`
+	Label      string `json:"label"`
+	IconSVG    string `json:"icon_svg"`
+	URL        string `json:"url"`
+	PageSlug   string `json:"page_slug,omitempty"`
+	Visibility string `json:"visibility"` // "user" or "admin"
 	// SectionKey controls the first-level shell section. Empty/unknown values
 	// are kept compatible by the frontend as the legacy custom section.
 	SectionKey     string `json:"section_key,omitempty"`
