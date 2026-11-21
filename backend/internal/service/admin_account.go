@@ -532,6 +532,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	if err != nil {
 		return nil, err
 	}
+	if err := normalizeNewAPIPluginAccount(ctx, s.newAPIPlugins, account, input.Credentials); err != nil {
+		return nil, err
+	}
 	if err := s.ValidateAccountGroupBindings(ctx, groupIDs); err != nil {
 		return nil, err
 	}
@@ -869,6 +872,9 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 
 	billingSettingsAppliedAtomically := false
+	if err := normalizeNewAPIPluginAccount(ctx, s.newAPIPlugins, account, input.Credentials); err != nil {
+		return nil, err
+	}
 	updater := s.accountBillingRepo
 	if updater == nil {
 		// Unit tests and narrow internal callers may construct adminServiceImpl

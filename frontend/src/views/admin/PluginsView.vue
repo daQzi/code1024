@@ -53,6 +53,8 @@
         </div>
       </section>
 
+      <NewAPIPluginsPanel />
+
       <p class="text-xs text-gray-500 dark:text-gray-400">
         {{ t("admin.plugins.uploadHint") }}
       </p>
@@ -333,6 +335,7 @@
 </template>
 
 <script setup lang="ts">
+import NewAPIPluginsPanel from '@/components/admin/NewAPIPluginsPanel.vue'
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {

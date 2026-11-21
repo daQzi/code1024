@@ -1,5 +1,29 @@
 export default {
   plugins: {
+    js: {
+      serviceFee: '每单服务费（USD）', minimumCharge: '最低收费（USD）', maximumHold: '最高基础费用（USD，可留空）',
+      upstreamKind: '上游服务类型', vendorUpstream: '原厂接口', newAPIUpstream: 'New API 网关',
+      review: {
+        title: '视频任务待对账', hint: '显示最早的 100 条异常任务。先到上游确认结果，再选择继续查询、全额退款或确认结算。',
+        empty: '没有待对账的视频任务。', identities: '用户 #{user} · 账号 #{account}', held: '已冻结 ${amount}', open: '处理任务',
+        action: '处理方式', resume: '补充上游任务号，继续查询', refund: '结束任务并全额退款', settle: '按确认金额结算',
+        upstreamId: '已确认的上游任务号', amount: '最终收费（USD，不超过冻结金额）', reason: '核查依据（至少 4 个字符）',
+        safety: '继续查询不会重新提交生成。退款、结算由后台事务执行，操作依据会保留。请勿在尚未确认上游结果时退款。',
+        confirm: '确认处理', saved: '处理已记录，后台将继续查询或完成资金结算。'
+      },
+      pricingTitle: '视频售价', addPrice: '添加定价', pricingHint: '留空时使用分组视频价格。成本加价可按单价与用量，或上游最终账单结算。最终账单模式必须填写最大冻结额（加分组倍率前的 USD）；超额转人工对账，差额退回。',
+      priceModel: '模型名（* 表示所有模型）', priceMode: '定价方式', fixedPrice: '固定单价', costPlus: '上游成本 × 加价倍率', priceUnit: '计费单位', salePrice: '售价（USD / 单位）', sourcePrice: '上游单价（原币 / 单位）', sourceCurrency: '上游币种', exchangeRate: '1 原币折算 USD', markup: '售价倍率（如 1.2）', invalidPrice: '请填写有效价格；模型不能重复。', units: { request: '每个任务', second: '每秒', token: '每个 Token', credit: '每个积分', upstream_cost: '上游最终账单' },
+      title: 'New API 协议插件',
+      description: '按上游协议安装插件，再到账号管理中选择。目前账号接入支持 OpenAI Videos 任务插件；Provider 和请求处理标签仅表示脚本声明，通用接点尚未开放。',
+      builtin: '内置插件', choose: '选择插件', installBuiltin: '安装内置版本', upload: '上传 plugin.js',
+      empty: '尚未安装 JS 插件', versions: '历史版本', useVersion: '启用此版本', modelCount: '声明 {count} 个模型',
+      versionNote: '历史版本保留。切换默认版本不会修改已有账号固定的插件版本，请在账号编辑页显式升级。装载通过只代表契约可读取，实际能力以宿主支持和联调结果为准。',
+      installed: '已保存 v{version}，可在历史版本中选择启用。', tooLarge: '源码文件不能超过 1 MiB',
+      accountTitle: '上游协议插件', native: '使用当前平台内置协议',
+      accountHint: '先在插件管理安装并启用。上游地址、Key、分组和并发继续使用本账号设置。',
+      pinned: '固定插件版本 #{id}', configSaved: '配置已加密保存，留空时保留原配置。',
+      replaceConfig: '重新填写插件配置', invalidJSON: '{name} 必须是有效 JSON', loadFailed: '插件列表加载失败，请刷新后重试。'
+    },
     title: '插件管理',
     description: '安装和管理独立运行的 OAuth 出站传输插件。API Key 流程不受影响。',
     upload: '安装插件',

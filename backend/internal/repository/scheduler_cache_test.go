@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -9,6 +10,21 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSchedulerMetadataPreservesPluginRoutingIsolation(t *testing.T) {
+	account := service.Account{ID: 29, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true,
+		Credentials: map[string]any{service.NewAPIPluginRevisionKey: 7, "newapi_plugin_video_models": []string{"sora-2"}, "newapi_plugin_config_encrypted": "private-config"}}
+	_, payload, err := marshalSchedulerCacheAccount(account)
+	require.NoError(t, err)
+	var projected service.Account
+	require.NoError(t, json.Unmarshal([]byte(payload), &projected))
+	require.EqualValues(t, 7, projected.NewAPIPluginVersionID())
+	require.NotContains(t, projected.Credentials, "newapi_plugin_config_encrypted")
+	require.True(t, projected.IsSchedulableForModelWithContext(service.WithNewAPIPluginRouting(context.Background()), "sora-2"))
+	require.True(t, projected.SupportsOpenAIEndpointCapability("plugin_task"))
+	require.False(t, projected.IsSchedulableForModel("sora-2"))
+	require.False(t, projected.SupportsOpenAIEndpointCapability(service.OpenAIEndpointCapabilityChatCompletions))
+}
 
 func TestFilterSchedulerCredentialsKeepsSubscriptionPlanType(t *testing.T) {
 	filtered := filterSchedulerCredentials(map[string]any{

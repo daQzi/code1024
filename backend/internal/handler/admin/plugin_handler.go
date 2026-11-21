@@ -25,11 +25,13 @@ const pluginUISessionTTL = 30 * time.Minute
 
 // PluginHandler 提供插件安装、生命周期、配置和隔离 UI 资源接口。
 type PluginHandler struct {
-	manager *service.PluginManager
+	manager     *service.PluginManager
+	newAPI      *service.NewAPIPluginService
+	generations *service.GenerationService
 }
 
-func NewPluginHandler(manager *service.PluginManager) *PluginHandler {
-	return &PluginHandler{manager: manager}
+func NewPluginHandler(manager *service.PluginManager, newAPI *service.NewAPIPluginService, generations *service.GenerationService) *PluginHandler {
+	return &PluginHandler{manager: manager, newAPI: newAPI, generations: generations}
 }
 
 func (h *PluginHandler) List(c *gin.Context) {

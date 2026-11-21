@@ -1,5 +1,29 @@
 export default {
   plugins: {
+    js: {
+      serviceFee: 'Service fee per task (USD)', minimumCharge: 'Minimum charge (USD)', maximumHold: 'Maximum base charge (USD, optional)',
+      upstreamKind: 'Upstream service', vendorUpstream: 'Vendor API', newAPIUpstream: 'New API gateway',
+      review: {
+        title: 'Video tasks requiring review', hint: 'Shows the oldest 100 tasks. Confirm the upstream outcome before resuming polling, refunding or settling.',
+        empty: 'No video tasks require review.', identities: 'User #{user} · Account #{account}', held: 'Held ${amount}', open: 'Review task',
+        action: 'Resolution', resume: 'Confirm upstream task ID and resume polling', refund: 'Close task and refund in full', settle: 'Settle confirmed amount',
+        upstreamId: 'Confirmed upstream task ID', amount: 'Final charge (USD, within the hold)', reason: 'Review evidence (at least 4 characters)',
+        safety: 'Resuming polling never submits generation again. Refunds and settlements run in a background transaction and retain an audit record. Confirm the upstream outcome before refunding.',
+        confirm: 'Confirm resolution', saved: 'Resolution recorded. Background processing will resume polling or settle funds.'
+      },
+      pricingTitle: 'Video pricing', addPrice: 'Add price', pricingHint: 'Leave empty to use group video prices. Cost-plus supports unit prices or final upstream bills. Final-bill mode requires a maximum USD hold before group multiplier; excess bills require review and unused funds are refunded.',
+      priceModel: 'Model (* matches all)', priceMode: 'Pricing mode', fixedPrice: 'Fixed unit price', costPlus: 'Upstream cost × markup', priceUnit: 'Billing unit', salePrice: 'Sale price (USD / unit)', sourcePrice: 'Upstream price (source currency / unit)', sourceCurrency: 'Source currency', exchangeRate: 'USD per source currency unit', markup: 'Markup multiplier (e.g. 1.2)', invalidPrice: 'Enter valid prices and unique model names.', units: { request: 'Per task', second: 'Per second', token: 'Per token', credit: 'Per credit', upstream_cost: 'Upstream final bill' },
+      title: 'New API protocol plugins',
+      description: 'Install an upstream protocol plugin, then select it in account management. Account routing currently supports OpenAI Videos task plugins. Provider and Transform labels describe the script; general host integration is not yet available.',
+      builtin: 'Bundled plugin', choose: 'Choose a plugin', installBuiltin: 'Install bundled version', upload: 'Upload plugin.js',
+      empty: 'No JavaScript plugins installed', versions: 'Version history', useVersion: 'Activate this version', modelCount: '{count} declared models',
+      versionNote: 'Version history is retained. Changing the default does not upgrade pinned account bindings; select the version when editing an account. Actual support depends on host services and integration tests.',
+      installed: 'Saved v{version}. Activate it from version history.', tooLarge: 'Source must not exceed 1 MiB',
+      accountTitle: 'Upstream protocol plugin', native: 'Use the platform built-in protocol',
+      accountHint: 'Install and enable a plugin first. This account owns the upstream URL, key, groups and concurrency.',
+      pinned: 'Pinned plugin version #{id}', configSaved: 'Configuration is encrypted. Leave it unchanged to retain saved values.',
+      replaceConfig: 'Replace plugin configuration', invalidJSON: '{name} must contain valid JSON', loadFailed: 'Could not load plugins. Refresh and try again.'
+    },
     title: 'Plugin Management',
     description: 'Install and manage isolated OAuth outbound transport plugins. API Key flows are unchanged.',
     upload: 'Install plugin',

@@ -45,6 +45,10 @@ export interface PlazaTimePricing {
 }
 
 export interface PlazaModel {
+	protocols?: string[]
+	generation_pricing?: { dynamic?: boolean; unit: string; unit_price: string; service_fee: string; minimum: string; resolution?: string }[]
+	/** Stable public catalog ID; model names may contain slashes. */
+	id?: string
   name: string
   platform: string
   /** 实收口径的展示定价：档位可提供绝对单价或相对基础价倍率；均为标准时段价。 */
@@ -93,6 +97,47 @@ export async function getModelPlaza(options?: { signal?: AbortSignal }): Promise
   const { data } = await apiClient.get<ModelPlazaResponse>('/model-plaza', {
     signal: options?.signal
   })
+  return data
+}
+
+export async function getModelPlazaModel(id: string, options?: { signal?: AbortSignal }): Promise<ModelPlazaResponse> {
+  const { data } = await apiClient.get<ModelPlazaResponse>(`/model-plaza/models/${encodeURIComponent(id)}`, {
+    signal: options?.signal
+  })
+  return data
+}
+
+export interface PlazaMetricsPoint {
+  group_id: number
+  bucket?: string
+  requests: number
+  successes: number
+  average_ms: number | null
+  p95_ms: number | null
+  first_token_ms: number | null
+  tokens_per_second: number | null
+}
+
+export interface PlazaMetrics {
+  start: string
+  end: string
+  scope: string
+  points: PlazaMetricsPoint[]
+}
+
+export async function getModelPlazaPerformance(id: string, signal?: AbortSignal): Promise<PlazaMetrics> {
+  const { data } = await apiClient.get<PlazaMetrics>(`/model-plaza/models/${encodeURIComponent(id)}/performance`, { signal })
+  return data
+}
+
+export interface PlazaMetricsSummaries {
+  start: string
+  end: string
+  models: Record<string, PlazaMetricsPoint>
+}
+
+export async function getModelPlazaPerformanceSummaries(ids: string[], signal?: AbortSignal): Promise<PlazaMetricsSummaries> {
+  const { data } = await apiClient.get<PlazaMetricsSummaries>('/model-plaza/performance', { params: { ids: ids.join(',') }, signal })
   return data
 }
 

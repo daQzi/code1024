@@ -1926,6 +1926,8 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
+      <NewAPIPluginField v-if="account.type === 'apikey'" :key="String(account.id) + String(show)" ref="newAPIPluginField" :credentials="account.credentials" />
+
       <UpstreamRequestIdHeaderField
         v-model="upstreamRequestIdHeader"
         :platform="account.platform"
@@ -3429,6 +3431,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
+import NewAPIPluginField from '@/components/account/NewAPIPluginField.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
 import OpenAIImageSizeTiersField from '@/components/account/OpenAIImageSizeTiersField.vue'
 import {
@@ -3535,6 +3538,7 @@ const emit = defineEmits<{
   updated: [account: Account]
 }>()
 
+const newAPIPluginField = ref<InstanceType<typeof NewAPIPluginField>>()
 const { t } = useI18n()
 const appStore = useAppStore()
 const browserTimeZone = getBrowserTimeZone()
@@ -5635,6 +5639,9 @@ const persistGrokMediaEligibility = async (accountID: number, updatedAccount: Ac
 }
 
 const submitUpdateAccount = async (accountID: number, updatePayload: Record<string, unknown>) => {
+  if (props.account?.type === 'apikey' && newAPIPluginField.value) {
+    updatePayload = { ...updatePayload, credentials: newAPIPluginField.value.apply((updatePayload.credentials ?? props.account.credentials ?? {}) as Record<string, unknown>) }
+  }
   submitting.value = true
   try {
     let updatedAccount = await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))

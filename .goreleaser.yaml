@@ -43,6 +43,10 @@ archives:
       - LICENSE*
       - README*
       - deploy/*
+      - backend/internal/newapi/LICENSE
+      - backend/internal/newapi/NOTICE.md
+      - backend/internal/newapi/HOST_COMPATIBILITY.md
+      - backend/internal/newapi/CHANNEL_ADAPTERS.md
 
 checksum:
   name_template: 'checksums.txt'
@@ -66,6 +70,8 @@ dockers:
     extra_files:
       - deploy/docker-entrypoint.sh
       - backend/resources
+      - backend/internal/newapi/LICENSE
+      - backend/internal/newapi/NOTICE.md
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.version={{ .Version }}"
@@ -82,6 +88,8 @@ dockers:
     extra_files:
       - deploy/docker-entrypoint.sh
       - backend/resources
+      - backend/internal/newapi/LICENSE
+      - backend/internal/newapi/NOTICE.md
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.version={{ .Version }}"
@@ -98,6 +106,8 @@ dockers:
     extra_files:
       - deploy/docker-entrypoint.sh
       - backend/resources
+      - backend/internal/newapi/LICENSE
+      - backend/internal/newapi/NOTICE.md
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.version={{ .Version }}"
@@ -114,6 +124,8 @@ dockers:
     extra_files:
       - deploy/docker-entrypoint.sh
       - backend/resources
+      - backend/internal/newapi/LICENSE
+      - backend/internal/newapi/NOTICE.md
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.version={{ .Version }}"

@@ -177,6 +177,16 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/model-plaza/models/:modelId',
+    name: 'ModelPlazaDetail',
+    component: () => import('@/views/ModelPlazaView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Model Details',
+      titleKey: 'modelPlaza.catalog.details'
+    }
+  },
+  {
     path: '/model-plaza',
     name: 'ModelPlaza',
     component: () => import('@/views/ModelPlazaView.vue'),
@@ -848,7 +858,7 @@ router.beforeEach(async (to, _from, next) => {
       return
     }
     // Model Plaza:公开路由但受「启用开关 + 可选强制登录」双重控制(后端同口径 fail-closed)
-    if (to.path === '/model-plaza') {
+    if (to.path === '/model-plaza' || to.path.startsWith('/model-plaza/')) {
       if (!appStore.publicSettingsLoaded) {
         try {
           await appStore.fetchPublicSettings()

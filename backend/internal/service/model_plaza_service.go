@@ -22,10 +22,12 @@ type PlazaOfficialPricing struct {
 
 // PlazaModel 模型广场中单个模型条目：按实收口径合成的展示定价 + 官方参考价。
 type PlazaModel struct {
-	Name            string
-	Platform        string
-	Pricing         *ChannelModelPricing
-	OfficialPricing *PlazaOfficialPricing
+	Protocols         []string
+	GenerationPricing []GenerationDisplayPrice
+	Name              string
+	Platform          string
+	Pricing           *ChannelModelPricing
+	OfficialPricing   *PlazaOfficialPricing
 	// LongContextBasis 多档时的计价基准（整单 / 仅超出部分），单档为空。
 	LongContextBasis ContextPricingBasis
 	// TimePricing 计费会生效的分时倍率时段；无分时为 nil。
@@ -67,11 +69,13 @@ type PlazaGroup struct {
 // 模型枚举来自渠道配置；token 模型的展示单价与阶梯由 BillingService 的阶梯表
 // 查询给出（与扣费走同一条解析链与计费函数），图片/按次模型沿用渠道/分组档位价。
 type ModelPlazaService struct {
-	channelRepo    ChannelRepository
-	groupRepo      GroupRepository
-	pricingService *PricingService
-	billingService *BillingService
-	resolver       *ModelPricingResolver
+	channelRepo       ChannelRepository
+	groupRepo         GroupRepository
+	pricingService    *PricingService
+	billingService    *BillingService
+	resolver          *ModelPricingResolver
+	metrics           ModelPlazaMetricsRepository
+	generationCatalog GenerationCatalogRepository
 }
 
 // NewModelPlazaService 创建模型广场服务。
@@ -198,6 +202,9 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		}
 	}
 
+	if err = s.appendGenerationCatalog(ctx, byGroup, groupEnt); err != nil {
+		return nil, err
+	}
 	officialMemo := make(map[string]*PlazaOfficialPricing)
 	out := make([]PlazaGroup, 0, len(order))
 	for _, gid := range order {
@@ -232,6 +239,9 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 // token 模型取计费阶梯表（单价与档位均由真实计费函数得出），
 // 图片/按次模型（或阶梯表不可用时）沿用渠道定价与分组图片档位价。
 func (s *ModelPlazaService) fillDisplayPricing(ctx context.Context, m *PlazaModel, g *Group) {
+	if len(m.GenerationPricing) > 0 {
+		return
+	}
 	if groupPricing := matchGroupModelPricing(g, m.Name); groupPricing != nil {
 		m.Pricing = groupPricing
 		// 分组模型级固定价就是实收价，不能再被分组图片兜底档位覆盖。

@@ -46,6 +46,9 @@ WORKDIR /app
 COPY sub2api /app/sub2api
 COPY --chown=sub2api:sub2api backend/resources /app/resources
 
+# Preserve the license and source notice for the embedded plugin runtime.
+COPY backend/internal/newapi/LICENSE backend/internal/newapi/NOTICE.md /app/licenses/newapi/
+
 # Create data directory
 RUN mkdir -p /app/data && chown -R sub2api:sub2api /app
 

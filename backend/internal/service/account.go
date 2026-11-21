@@ -683,6 +683,15 @@ func (a *Account) SharedSnapshotCurrent() bool {
 }
 
 func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]string {
+	if a.HasNewAPIPlugin() {
+		result := make(map[string]string, len(rawMapping))
+		for key, value := range rawMapping {
+			if target, ok := value.(string); ok {
+				result[key] = target
+			}
+		}
+		return result
+	}
 	if a.Credentials == nil {
 		// Antigravity 平台使用默认映射
 		if a.Platform == domain.PlatformAntigravity {
@@ -1926,6 +1935,12 @@ func (a *Account) GetOpenAISessionID() string {
 
 func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapability) bool {
 	if a == nil {
+		return false
+	}
+	if a.HasNewAPIPlugin() {
+		return capability == OpenAIEndpointCapability("plugin_task") && a.NewAPIPluginVersionID() > 0 && a.Type == AccountTypeAPIKey
+	}
+	if capability == OpenAIEndpointCapability("plugin_task") {
 		return false
 	}
 	if capability == OpenAIEndpointCapabilitySeedance {

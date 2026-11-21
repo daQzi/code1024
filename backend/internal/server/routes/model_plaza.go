@@ -26,5 +26,8 @@ func RegisterModelPlazaRoutes(
 	plaza.Use(middleware.BackendModeUserGuard(settingService))
 	{
 		plaza.GET("", h.ModelPlaza.Get)
+		plaza.GET("/performance", h.ModelPlaza.GetPerformanceSummaries)
+		plaza.GET("/models/:model_id", h.ModelPlaza.GetModel)
+		plaza.GET("/models/:model_id/performance", h.ModelPlaza.GetPerformance)
 	}
 }

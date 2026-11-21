@@ -186,6 +186,54 @@ func ProvidePluginManager(repo PluginRepository, encryptor SecretEncryptor, cfg 
 	return manager
 }
 
+func ProvideNewAPIPluginService(repo NewAPIPluginRepository, encryptor SecretEncryptor, gateway *OpenAIGatewayService) (*NewAPIPluginService, error) {
+	svc, err := NewNewAPIPluginService(repo, encryptor)
+	if err != nil {
+		return nil, err
+	}
+	svc.gateway = gateway
+	return svc, nil
+}
+
+func ProvideAdminService(
+	cfg *config.Config,
+	userRepo UserRepository,
+	groupRepo AdminGroupRepository,
+	accountRepo AdminAccountRepository,
+	proxyRepo ProxyRepository,
+	apiKeyRepo APIKeyRepository,
+	redeemCodeRepo RedeemCodeRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	userRPMCache UserRPMCache,
+	billingCacheService *BillingCacheService,
+	proxyProber ProxyExitInfoProber,
+	proxyLatencyCache ProxyLatencyCache,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	entClient *dbent.Client,
+	settingService *SettingService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	userSubRepo UserSubscriptionRepository,
+	privacyClientFactory PrivacyClientFactory,
+	runtimeBlocker AccountRuntimeBlocker,
+	affiliateService *AffiliateService,
+	compositeRouteRepo CompositeModelRouteRepository,
+	compositeResolver *CompositeRouteResolver,
+	channelCacheInvalidator ChannelCacheInvalidator,
+
+	newAPIPlugins *NewAPIPluginService,
+) AdminService {
+	svc := NewAdminService(cfg, userRepo, groupRepo, accountRepo, proxyRepo, apiKeyRepo, redeemCodeRepo, userGroupRateRepo, userRPMCache, billingCacheService, proxyProber, proxyLatencyCache, authCacheInvalidator, entClient, settingService, defaultSubAssigner, userSubRepo, privacyClientFactory, runtimeBlocker, affiliateService, compositeRouteRepo, compositeResolver, channelCacheInvalidator).(*adminServiceImpl)
+	svc.newAPIPlugins = newAPIPlugins
+	return svc
+}
+
+func ProvideModelPlazaService(channelRepo ChannelRepository, groupRepo GroupRepository, pricing *PricingService, billing *BillingService, resolver *ModelPricingResolver, metrics ModelPlazaMetricsRepository, plugins NewAPIPluginRepository) *ModelPlazaService {
+	svc := NewModelPlazaService(channelRepo, groupRepo, pricing, billing, resolver)
+	svc.generationCatalog, _ = plugins.(GenerationCatalogRepository)
+	svc.metrics = metrics
+	return svc
+}
+
 // ProvideOpenAIQuotaService wires the OpenAI quota query/reset service.
 // It depends on the OpenAI token provider for refreshed access tokens and the
 // privacy client factory for the impersonated upstream HTTP client.
@@ -881,7 +929,9 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
-	NewAdminService,
+	ProvideAdminService,
+	ProvideNewAPIPluginService,
+	NewGenerationService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
 	ProvideImageStorageSettingService,
@@ -979,7 +1029,7 @@ var ProviderSet = wire.NewSet(
 	NewChannelService,
 	wire.Bind(new(ChannelCacheInvalidator), new(*ChannelService)),
 	NewModelPricingResolver,
-	NewModelPlazaService,
+	ProvideModelPlazaService,
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,

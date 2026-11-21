@@ -3,6 +3,7 @@ package routes
 
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -769,6 +770,14 @@ func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Hand
 }
 
 func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+	js := admin.Group("/newapi-plugins")
+	js.Use(middleware.RequestBodyLimit(2<<20, pkghttputil.NewBodyMemoryBudget(64<<20)))
+	js.GET("", h.Admin.Plugin.ListNewAPI)
+	js.GET("/tasks/review", h.Admin.Plugin.GenerationReview)
+	js.PUT("/tasks/:task_id/reconcile", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.ReconcileGeneration)
+	js.GET("/:key/versions", h.Admin.Plugin.NewAPIVersions)
+	js.POST("", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.InstallNewAPI)
+	js.PUT("/:id/activation", gin.HandlerFunc(stepUpAuth), h.Admin.Plugin.ActivateNewAPI)
 	plugins := admin.Group("/plugins")
 	{
 		plugins.GET("", h.Admin.Plugin.List)
