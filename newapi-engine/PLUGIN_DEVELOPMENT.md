@@ -2,6 +2,8 @@
 
 渠道插件负责“把标准请求翻译成上游请求，再把上游结果翻译回来”。账号、权限、并发、任务、文件、钱包和日志由宿主负责。先完成离线回放，再用有额度的测试账号验证实际渠道。
 
+日常独立开发社区/自定义插件请直接在同级独立项目 `../code1024-plugins/` 中进行（内置标准文档、开发目录、`Makefile`、`tools/plugindev` 与外部市场 `index.json` 生成）。本文件保留 `newapi-engine` 引擎侧的基础规范与底层 `pluginctl` 命令说明。
+
 本引擎固定参考 New API `48f9df96ea7c68eae04a0f3687869f232f48929f` 的 API v1。原版 JS 可直接上传，但只有兼容矩阵标明已接通的宿主功能可以运行；不能因为编译成功就宣称所有 New API 插件都兼容。准确范围见仓库根 `backend/internal/newapi/HOST_COMPATIBILITY.md`。
 
 ## 1. 创建项目

@@ -9,7 +9,7 @@
 
 按最新方向，两套系统分别维护：New API JS 插件和 Task 引擎独立提取，原生 Sub 插件保持原有协议与运行时，不再并入统一控制层。见[独立引擎与宿主适配设计](customization/NEWAPI_ENGINE_DECOUPLING.md)。本文目前以原生教程为主；**独立引擎的插件脚手架、离线校验/回放与开发规范已提供，见 [newapi-engine/PLUGIN_DEVELOPMENT.md](../newapi-engine/PLUGIN_DEVELOPMENT.md)；视频、Provider 和请求处理分别见其专项规范。完整宿主兼容、其余 adapter 与独立发布仍以剩余清单为准**，不要求为了新模块重建旧 native SDK。
 
-当前先完成通用系统和配套文档。官转二、官转五等渠道专项随后按公开契约作为社区插件整理交付；已有安装版本和在途任务保持原绑定。
+社区与自定义 JS 插件已拆出至同级独立项目 `../code1024-plugins/` 维护（含标准插件开发文档、按类型分层的开发目录、脚手架工具与外部市场 `index.json`）。主仓库中已有的内置版本和在途任务保持原绑定不变。
 
 ## JS 插件中心使用说明
 

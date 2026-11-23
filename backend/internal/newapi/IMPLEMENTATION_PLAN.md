@@ -1176,5 +1176,6 @@
 ### 2026-11-23：拆分官转二 / 官转五为独立社区插件包（第 11 批）
 
 - **独立社区包**：按 `newapi-engine/PLUGIN_DEVELOPMENT.md` 在仓库根目录新增 `community-plugins/`（含总览 `README.md`、`sub2api-dreamina/` 与 `sub2api-official5/`）。各自移除跨渠道分支，采用独立 key（`community-sub2api-dreamina@1.0.0`、SHA256 `5086be00e4359bab23bbabdeeeabeedba52fa0bf114149f1501dd9a85b6981e4`；`community-sub2api-official5@1.1.0`、SHA256 `7dba6a094fc9e2807370005a8c27f4621f818e60b155338d8fb46a0728886cb9`），并附完整确定性 `fixture.json`（31 个 / 20 个用例）及说明文档（含社区投稿改名说明、内置 `sub2api-official5@1.1.0` 宿主分片上传精确 SHA 边界说明）。
+- **后续独立项目迁移**：上述 `community-plugins/` 已整体迁出至同级独立插件项目 `../code1024-plugins/`（按 `plugins/<tasks|providers|transforms>/<key>/<version>/` 组织，保留原 SHA256 与 fixture，配套标准开发文档、`tools/plugindev` 与外部市场 `index.json`）。
 - **历史零破坏**：原 `newapi-engine/builtin/sub2api-dreamina` 与 `newapi-engine/builtin/sub2api-official5` 源码、版本及 SHA256 零修改，已绑定账号、宿主上传准备与历史任务完整保留。
 - **离线验证**：`GOWORK=off go run ./cmd/pluginctl lint` 与 `pluginctl test --fixture` 对两个独立包全部通过（31/31、20/20）。至此第一批纯离线编码与测试工作已全部完成；真实上游、外部市场实机与发布部署留待第 2 批用户验收。仅本地提交，未推送或部署。

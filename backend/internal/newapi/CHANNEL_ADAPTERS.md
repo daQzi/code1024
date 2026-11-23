@@ -8,7 +8,7 @@
 
 ## 管理员配置
 
-1. 在插件管理安装内置 `sub2api-dreamina` 或 `sub2api-official5`，启用其版本；或者按 [`community-plugins/README.md`](../../../community-plugins/README.md) 安装独立的社区插件包 `community-sub2api-dreamina`（1.0.0） / `community-sub2api-official5`（1.1.0）。**内置版本源码及 SHA256 保持原样**，原有绑定账号与历史任务不受影响，官转五宿主分片上传准备工作流继续仅针对内置 `sub2api-official5@1.1.0` 生效。
+1. 在插件管理安装内置 `sub2api-dreamina` 或 `sub2api-official5`，启用其版本；或者从独立插件开发仓库 `../code1024-plugins` 安装社区插件包 `community-sub2api-dreamina`（1.0.0） / `community-sub2api-official5`（1.1.0）。**内置版本源码及 SHA256 保持原样**，原有绑定账号与历史任务不受影响，官转五宿主分片上传准备工作流继续仅针对内置 `sub2api-official5@1.1.0` 生效。
 2. 在账号中添加普通 API Key 账号，填站点根地址（例如 `https://sub2api.0x0.fan`），选择插件固定版本，填写对应渠道分组的上游 Key。
 3. 绑定本站分组、并发和公开模型映射。官转五必须从该 Key 的能力接口或 `/v1/models` 获取真实型号，显式配置 `公开模型名 → cc-seedance-实际型号`。`cc-seedance-*` 是插件家族声明，不能作为可调用的模型名或展示型号。
 4. 设置售价；账号未设置时沿用分组视频价格。上游连接仍使用账号管理，无需另建连接记录。
@@ -123,9 +123,9 @@ JSON 现有对象支持 `client_ref_id` 与 `metadata.selected_reference_ids`，
 - 成片仍由上游保存与代理下载，本站没有永久转储保障。
 - 本轮验证使用本地模拟上游、真实插件子进程、`pluginctl` 离线回放与隔离 PostgreSQL。真实上游 Key、付费生成和厂商实际存储联调仍待验收。
 
-## 独立社区插件包（第 11 批）
+## 独立社区插件项目
 
-仓库根目录 [`community-plugins/`](../../../community-plugins/README.md) 现提供按 [`newapi-engine/PLUGIN_DEVELOPMENT.md`](../../../newapi-engine/PLUGIN_DEVELOPMENT.md) 拆分的自包含社区发行包（各含 `plugin.js`、`fixture.json` 与 `README.md`）：
+社区插件的独立开发与发行目录已迁移至与本仓库同级的独立项目 `../code1024-plugins/`（内置标准开发文档、`tools/plugindev`、`Makefile` 及外部市场 `index.json`）：
 
-- [`community-plugins/sub2api-dreamina/`](../../../community-plugins/sub2api-dreamina/README.md)：Key `community-sub2api-dreamina`（`1.0.0`，31/31 fixture 校验通过）
-- [`community-plugins/sub2api-official5/`](../../../community-plugins/sub2api-official5/README.md)：Key `community-sub2api-official5`（`1.1.0`，20/20 fixture 校验通过）
+- `../code1024-plugins/plugins/tasks/community-sub2api-dreamina/1.0.0/`：Key `community-sub2api-dreamina`（`1.0.0`，31/31 fixture 校验通过）
+- `../code1024-plugins/plugins/tasks/community-sub2api-official5/1.1.0/`：Key `community-sub2api-official5`（`1.1.0`，20/20 fixture 校验通过）

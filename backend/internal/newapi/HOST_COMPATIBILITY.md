@@ -46,7 +46,7 @@
 | Grok/xAI、Ark/Seedance、Sora | 原版脚本模拟闭环已验证；Ark 支持映射到 `ep-…` endpoint；真实调用待验证 |
 | 旧 Grok / Ark 原生视频历史 | 新提交的原生视频已接持久任务日志和私有计费输入；Redis owner/pending 缺失时可按完整归属恢复原账号与参数，歧义或缺证据时拒绝恢复/扣费；有连接摘要的普通 API Key 新任务可后台跟进状态，有完整价格/连接证据的新任务可用实际用量后台结算，费用仍以原账本成功凭据为准，未整体改为 JS Task 驱动；见 `NATIVE_VIDEO_RECOVERY.md`、`NATIVE_VIDEO_MONITORING.md` |
 | 已绑定插件的原生视频入口 | xAI 生成/编辑/延长及 Ark 创建/查询，已通过固定 `native.decode` 接入共同 Task 队列、后台查询、资金和日志；保留模型映射、多素材与原生响应形状，本站公开 ID 与受限宿主 DTO；配置及切换边界见 `NATIVE_VIDEO_INGRESS.md` |
-| 官转二、官转五 | 专用 Task 插件（`OpenAI Videos -> 原生 API`），内置历史版本与 `community-plugins/` 独立社区发行包（`community-sub2api-dreamina@1.0.0` / `community-sub2api-official5@1.1.0`）并存；模拟回归与 `pluginctl` 离线 fixture 已验证，内置源码及旧任务零改动 |
+| 官转二、官转五 | 专用 Task 插件（`OpenAI Videos -> 原生 API`），内置历史版本与同级独立插件仓库 `../code1024-plugins/`（`community-sub2api-dreamina@1.0.0` / `community-sub2api-official5@1.1.0`）并存；模拟回归与离线 fixture 已验证，内置源码及旧任务零改动 |
 | 普通 Provider relay | OpenAI 平台静态 API Key 或服务端保存的 Provider 登录凭据、原生 Chat / Responses 文本 JSON/SSE、精确/正则模型路由、路由认证、配置 URL、`prepareRequest` 和 `signRequest` 已接入；内置 `sub2api-openai-relay` 可选 |
 | Provider `converter: plugin` | `convertRequest` → `prepareRequest` → 签名 → JSON 响应或 SSE/NDJSON 事件转换已接入；响应固定同一请求的源码、配置与 state；下游仍为标准 Chat / Responses |
 | Provider Embeddings | `/v1/embeddings` 的 none/plugin JSON 已接账号候选、固定连接/凭据、签名、next、一次续期及既有输入用量/账本/监控；明确输入用量缺失或非法时失败，不按免费成功。响应最多 1 MiB，不接生成参数/流式；已接 Transform 请求阶段与 report，按固定基线跳过文本 reply；模型广场仅按实际声明显示接口及示例 |
