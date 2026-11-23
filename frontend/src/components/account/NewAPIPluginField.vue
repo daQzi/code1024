@@ -32,7 +32,7 @@
       <NewAPIPluginCredential v-if="accountId && revision === Number(credentials?.newapi_plugin_version_id) && selected?.compatibility?.kinds.some(kind => kind === 'provider' || kind === 'task') && selected.capabilities.hooks?.some(hook => ['login', 'refresh', 'revoke', 'scheduled'].includes(hook))" :account-id="accountId" :version-id="revision" :hooks="selected.capabilities.hooks" />
       <NewAPIPluginBalance v-if="accountId && revision === Number(credentials?.newapi_plugin_version_id) && selected?.capabilities.hooks?.includes('buildBalanceRequest') && selected.capabilities.hooks.includes('parseBalance')" :account-id="accountId" :version-id="revision" />
       <NewAPIPluginModels v-if="accountId && revision === Number(credentials?.newapi_plugin_version_id) && selected?.meta.relay?.some(route => route.incoming_path === '/v1/models')" :account-id="accountId" :version-id="revision" />
-      <NewAPIVideoPricingField v-if="selected?.compatibility?.kinds.includes('task')" ref="pricingField" :value="credentials?.newapi_video_pricing" />
+      <NewAPIVideoPricingField v-if="selected?.compatibility?.kinds.includes('task')" ref="pricingField" :value="credentials?.newapi_video_pricing" :plugin-meta="selected.meta" />
     </template>
   </section>
 </template>

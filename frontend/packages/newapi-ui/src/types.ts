@@ -1,4 +1,17 @@
 export type LocalizedText = string | Record<string, string>
+export interface UsageFieldSchema {
+  type?: string
+  unit?: string
+  unitLabel?: LocalizedText
+  enum?: string[]
+  enumLabels?: Record<string, LocalizedText>
+  description?: LocalizedText
+}
+export interface UsageProfile {
+  models: string[]
+  schema: Record<string, UsageFieldSchema>
+  examples?: { label: string; facts: Record<string, unknown> }[]
+}
 export interface PluginConfigField {
   type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object'
   title?: LocalizedText
@@ -20,13 +33,26 @@ export interface NewAPIPluginVersion {
   origin: string
   meta: {
     name: string
+    name_i18n?: LocalizedText
+    icon?: string
+    sortPriority?: number
+    fetchMode?: string
+    channelTypes?: number[]
+    allowedHosts?: string[]
+    upstreams?: string[]
+    routes?: { method: string; path: string; type: string; models?: string[] }[]
+    usageSchema?: Record<string, UsageFieldSchema>
+    usageProfiles?: UsageProfile[]
+    usageExamples?: UsageProfile['examples']
+    auth?: { type: string }
+    optional?: boolean
     description?: LocalizedText
     models: string[]
     baseUrl?: string
     channelConfig?: PluginConfigField
     configSchema?: PluginConfigField
     protocols?: { name: string; models?: string[]; supports?: string[] }[]
-    relay?: { incoming_path: string }[]
+    relay?: { incoming_path: string; incoming_methods?: string[]; upstream_path?: string; converter?: string }[]
     scope?: { models?: string[]; channelTypes?: number[] }
     author?: { name?: string; url?: string }
     website?: string
@@ -40,7 +66,7 @@ export interface NewAPIPluginVersion {
 export type PluginFactory = Pick<NewAPIPluginVersion, 'key' | 'version' | 'sha256' | 'meta' | 'capabilities' | 'compatibility'>
 export interface NewAPIPluginCatalog { plugins: NewAPIPluginVersion[]; builtins: string[]; factories?: PluginFactory[]; baseline: string }
 
-export interface PluginCenterInstallInput { source?: string; builtin?: string; allow_builtin_override?: boolean; marketplace?: { index_url: string; key: string; version: string; sha256: string } }
+export interface PluginCenterInstallInput { source?: string; builtin?: string; expected_key?: string; allow_builtin_override?: boolean; marketplace?: { index_url: string; key: string; version: string; sha256: string } }
 
 // The UI receives its transport and authorization boundary from the host.
 export interface PluginCenterClient {
@@ -49,6 +75,40 @@ export interface PluginCenterClient {
   install(input: PluginCenterInstallInput): Promise<NewAPIPluginVersion>
   activate(id: number, enabled: boolean): Promise<void>
   restore(key: string): Promise<NewAPIPluginVersion>
+  remove?(id: number): Promise<PluginDeleteResult>
+  dryRun?(id: number, input: PluginFixture, signal?: AbortSignal): Promise<PluginDryRunResult>
+  pricing?(key: string, signal?: AbortSignal): Promise<PluginAccountPricingSummary[]>
+}
+
+export interface PluginDeleteResult {
+  deleted_id: number
+  key: string
+  version: string
+  fallback_version_id?: number
+  removed_plugin: boolean
+}
+export interface PluginPriceRule {
+  mode: string
+  expression?: string
+  unit?: string
+  unit_price?: string
+  source_currency?: string
+  source_unit?: string
+  source_unit_price?: string
+  exchange_rate?: string
+  markup?: string
+  service_fee?: string
+  minimum?: string
+  maximum?: string
+}
+export interface PluginAccountPricingSummary {
+  account_id: number
+  account_name: string
+  status: string
+  schedulable: boolean
+  version_id: number
+  version: string
+  pricing_rules: Record<string, PluginPriceRule>
 }
 
 export interface PluginFixture { source?: string; hook: string; args: unknown[] }

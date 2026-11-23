@@ -5,9 +5,10 @@
       <button type="button" class="btn btn-secondary btn-sm" @click="add">{{ t('admin.plugins.js.addPrice') }}</button>
     </div>
     <p class="input-hint">{{ t('admin.plugins.js.pricingHint') }}</p>
+    <datalist :id="`${uid}-models`"><option v-for="model in pluginMeta?.models ?? []" :key="model" :value="model" /></datalist>
     <div v-for="(row, index) in rows" :key="row.id" class="space-y-3 rounded-lg bg-gray-50 p-3 dark:bg-dark-900">
       <div class="grid gap-3 sm:grid-cols-2">
-        <label><span class="input-label">{{ t('admin.plugins.js.priceModel') }}</span><input v-model="row.model" class="input" placeholder="*" /></label>
+        <label><span class="input-label">{{ t('admin.plugins.js.priceModel') }}</span><input v-model="row.model" class="input" placeholder="*" :list="`${uid}-models`" /></label>
         <div class="min-w-0">
           <span class="input-label">{{ t('admin.plugins.js.priceMode') }}</span>
           <Select v-model="row.mode" :options="modeOptions" :aria-label="t('admin.plugins.js.priceMode')" @change="normalizeMode(row)" />
@@ -23,6 +24,17 @@
         <textarea v-model="row.expression" class="input font-mono text-xs" rows="3" maxlength="4096" spellcheck="false" />
         <span class="input-hint">{{ t('admin.plugins.js.expressionHint') }}</span>
       </label>
+      <details v-if="usageGroups(row.model).length" class="rounded-lg border border-gray-200 p-3 text-xs dark:border-dark-700" data-usage-reference>
+        <summary class="cursor-pointer font-medium">{{ t('admin.plugins.detail.availableUsage') }}</summary>
+        <div v-for="(group, groupIndex) in usageGroups(row.model)" :key="groupIndex" class="mt-3 space-y-2">
+          <p class="break-words font-mono text-gray-500">{{ group.models.join(', ') || '*' }}</p>
+          <div v-for="(field, name) in group.schema" :key="name" class="flex flex-wrap items-start gap-2 leading-5">
+            <button v-if="row.mode === 'expression'" type="button" class="rounded-md bg-primary-50 px-2 py-0.5 font-mono text-primary-700 dark:bg-dark-700 dark:text-primary-300" :title="t('admin.plugins.detail.insertUsage')" @click="insertUsage(row, String(name))">{{ `u(${JSON.stringify(name)})` }}</button>
+            <code v-else>{{ name }}</code>
+            <span class="text-gray-500">{{ localized(field.description) || t(`admin.plugins.detail.${field.enum?.length ? 'string' : field.type || 'number'}`) }}{{ field.unit ? ` · ${localized(field.unitLabel) || t(`admin.plugins.detail.units.${field.unit}`)}` : '' }}{{ field.enum?.length ? ` · ${field.enum.join(' / ')}` : '' }}</span>
+          </div>
+        </div>
+      </details>
       <div class="grid gap-3 sm:grid-cols-3">
         <label><span class="input-label">{{ t('admin.plugins.js.serviceFee') }}</span><input v-model="row.serviceFee" type="number" min="0" step="any" class="input" /></label>
         <label><span class="input-label">{{ t('admin.plugins.js.minimumCharge') }}</span><input v-model="row.minimum" type="number" min="0" step="any" class="input" /></label>
@@ -39,11 +51,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
-const props = defineProps<{ value?: unknown }>()
-const { t } = useI18n()
+import { localizedPluginText, pluginUsageGroups, type NewAPIPluginVersion } from '../../../packages/newapi-ui/src'
+const props = defineProps<{ value?: unknown; pluginMeta?: NewAPIPluginVersion['meta'] }>()
+const { t, locale } = useI18n()
+const uid = useId()
+const localized = (value: Parameters<typeof localizedPluginText>[0]) => localizedPluginText(value, locale?.value ?? 'en')
+function usageGroups(model: string) {
+  if (!props.pluginMeta) return []
+  const groups = pluginUsageGroups(props.pluginMeta)
+  if (model.trim() === '*') return groups
+  return groups.filter(group => group.models.some(value => value.toLowerCase() === model.trim().toLowerCase()))
+}
+function insertUsage(row: Row, name: string) {
+  const field = `u(${JSON.stringify(name)})`
+  row.expression = row.expression.trim() ? `${row.expression} + ${field}` : field
+}
 const modeOptions = computed(() => [
   { value: 'fixed', label: t('admin.plugins.js.fixedPrice') },
   { value: 'cost_plus', label: t('admin.plugins.js.costPlus') },

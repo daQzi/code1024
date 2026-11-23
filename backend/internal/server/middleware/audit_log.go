@@ -152,6 +152,7 @@ var auditBodyOmittedRoutes = map[string]struct{}{
 	"POST /api/v1/admin/request-processing":                     {},
 	"POST /api/v1/admin/request-processing/dry-run":             {},
 	"POST /api/v1/admin/newapi-plugins":                         {},
+	"POST /api/v1/admin/newapi-plugins/versions/:id/dry-run":    {},
 	"POST /api/v1/admin/newapi-plugins/accounts/:id/credential": {},
 	"POST /api/v1/plugin-registry":                              {},
 	"POST /api/v1/auth/passkey/login/finish":                    {},

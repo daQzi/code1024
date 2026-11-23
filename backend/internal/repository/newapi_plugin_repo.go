@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -155,4 +156,121 @@ func (r *newAPIPluginRepository) SelectVersion(ctx context.Context, id int64) er
 		return service.ErrPluginStateChanged
 	}
 	return err
+}
+
+func (r *newAPIPluginRepository) DeleteVersion(ctx context.Context, id int64, isRunnable func(service.NewAPIPluginVersion) bool) (*service.PluginDeleteResult, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(734562910245)`); err != nil {
+		return nil, err
+	}
+	target, err := scanNewAPIPlugin(tx.QueryRowContext(ctx, newAPIPluginSelect+` WHERE v.id=$1 FOR UPDATE OF p,v`, id))
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(target.Origin, "builtin:") {
+		return nil, service.ErrPluginBuiltinProtected
+	}
+	var accountCount, instanceCount, taskCount, credStateCount, credRevocationCount int64
+	if err = tx.QueryRowContext(ctx, `SELECT
+ (SELECT count(*) FROM accounts WHERE deleted_at IS NULL AND credentials->>'newapi_plugin_version_id'=($1::bigint)::text),
+ (SELECT count(*) FROM sub2api_request_plugin_instances WHERE plugin_version_id=$1),
+ (SELECT count(*) FROM sub2api_generation_tasks WHERE plugin_version_id=$1),
+ (SELECT count(*) FROM sub2api_plugin_credential_state WHERE plugin_version_id=$1),
+ (SELECT count(*) FROM sub2api_plugin_credential_revocations WHERE plugin_version_id=$1)`, id).
+		Scan(&accountCount, &instanceCount, &taskCount, &credStateCount, &credRevocationCount); err != nil {
+		return nil, err
+	}
+	reasons := make([]string, 0, 5)
+	if accountCount > 0 {
+		reasons = append(reasons, fmt.Sprintf("账号 %d 个", accountCount))
+	}
+	if instanceCount > 0 {
+		reasons = append(reasons, fmt.Sprintf("请求处理实例 %d 个", instanceCount))
+	}
+	if taskCount > 0 {
+		reasons = append(reasons, fmt.Sprintf("任务记录 %d 条", taskCount))
+	}
+	if credStateCount > 0 || credRevocationCount > 0 {
+		reasons = append(reasons, fmt.Sprintf("凭据/清理记录 %d 条", credStateCount+credRevocationCount))
+	}
+	if len(reasons) > 0 {
+		return nil, service.PluginVersionInUseError(fmt.Sprintf("该自定义版本仍被引用（%s），无法删除；请先解除账号或实例绑定。历史任务和授权记录需保留，可停用插件", strings.Join(reasons, "、")))
+	}
+	result := &service.PluginDeleteResult{
+		DeletedID: target.ID,
+		Key:       target.Key,
+		Version:   target.Version,
+	}
+	if target.Active {
+		fallback, lookupErr := scanNewAPIPlugin(tx.QueryRowContext(ctx, strings.Replace(newAPIPluginSelect, "v.source", "''::text", 1)+
+			` WHERE v.plugin_key=$1 AND v.id<>$2 ORDER BY v.created_at DESC,v.id DESC LIMIT 1`, target.Key, target.ID))
+		if lookupErr != nil && lookupErr != sql.ErrNoRows {
+			return nil, lookupErr
+		}
+		if fallback != nil {
+			nextEnabled := target.Enabled
+			if nextEnabled && isRunnable != nil && !isRunnable(*fallback) {
+				nextEnabled = false
+			}
+			if _, err = tx.ExecContext(ctx, `UPDATE sub2api_js_plugins SET active_version_id=$1, enabled=$2, updated_at=NOW() WHERE plugin_key=$3`,
+				fallback.ID, nextEnabled, target.Key); err != nil {
+				return nil, err
+			}
+			fallbackID := fallback.ID
+			result.FallbackVersionID = &fallbackID
+		} else {
+			if _, err = tx.ExecContext(ctx, `DELETE FROM sub2api_js_plugins WHERE plugin_key=$1`, target.Key); err != nil {
+				return nil, err
+			}
+			result.RemovedPlugin = true
+		}
+	}
+	deleteRes, err := tx.ExecContext(ctx, `DELETE FROM sub2api_js_plugin_versions WHERE id=$1`, target.ID)
+	if err != nil {
+		return nil, err
+	}
+	affected, err := deleteRes.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if affected != 1 {
+		return nil, sql.ErrNoRows
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *newAPIPluginRepository) ListPluginAccountPricing(ctx context.Context, pluginKey string) ([]service.PluginAccountPricingSummary, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT a.id, COALESCE(a.name, ''), a.status, a.schedulable, v.id, v.version,
+ COALESCE(a.credentials->'newapi_video_pricing', '{}'::jsonb)
+ FROM accounts a
+ JOIN sub2api_js_plugin_versions v ON a.credentials->>'newapi_plugin_version_id'=v.id::text
+ WHERE a.deleted_at IS NULL AND v.plugin_key=$1
+ ORDER BY a.priority, a.id`, pluginKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make([]service.PluginAccountPricingSummary, 0)
+	for rows.Next() {
+		var item service.PluginAccountPricingSummary
+		var pricingRaw []byte
+		if err = rows.Scan(&item.AccountID, &item.AccountName, &item.Status, &item.Schedulable, &item.VersionID, &item.Version, &pricingRaw); err != nil {
+			return nil, err
+		}
+		item.PricingRules = make(map[string]service.GenerationPriceRule)
+		if len(pricingRaw) > 0 {
+			if err = json.Unmarshal(pricingRaw, &item.PricingRules); err != nil {
+				return nil, err
+			}
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
 }

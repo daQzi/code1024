@@ -25,6 +25,33 @@ describe('final-bill pricing configuration', () => {
 })
 
 describe('Task expression pricing configuration', () => {
+  it('offers declared models and only the selected model’s usage fields', async () => {
+    const wrapper = mount(NewAPIVideoPricingField, {
+      global: { stubs: { Select: SelectStub } },
+      props: {
+        value: { image: { mode: 'expression', expression: '', maximum: '10', extension: true } },
+        pluginMeta: {
+          name: 'Fixture', models: ['image', 'video'],
+          usageSchema: { seconds: { type: 'number', unit: 'second' } },
+          usageProfiles: [{ models: ['image'], schema: { image_count: { type: 'number', unit: 'count' } } }]
+        }
+      }
+    })
+    expect(wrapper.findAll('datalist option').map(option => option.attributes('value'))).toEqual(['image', 'video'])
+    const reference = wrapper.find('[data-usage-reference]')
+    expect(reference.text()).toContain('image_count')
+    expect(reference.text()).not.toContain('seconds')
+    await reference.find('button').trigger('click')
+    expect(wrapper.find('textarea').element.value).toBe('u("image_count")')
+    const rule = (wrapper.vm as unknown as { rules: () => Record<string, Record<string, unknown>> }).rules().image!
+    expect(rule.expression).toBe('u("image_count")')
+    expect(rule.extension).toBe(true)
+    await wrapper.find('input[list]').setValue('video')
+    expect(wrapper.find('[data-usage-reference]').text()).toContain('seconds')
+    expect(wrapper.find('[data-usage-reference]').text()).not.toContain('image_count')
+    wrapper.unmount()
+  })
+
   function expression(value: Record<string, unknown> = {}) {
     return mount(NewAPIVideoPricingField, { global: { stubs: { Select: SelectStub } }, props: { value: { '*': { mode: 'expression', expression: 'u("seconds") * 0.2', maximum: '10', ...value } } } })
   }

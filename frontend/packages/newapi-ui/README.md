@@ -13,14 +13,15 @@
 />
 ```
 
-- `client` 实现 `src/types.ts` 的 `PluginCenterClient`。HTTP、身份凭据和错误转换由宿主负责；列表和版本查询收到 `AbortSignal`。
+- `client` 实现 `src/types.ts` 的 `PluginCenterClient`。HTTP、身份凭据和错误转换由宿主负责；列表和版本查询收到 `AbortSignal`。可选 `remove`、`pricing`、`dryRun` 分别提供受保护的自定义版本删除、实际账号定价、固定版本离线沙盒；价格和沙盒读取同样接收取消信号。服务端必须保护内置版与被引用版，沙盒不得读取账号或执行网络请求。
 - `editable` 默认 `false`。`runMutation` 必须执行宿主授权/二次验证后再调用传入的操作；服务端仍需独立检查权限。
 - `t` 为翻译函数，`locale` 为当前语言。翻译键沿用 `admin.plugins.*` 和 `common.*`。
-- `dialogComponent` 接收 `show`、`title`、`width`，触发 `close` 并渲染默认插槽。
+- `dialogComponent` 接收 `show`、`title`、`width`，详情会额外传入 `placement="right"`；触发 `close` 并渲染默认插槽。宿主可支持右侧抽屉或保留自己的弹窗样式。
+- `iconComponent` 可提供宿主已有的模型图标（接收 `model`、`size`）；常见任务插件品牌图标在本包内展示。
 - `selectComponent` 可为插件中心、市场、投稿、源码对比和任务日志提供宿主下拉框。接收 `modelValue`、`options`（`{ value, label }`）、`disabled`、`ariaLabel`，触发 `update:modelValue`。省略时使用原生下拉框。
 - 本包沿用宿主 Tailwind 主题和 `btn`、`input`、`card` 类；宿主 Tailwind 的 content 必须包含本包 `src/**/*.{vue,ts}`，并提供现有 `dark`/`primary`/`dark-*` 主题变量。
 
-可选插槽：`header-actions`、`cleanup`、`registry({ mode })`、`community-market({ reload })`、`external-market({ plugins, reload })`、`detail-actions({ plugin })`、`source({ plugin, versions })`。未注入的管理/市场入口不显示；宿主可组合下面的独立面板，也可提供自己的面板。
+可选插槽：`header-actions`、`cleanup`、`registry({ mode })`、`community-market({ reload })`、`external-market({ plugins, reload })`、`detail-actions({ plugin })`、`pricing-actions({ plugin })`、`source({ plugin, versions, mode })`。`mode` 区分 `source` 与 `diff` 标签，可传给 `PluginSourcePanel` 自动展开对应内容。未注入的管理/市场入口不显示；宿主可组合下面的独立面板，也可提供自己的面板。
 
 ## 独立面板与端口
 

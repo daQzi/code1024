@@ -129,6 +129,7 @@ func (h *NewAPIPluginHandler) InstallNewAPI(c *gin.Context) {
 	var input struct {
 		Source               string                        `json:"source"`
 		Builtin              string                        `json:"builtin"`
+		ExpectedKey          string                        `json:"expected_key"`
 		AllowBuiltinOverride bool                          `json:"allow_builtin_override"`
 		Marketplace          *service.PluginMarketplacePin `json:"marketplace"`
 	}
@@ -142,13 +143,17 @@ func (h *NewAPIPluginHandler) InstallNewAPI(c *gin.Context) {
 	}
 	var item *service.NewAPIPluginVersion
 	if input.Marketplace != nil {
+		if input.ExpectedKey != "" && input.Marketplace.Key != input.ExpectedKey {
+			response.BadRequest(c, "上传的新版本必须使用当前插件的 key")
+			return
+		}
 		if input.Builtin != "" {
 			response.BadRequest(c, "市场源码与内置恢复不能同时选择")
 			return
 		}
 		item, err = h.newAPI.InstallMarketplace(c.Request.Context(), input.Source, *input.Marketplace, actor, input.AllowBuiltinOverride)
 	} else {
-		item, err = h.newAPI.Install(c.Request.Context(), input.Source, input.Builtin, actor, service.PluginInstallOptions{AllowBuiltinOverride: input.AllowBuiltinOverride})
+		item, err = h.newAPI.Install(c.Request.Context(), input.Source, input.Builtin, actor, service.PluginInstallOptions{AllowBuiltinOverride: input.AllowBuiltinOverride, ExpectedKey: input.ExpectedKey})
 	}
 	if err != nil {
 		response.BadRequest(c, err.Error())
@@ -239,4 +244,73 @@ func (h *NewAPIPluginHandler) ActivateNewAPI(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"id": id, "enabled": *input.Enabled})
+}
+
+func (h *NewAPIPluginHandler) DeleteNewAPI(c *gin.Context) {
+	if !h.requireNewAPI(c) {
+		return
+	}
+	id, ok := pluginIDParam(c)
+	if !ok {
+		return
+	}
+	result, err := h.newAPI.DeleteVersion(c.Request.Context(), id)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
+func (h *NewAPIPluginHandler) DryRunNewAPI(c *gin.Context) {
+	if !h.requireNewAPI(c) {
+		return
+	}
+	id, ok := pluginIDParam(c)
+	if !ok {
+		return
+	}
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
+	if err != nil {
+		if !middleware.RejectRequestBodyMemoryOverload(c, err) {
+			response.BadRequest(c, "无法读取沙盒参数")
+		}
+		return
+	}
+	if len(body) > 128<<10 {
+		response.BadRequest(c, "沙盒参数最多 128 KiB")
+		return
+	}
+	if err = pkghttputil.ReserveRequestBodyMemory(c.Request.Context(), int64(len(body))*4); err != nil {
+		middleware.RejectRequestBodyMemoryOverload(c, err)
+		return
+	}
+	var input struct {
+		Hook string            `json:"hook"`
+		Args []json.RawMessage `json:"args"`
+	}
+	if json.Unmarshal(body, &input) != nil {
+		response.BadRequest(c, "沙盒参数格式无效")
+		return
+	}
+	result, err := h.newAPI.DryRunInstalledVersion(c.Request.Context(), id, input.Hook, input.Args)
+	if err != nil {
+		if !middleware.RejectRequestBodyMemoryOverload(c, err) {
+			response.ErrorFrom(c, err)
+		}
+		return
+	}
+	response.Success(c, result)
+}
+
+func (h *NewAPIPluginHandler) PluginPricingSummary(c *gin.Context) {
+	if !h.requireNewAPI(c) {
+		return
+	}
+	items, err := h.newAPI.ListAccountPricing(c.Request.Context(), c.Param("key"))
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, items)
 }

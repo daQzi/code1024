@@ -8,7 +8,7 @@ export async function saveProviderToolPrices(input: ProviderToolPriceSettings, s
   return (await apiClient.put<ProviderToolPriceSettings>('/admin/newapi-plugins/provider-tool-prices', input, { signal })).data
 }
 
-import type { LocalizedText, NewAPIPluginCatalog, NewAPIPluginVersion, PluginMarketplaceSource, PluginMarketplacePin, PluginSource, PluginCredentialRevocation } from '../../../packages/newapi-ui/src/types'
+import type { LocalizedText, NewAPIPluginCatalog, NewAPIPluginVersion, PluginMarketplaceSource, PluginMarketplacePin, PluginSource, PluginCredentialRevocation, PluginDeleteResult, PluginDryRunResult, PluginFixture, PluginAccountPricingSummary } from '../../../packages/newapi-ui/src/types'
 export type { LocalizedText, PluginConfigField, NewAPIPluginVersion, PluginFactory, NewAPIPluginCatalog, PluginMarketplaceSource, PluginMarketplacePin, PluginSource, PluginCredentialRevocation } from '../../../packages/newapi-ui/src/types'
 
 export async function listNewAPIPlugins(signal?: AbortSignal) {
@@ -35,7 +35,7 @@ export async function listPluginMarketplaceSources(signal?: AbortSignal) {
 export async function savePluginMarketplaceSources(sources: PluginMarketplaceSource[]) {
   return (await apiClient.put<PluginMarketplaceSource[]>('/admin/newapi-plugins/marketplace/sources', { sources })).data
 }
-export async function installNewAPIPlugin(input: { source?: string; builtin?: string; allow_builtin_override?: boolean; marketplace?: PluginMarketplacePin }) {
+export async function installNewAPIPlugin(input: { source?: string; builtin?: string; expected_key?: string; allow_builtin_override?: boolean; marketplace?: PluginMarketplacePin }) {
   return (await apiClient.post<NewAPIPluginVersion>('/admin/newapi-plugins', input)).data
 }
 export async function restorePluginFactory(key: string) {
@@ -55,6 +55,16 @@ export async function getPluginFactorySource(key: string, signal?: AbortSignal) 
 }
 export async function activateNewAPIPlugin(id: number, enabled: boolean) {
   await apiClient.put(`/admin/newapi-plugins/${id}/activation`, { enabled })
+}
+
+export async function deleteNewAPIPluginVersion(id: number) {
+  return (await apiClient.delete<PluginDeleteResult>(`/admin/newapi-plugins/versions/${id}`)).data
+}
+export async function dryRunNewAPIPluginVersion(id: number, input: PluginFixture, signal?: AbortSignal) {
+  return (await apiClient.post<PluginDryRunResult>(`/admin/newapi-plugins/versions/${id}/dry-run`, input, { signal })).data
+}
+export async function getNewAPIPluginPricing(key: string, signal?: AbortSignal) {
+  return (await apiClient.get<PluginAccountPricingSummary[]>(`/admin/newapi-plugins/${encodeURIComponent(key)}/pricing`, { signal })).data
 }
 
 export interface NewAPIPluginBalance {

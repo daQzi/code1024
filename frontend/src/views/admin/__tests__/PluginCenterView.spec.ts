@@ -13,7 +13,7 @@ vi.mock('@/api/admin/newapiPlugins', () => {
   const task = { id: 1, key: 'test-video', version: '1.0.0', sha256: 'a'.repeat(64), origin: 'builtin', meta: { name: 'Video driver', models: ['model-a'] }, capabilities: { task: true }, compatibility: { runnable: true, kinds: ['task'], warnings: [], blockers: [] }, enabled: false, active: true }
   const provider = { id: 2, key: 'test-provider', version: '1.0.0', sha256: 'b'.repeat(64), origin: 'uploaded', meta: { name: 'Provider driver', models: [] }, capabilities: { provider: true }, compatibility: { runnable: false, kinds: [], warnings: [], blockers: ['no host path'] }, enabled: false, active: true }
   const transform = { id: 3, key: 'test-transform', version: '1.0.0', sha256: 'c'.repeat(64), origin: 'uploaded', meta: { name: 'Ingress filter', models: [] }, capabilities: { transform: true, hooks: ['ingress'] }, compatibility: { runnable: true, kinds: ['transform'], warnings: [], blockers: [] }, enabled: false, active: true }
-  return { getProviderToolPrices: vi.fn().mockResolvedValue({ prices: {}, revision: 'r1' }), saveProviderToolPrices: vi.fn(), listNewAPIPlugins: vi.fn().mockResolvedValue({ plugins: [task, provider, transform], factories: [task], builtins: [], baseline: 'fixture' }), listNewAPIPluginVersions: vi.fn().mockResolvedValue([task]), activateNewAPIPlugin: vi.fn().mockResolvedValue(undefined), restorePluginFactory: vi.fn().mockResolvedValue(task), installNewAPIPlugin: vi.fn() }
+  return { getProviderToolPrices: vi.fn().mockResolvedValue({ prices: {}, revision: 'r1' }), saveProviderToolPrices: vi.fn(), deleteNewAPIPluginVersion: vi.fn(), dryRunNewAPIPluginVersion: vi.fn(), getNewAPIPluginPricing: vi.fn(), listNewAPIPlugins: vi.fn().mockResolvedValue({ plugins: [task, provider, transform], factories: [task], builtins: [], baseline: 'fixture' }), listNewAPIPluginVersions: vi.fn().mockResolvedValue([task]), activateNewAPIPlugin: vi.fn().mockResolvedValue(undefined), restorePluginFactory: vi.fn().mockResolvedValue(task), installNewAPIPlugin: vi.fn() }
 })
 
 function render() {
@@ -39,6 +39,7 @@ describe('independent New API plugin center', () => {
     if (outcome === 'resolve') finish([previous])
     else fail(new Error('old-history-marker'))
     await flushPromises()
+    await wrapper.find('[data-detail]').findAll('button').find(button => button.text() === 'admin.plugins.detail.history')!.trigger('click')
     expect(wrapper.find('[data-detail]').text()).toContain('new-history-marker')
     expect(wrapper.text()).not.toContain('old-history-marker')
     const current = vi.mocked(listNewAPIPluginVersions).mock.calls.at(-1)![1]!

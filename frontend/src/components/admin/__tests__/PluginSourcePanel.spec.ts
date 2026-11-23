@@ -20,6 +20,18 @@ async function artifact(id: number, version: string, source: string) {
 }
 
 describe('plugin source inspection', () => {
+  it('opens the diff tab immediately and selects the version actually being compared', async () => {
+    const before = await artifact(1, '1.0.0', 'const value = 1')
+    const after = await artifact(2, '2.0.0', 'const value = 2')
+    vi.mocked(getNewAPIPluginSource).mockImplementation(async id => id === 1 ? before.data : after.data)
+    const wrapper = mount(PluginSourcePanel, { props: { plugin: after.plugin, versions: [after.plugin, before.plugin], mode: 'diff' } })
+    await vi.waitFor(() => expect(wrapper.find('[data-source-diff]').exists()).toBe(true))
+    expect(wrapper.find('[data-source-toggle]').exists()).toBe(false)
+    expect((wrapper.find('[data-source-compare]').element as HTMLSelectElement).value).toBe('1')
+    expect(wrapper.find('[data-source-content]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('loads lazily, renders source literally and compares immutable versions with line numbers', async () => {
     const before = await artifact(1, '1.0.0', 'const a = 1\nthrow Error("never execute");')
     const after = await artifact(2, '2.0.0', 'const a = 2\nthrow Error("never execute");\n// <script>throw 1</script>')

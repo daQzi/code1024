@@ -4,6 +4,7 @@
       <div
         v-if="show"
         class="modal-overlay"
+        :class="{ '!p-0': placement === 'right' }"
         :style="zIndexStyle"
         :data-dialog-layer="layer"
         :aria-labelledby="dialogId"
@@ -12,7 +13,7 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
-        <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
+        <div ref="dialogRef" :class="['modal-content', widthClasses, { '!ml-auto !mr-0 !h-[100dvh] !max-h-[100dvh] !rounded-none': placement === 'right' }]" @click.stop>
           <!-- Header -->
           <div class="modal-header">
             <h3 :id="dialogId" class="modal-title">
@@ -66,6 +67,7 @@ interface Props {
   show: boolean
   title: string
   width?: DialogWidth
+  placement?: 'center' | 'right'
   closeOnEscape?: boolean
   closeOnClickOutside?: boolean
   showCloseButton?: boolean

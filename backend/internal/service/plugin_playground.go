@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"slices"
 	"time"
 
@@ -59,7 +60,7 @@ func (s *NewAPIPluginService) DryRunPlugin(ctx context.Context, input PluginPlay
 	if len(input.Source) == 0 || len(input.Source) > runner.MaxSourceBytes || len(input.Args) > 4 {
 		return nil, pluginInputError("Invalid playground source or argument count")
 	}
-	if !slices.Contains([]string{"ingress", "buildSubmitRequest", "parseSubmitResponse", "buildQueryRequest", "parseTaskResult", "extractUsage", "extractUsageOnComplete", "listArtifacts", "buildContentRequest", "convertRequest", "prepareRequest", "convertResponse", "convertStreamEvent", "signRequest", "credentialRejected"}, input.Hook) {
+	if !slices.Contains([]string{"ingress", "request", "outbound", "egress", "reply", "report", "buildSubmitRequest", "parseSubmitResponse", "parseSubmitEvent", "parseSubmitEventDelta", "buildQueryRequest", "parseTaskResult", "buildBatchQueryRequest", "parseBatchResult", "buildQuoteRequest", "parseQuoteResponse", "quotePrice", "buildCancelRequest", "parseCancelResponse", "extractUsage", "extractUsageOnComplete", "listArtifacts", "buildContentRequest", "buildBalanceRequest", "parseBalance", "convertRequest", "prepareRequest", "convertResponse", "convertStreamEvent", "signRequest", "credentialRejected"}, input.Hook) {
 		return nil, pluginInputError("This hook is not available in the offline playground")
 	}
 	total := 0
@@ -76,7 +77,7 @@ func (s *NewAPIPluginService) DryRunPlugin(ctx context.Context, input PluginPlay
 	result := &PluginPlaygroundResult{Hook: input.Hook, SHA256: hex.EncodeToString(hash[:]), Offline: true}
 	err := s.pool.WithFresh(ctx, input.Source, func(client *runner.Client) error {
 		if !slices.Contains(client.Descriptor.Hooks, input.Hook) {
-			return pluginInputError("The source does not export the selected hook")
+			return errors.New("The source does not export the selected hook")
 		}
 		result.Compatibility = AssessPluginHost(client.Meta, client.Descriptor)
 		args := make([]any, len(input.Args))
@@ -88,7 +89,7 @@ func (s *NewAPIPluginService) DryRunPlugin(ctx context.Context, input PluginPlay
 			return err
 		}
 		if len(raw) > 64<<10 || !json.Valid(raw) {
-			return pluginInputError("Hook output must be JSON and at most 64 KiB")
+			return errors.New("Hook output must be JSON and at most 64 KiB")
 		}
 		result.Result = raw
 		return nil

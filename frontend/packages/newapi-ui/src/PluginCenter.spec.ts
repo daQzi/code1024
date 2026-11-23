@@ -22,6 +22,71 @@ const dialogComponent = { props: ['show'], template: '<section v-if="show" data-
 const translate = (key: string) => key
 
 describe('standalone plugin UI', () => {
+  it('pins uploads opened from details to the selected plugin key', async () => {
+    const client = fixture()
+    client.install.mockResolvedValue(version)
+    const wrapper = mount(PluginCenter, { props: { client, t: translate, locale: 'en', dialogComponent, editable: true, runMutation: action => action() } })
+    await flushPromises()
+    await wrapper.find('[data-plugin-details]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-detail]').findAll('button').find(button => button.text() === 'admin.plugins.detail.uploadVersion')!.trigger('click')
+    await wrapper.find('textarea').setValue('export const meta = { key: "fixture" }')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    expect(client.install).toHaveBeenCalledWith({ source: 'export const meta = { key: "fixture" }', expected_key: 'fixture', allow_builtin_override: false })
+    wrapper.unmount()
+  })
+
+  it('does not report a skipped mutation as saved after authorization is removed', async () => {
+    const client = fixture()
+    let proceed!: () => Promise<unknown>
+    const runMutation = vi.fn((action: () => Promise<unknown>) => new Promise(resolve => {
+      proceed = async () => resolve(await action())
+    }))
+    const wrapper = mount(PluginCenter, { props: { client, t: translate, locale: 'en', dialogComponent, editable: true, runMutation } })
+    await flushPromises()
+    await wrapper.find('article [role="switch"]').trigger('click')
+    await wrapper.setProps({ editable: false })
+    await proceed()
+    await flushPromises()
+    expect(client.activate).not.toHaveBeenCalled()
+    expect(client.list).toHaveBeenCalledOnce()
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('confirms custom deletion and removes an empty plugin from the list and drawer', async () => {
+    const client = { ...fixture(), remove: vi.fn().mockResolvedValue({ deleted_id: 7, key: 'fixture', version: '1.0.0', removed_plugin: true }) }
+    const runMutation = vi.fn((action: () => Promise<unknown>) => action())
+    const wrapper = mount(PluginCenter, { props: { client, t: translate, locale: 'en', dialogComponent, editable: true, runMutation } })
+    await flushPromises()
+    await wrapper.find('[data-plugin-details]').trigger('click')
+    await flushPromises()
+    const deletion = wrapper.find('[data-detail]').findAll('button').find(button => button.text() === 'admin.plugins.detail.deleteVersion')!
+    await deletion.trigger('click')
+    expect(client.remove).not.toHaveBeenCalled()
+    client.list.mockResolvedValue({ plugins: [], factories: [], builtins: [], baseline: 'fixture' })
+    await wrapper.find('[data-confirm-delete]').trigger('click')
+    await flushPromises()
+    expect(runMutation).toHaveBeenCalledOnce()
+    expect(client.remove).toHaveBeenCalledWith(7)
+    expect(wrapper.findAll('article')).toHaveLength(0)
+    expect(wrapper.find('[data-detail]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('protects built-in digests and limits model previews to four models', async () => {
+    const builtin = { ...version, meta: { ...version.meta, models: ['one', 'two', 'three', 'four', 'five', 'six'] } }
+    const client = { ...fixture(), remove: vi.fn() }
+    client.list.mockResolvedValue({ plugins: [builtin], factories: [builtin], builtins: ['fixture'], baseline: 'fixture' })
+    const wrapper = mount(PluginCenter, { props: { client, t: translate, locale: 'en', dialogComponent, editable: true, runMutation: action => action() } })
+    await flushPromises()
+    expect(wrapper.find('article').text()).toContain('+2')
+    expect(wrapper.find('article').text()).not.toContain('five')
+    const deletion = wrapper.find('article').findAll('button').find(button => button.text() === 'admin.plugins.detail.deleteVersion')!
+    expect(deletion.attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
   it('uses only injected clients, language and authorization', async () => {
     const client = fixture()
     const runMutation = vi.fn((action: () => Promise<unknown>) => action())

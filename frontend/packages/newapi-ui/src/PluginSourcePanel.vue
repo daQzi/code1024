@@ -1,9 +1,9 @@
 <template>
   <section class="space-y-3 rounded-lg border border-gray-200 p-4 dark:border-dark-700">
-    <button type="button" class="btn btn-secondary btn-sm" :aria-expanded="opened" data-source-toggle @click="opened = !opened">{{ t(comparisonOnly ? 'pluginRegistry.external.compareInstalled' : 'admin.plugins.source.title') }}</button>
+    <button v-if="!mode" type="button" class="btn btn-secondary btn-sm" :aria-expanded="opened" data-source-toggle @click="opened = !opened">{{ t(comparisonOnly ? 'pluginRegistry.external.compareInstalled' : 'admin.plugins.source.title') }}</button>
     <template v-if="opened">
       <p class="text-xs leading-5 text-gray-500">{{ t('admin.plugins.source.hint') }}</p>
-      <div v-if="options.length" class="space-y-1 text-sm">{{ t('admin.plugins.source.compare') }}<HostSelect v-model="compareID" :select-component="selectComponent" :label="t('admin.plugins.source.compare')"
+      <div v-if="options.length && mode !== 'source'" class="space-y-1 text-sm">{{ t('admin.plugins.source.compare') }}<HostSelect v-model="selectedCompareID" :select-component="selectComponent" :label="t('admin.plugins.source.compare')"
         :options="compareOptions" data-source-compare /></div>
       <p v-if="loading" role="status" class="text-sm text-gray-500">{{ t('common.loading') }}</p>
       <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
@@ -17,7 +17,8 @@
             <div v-for="(line,index) in lines" :key="index" class="flex min-w-max whitespace-pre px-2 leading-5" :class="line.kind === 'added' ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200' : line.kind === 'removed' ? 'bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200' : ''" :data-diff-kind="line.kind"><span class="w-12 shrink-0 select-none text-right text-gray-500">{{ line.before ?? '' }}</span><span class="mr-3 w-12 shrink-0 select-none text-right text-gray-500">{{ line.after ?? '' }}</span><span>{{ line.kind === 'added' ? '+' : line.kind === 'removed' ? '-' : ' ' }} {{ line.text || ' ' }}</span></div>
           </div>
         </template>
-        <label v-if="!comparisonOnly" class="block space-y-1 text-xs text-gray-500">{{ t('admin.plugins.source.raw') }}<textarea :value="current.source" readonly spellcheck="false" rows="14" class="input font-mono text-xs" :aria-label="t('admin.plugins.source.raw')" data-source-content /></label>
+        <p v-if="mode === 'diff' && !compared" class="text-sm text-gray-500">{{ t('admin.plugins.detail.noComparison') }}</p>
+        <label v-if="!comparisonOnly && mode !== 'diff'" class="block space-y-1 text-xs text-gray-500"><span class="flex items-center justify-between">{{ t('admin.plugins.source.raw') }}<PluginCopyButton :value="current.source" :label="t('admin.plugins.detail.copy')" :failed-label="t('admin.plugins.detail.copyFailed')" /></span><textarea :value="current.source" readonly spellcheck="false" rows="22" class="input font-mono text-xs" :aria-label="t('admin.plugins.source.raw')" data-source-content /></label>
       </template>
     </template>
   </section>
@@ -26,22 +27,27 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import HostSelect from './HostSelect.vue'
+import PluginCopyButton from './PluginCopyButton.vue'
 import type { NewAPIPluginVersion, PluginSource, PluginSourceClient, PluginTranslator } from './types'
 import { sourceSHA256 } from './marketplace'
 import { diffPluginSource } from './sourceDiff'
 
 type SourceIdentity = Pick<PluginSource, 'key' | 'version' | 'sha256'> & { id?: number }
-const props = defineProps<{ selectComponent?: Component; client: PluginSourceClient; t: PluginTranslator; plugin: SourceIdentity; versions: NewAPIPluginVersion[]; source?: string; comparisonOnly?: boolean }>()
+const props = defineProps<{ selectComponent?: Component; client: PluginSourceClient; t: PluginTranslator; plugin: SourceIdentity; versions: NewAPIPluginVersion[]; source?: string; comparisonOnly?: boolean; mode?: 'source' | 'diff' }>()
 const t: PluginTranslator = (key, values) => props.t(key, values)
-const opened = ref(false)
+const opened = ref(!!props.mode)
 const compareID = ref('')
 const current = ref<PluginSource>()
 const compared = ref<PluginSource>()
 const loading = ref(false)
 const error = ref('')
 const options = computed(() => props.versions.filter(item => item.key === props.plugin.key && item.id !== props.plugin.id))
+const selectedCompareID = computed({
+  get: () => props.mode === 'diff' ? (options.value.some(item => String(item.id) === compareID.value) ? compareID.value : String(options.value[0]?.id ?? '')) : compareID.value,
+  set: value => { compareID.value = value }
+})
 const compareOptions = computed(() => [
-  { value: '', label: t(props.comparisonOnly ? 'pluginRegistry.external.currentInstalled' : 'admin.plugins.source.raw') },
+  ...(props.mode === 'diff' ? [] : [{ value: '', label: t(props.comparisonOnly ? 'pluginRegistry.external.currentInstalled' : 'admin.plugins.source.raw') }]),
   ...options.value.map(item => ({ value: String(item.id), label: `v${item.version} · #${item.id} · ${item.sha256.slice(0, 12)}` }))
 ])
 const lines = computed(() => compared.value && current.value ? diffPluginSource(compared.value.source, current.value.source) : null)
@@ -55,7 +61,7 @@ async function readSource(expected: SourceIdentity, signal: AbortSignal, candida
   return result
 }
 
-watch([opened, compareID, () => props.plugin, () => props.source, () => props.versions], async () => {
+watch([opened, compareID, () => props.plugin, () => props.source, () => props.versions, () => props.mode], async () => {
   const epoch = ++sequence
   active?.abort()
   current.value = undefined
@@ -67,7 +73,7 @@ watch([opened, compareID, () => props.plugin, () => props.source, () => props.ve
   active = request
   loading.value = true
   try {
-    const target = options.value.find(item => String(item.id) === compareID.value) ?? (props.comparisonOnly ? options.value[0] : undefined)
+    const target = props.mode === 'source' ? undefined : options.value.find(item => String(item.id) === compareID.value) ?? (props.comparisonOnly || props.mode === 'diff' ? options.value[0] : undefined)
     const [selected, comparison] = await Promise.all([readSource(props.plugin, request.signal, props.source), target ? readSource(target, request.signal) : Promise.resolve(undefined)])
     if (request.signal.aborted || epoch !== sequence) return
     current.value = selected
@@ -77,6 +83,6 @@ watch([opened, compareID, () => props.plugin, () => props.source, () => props.ve
   } finally {
     if (epoch === sequence) loading.value = false
   }
-})
+}, { immediate: true })
 onBeforeUnmount(() => { sequence++; active?.abort() })
 </script>
