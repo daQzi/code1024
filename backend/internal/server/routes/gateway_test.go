@@ -94,6 +94,48 @@ func TestGatewayRoutesOpenAIAlphaSearchPathsAreRegistered(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesVideoRemixAliasesRequireTaskService(t *testing.T) {
+	router := newGatewayRoutesTestRouter()
+	for _, path := range []string{"/v1/videos/video_" + strings.Repeat("1", 40) + "/remix", "/videos/video_" + strings.Repeat("1", 40) + "/remix"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"prompt":"ocean"}`))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusServiceUnavailable, w.Code, path)
+		require.Contains(t, w.Body.String(), "Video task service is unavailable")
+	}
+}
+
+func TestGatewayRoutesPluginTaskReadPathsAreRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter()
+	base := "/v1/tasks/video_" + strings.Repeat("1", 40)
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, base}, {http.MethodPost, "/v1/tasks/sora"}, {http.MethodPost, base + "/cancel"}, {http.MethodDelete, base}, {http.MethodGet, base + "/artifacts"},
+		{http.MethodGet, base + "/artifacts/video/content"}, {http.MethodHead, base + "/artifacts/video/content"},
+		{http.MethodGet, "/v1/tasks/sunoapi/native/suno/fetch/fixture"}, {http.MethodPost, "/v1/tasks/sunoapi/native/suno/fetch"},
+		{http.MethodGet, "/v1/responses/resp_fixture"}, {http.MethodGet, "/responses/resp_fixture"},
+	} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+		require.Equal(t, http.StatusServiceUnavailable, w.Code, "%s %s", tc.method, tc.path)
+	}
+}
+
+func TestGatewayRoutesProviderAudioPathsAreRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter()
+	routes := make(map[string]string)
+	for _, route := range router.Routes() {
+		if route.Method == http.MethodPost {
+			routes[route.Path] = route.Handler
+		}
+	}
+	for _, prefix := range []string{"/v1", ""} {
+		for _, path := range []string{"/audio/transcriptions", "/audio/translations", "/audio/speech"} {
+			require.Contains(t, routes, prefix+path)
+		}
+	}
+}
+
 func TestGatewayRoutesAlphaSearchRejectsUnsupportedGroup(t *testing.T) {
 	router := newGatewayRoutesTestRouter(service.PlatformGrok)
 	req := httptest.NewRequest(http.MethodPost, "/v1/alpha/search", strings.NewReader(`{"model":"gpt-5.6-sol"}`))

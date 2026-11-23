@@ -15,6 +15,7 @@ import (
 	coderws "github.com/coder/websocket"
 	"github.com/tidwall/gjson"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/relaymetrics"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 )
 
@@ -43,6 +44,7 @@ type RelayResult struct {
 	Usage                   Usage
 	RequestID               string
 	TerminalEventType       string
+	PerformanceOutcome      relaymetrics.Outcome
 	FirstTokenMs            *int
 	Duration                time.Duration
 	ClientToUpstreamFrames  int64
@@ -58,6 +60,7 @@ type RelayTurnResult struct {
 	Usage                 Usage
 	RequestID             string
 	TerminalEventType     string
+	PerformanceOutcome    relaymetrics.Outcome
 	StartedAt             time.Time
 	Duration              time.Duration
 	FirstTokenMs          *int
@@ -81,12 +84,15 @@ type RelayOptions struct {
 	StartClientAfterFirstDownstream bool
 	OnUsageParseFailure             func(eventType string, usageRaw string)
 	OnTurnComplete                  func(turn RelayTurnResult)
-	BeforeWriteClient               func(msgType coderws.MessageType, payload []byte, wroteDownstream bool) error
-	BeforeClientWrite               func(msgType coderws.MessageType, payload []byte)
-	AfterClientWrite                func(msgType coderws.MessageType, payload []byte, writeErr error)
-	BeforeRelayCancel               func(exit RelayExit)
-	ReadClientFrame                 func(ctx context.Context, clientConn FrameConn) (coderws.MessageType, []byte, error)
-	OnTrace                         func(event RelayTraceEvent)
+	// OnTurnOutcome runs after the terminal write (or bounded disconnect drain).
+	// It is separate from the existing pre-write usage settlement callback.
+	OnTurnOutcome     func(turn RelayTurnResult, clientDisconnected bool)
+	BeforeWriteClient func(msgType coderws.MessageType, payload []byte, wroteDownstream bool) error
+	BeforeClientWrite func(msgType coderws.MessageType, payload []byte)
+	AfterClientWrite  func(msgType coderws.MessageType, payload []byte, writeErr error)
+	BeforeRelayCancel func(exit RelayExit)
+	ReadClientFrame   func(ctx context.Context, clientConn FrameConn) (coderws.MessageType, []byte, error)
+	OnTrace           func(event RelayTraceEvent)
 	// IsFirstTokenEvent decides which upstream event marks the first token.
 	// Nil keeps the built-in delta-based rule.
 	IsFirstTokenEvent func(eventType string, message []byte) bool
@@ -115,6 +121,7 @@ type relayState struct {
 	lastResponseServiceTier string
 	responseConflict        bool
 	terminalEventType       string
+	terminalOutcome         relaymetrics.Outcome
 	firstTokenMs            *int
 	turnTimingByID          map[string]*relayTurnTiming
 	activeTurn              *relayTurnTiming
@@ -140,6 +147,9 @@ type observedUpstreamEvent struct {
 	responseServiceTier string
 	duration            time.Duration
 	firstToken          *int
+	outcome             relaymetrics.Outcome
+	clientDisconnected  bool
+	metricsOnly         bool
 }
 
 type relayTurnTiming struct {
@@ -308,6 +318,7 @@ func Relay(
 			state,
 			options.OnUsageParseFailure,
 			options.OnTurnComplete,
+			options.OnTurnOutcome,
 			options.BeforeWriteClient,
 			options.BeforeClientWrite,
 			options.AfterClientWrite,
@@ -382,7 +393,9 @@ func Relay(
 	// turn callback; otherwise a late read can race Relay's result settlement.
 	<-upstreamDone
 
-	emitTurnComplete(options.OnTurnComplete, state, finalizePendingBareError(state, nowFn()))
+	pending := finalizePendingBareError(state, nowFn())
+	emitTurnComplete(options.OnTurnComplete, state, pending)
+	emitTurnOutcome(options.OnTurnOutcome, state, pending)
 	enrichResult(&result, state, nowFn().Sub(startAt))
 	result.ClientToUpstreamFrames = clientToUpstreamFrames.Load()
 	result.UpstreamToClientFrames = upstreamToClientFrames.Load()
@@ -534,6 +547,7 @@ func runUpstreamToClient(
 	state *relayState,
 	onUsageParseFailure func(eventType string, usageRaw string),
 	onTurnComplete func(turn RelayTurnResult),
+	onTurnOutcome func(turn RelayTurnResult, clientDisconnected bool),
 	beforeWriteClient func(msgType coderws.MessageType, payload []byte, wroteDownstream bool) error,
 	beforeClientWrite func(msgType coderws.MessageType, payload []byte),
 	afterClientWrite func(msgType coderws.MessageType, payload []byte, writeErr error),
@@ -549,7 +563,9 @@ func runUpstreamToClient(
 	for {
 		msgType, payload, err := upstreamConn.ReadFrame(ctx)
 		if err != nil {
-			emitTurnComplete(onTurnComplete, state, finalizePendingBareError(state, nowFn()))
+			pending := finalizePendingBareError(state, nowFn())
+			emitTurnComplete(onTurnComplete, state, pending)
+			emitTurnOutcome(onTurnOutcome, state, pending)
 			graceful := isDisconnectError(err)
 			// A clean WebSocket close only describes the transport handshake. Once
 			// the upstream has started a Responses turn, success still requires a
@@ -602,7 +618,9 @@ func runUpstreamToClient(
 		case coderws.MessageText:
 			eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
 			if shouldFinalizePendingBareError(state, payload, eventType) {
-				emitTurnComplete(onTurnComplete, state, finalizePendingBareError(state, nowFn()))
+				pending := finalizePendingBareError(state, nowFn())
+				emitTurnComplete(onTurnComplete, state, pending)
+				emitTurnOutcome(onTurnOutcome, state, pending)
 			}
 			observedEvent = observeUpstreamMessage(state, payload, startAt, nowFn, onUsageParseFailure)
 		case coderws.MessageBinary:
@@ -610,13 +628,23 @@ func runUpstreamToClient(
 			// terminal still settles relay lifecycle. Otherwise the pending-turn
 			// disconnect guard would turn an already-delivered terminal into a false
 			// missing-terminal failure when the upstream closes normally.
-			if isTerminalEvent(strings.TrimSpace(gjson.GetBytes(payload, "type").String())) {
+			if eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String()); isTerminalEvent(eventType) {
+				// Observe terminal health without adding usage for the opaque
+				// binary path. Its existing billing semantics remain untouched.
+				observedEvent = observedUpstreamEvent{terminal: true, eventType: eventType, responseID: strings.TrimSpace(gjson.GetBytes(payload, "response.id").String()), outcome: relaymetrics.Terminal(payload), metricsOnly: true}
+				if state.activeTurn != nil {
+					observedEvent.startedAt = state.activeTurn.startAt
+					observedEvent.duration = max(time.Duration(0), nowFn().Sub(state.activeTurn.startAt))
+					observedEvent.firstToken = openAIWSRelayCloneIntPtr(state.activeTurn.firstTokenMs)
+				}
 				state.consumePendingTurnStartedAt()
 				openAIWSRelayDiscardActiveTurnTiming(state)
 			}
 		}
 		emitTurnComplete(onTurnComplete, state, observedEvent)
 		if dropDownstreamWrites != nil && dropDownstreamWrites.Load() {
+			markTurnDelivery(state, &observedEvent, true)
+			emitTurnOutcome(onTurnOutcome, state, observedEvent)
 			if droppedFrames != nil {
 				droppedFrames.Add(1)
 			}
@@ -642,6 +670,8 @@ func runUpstreamToClient(
 			beforeClientWrite(msgType, payload)
 		}
 		writeErr := writeClient(msgType, payload)
+		markTurnDelivery(state, &observedEvent, writeErr != nil)
+		emitTurnOutcome(onTurnOutcome, state, observedEvent)
 		if afterClientWrite != nil {
 			afterClientWrite(msgType, payload, writeErr)
 		}
@@ -804,6 +834,8 @@ func observeUpstreamMessage(
 	}
 	observeRelayTurnResponseServiceTier(turnTiming, firstRelayResponseServiceTier(message))
 	state.terminalEventType = eventType
+	observed.outcome = relaymetrics.Terminal(message)
+	state.terminalOutcome = observed.outcome
 	if eventType == "error" {
 		// Some Responses servers emit error immediately before response.failed.
 		// Defer turn settlement so the authoritative failed usage can replace
@@ -885,7 +917,7 @@ func emitTurnComplete(
 	state *relayState,
 	observed observedUpstreamEvent,
 ) {
-	if onTurnComplete == nil || !observed.terminal {
+	if onTurnComplete == nil || !observed.terminal || observed.metricsOnly {
 		return
 	}
 	responseID := strings.TrimSpace(observed.responseID)
@@ -904,10 +936,26 @@ func emitTurnComplete(
 		Usage:                 observed.usage,
 		RequestID:             responseID,
 		TerminalEventType:     observed.eventType,
+		PerformanceOutcome:    observed.outcome,
 		StartedAt:             observed.startedAt,
 		Duration:              observed.duration,
 		FirstTokenMs:          openAIWSRelayCloneIntPtr(observed.firstToken),
 	})
+}
+
+func markTurnDelivery(state *relayState, observed *observedUpstreamEvent, disconnected bool) {
+	observed.clientDisconnected = disconnected
+	if state != nil && state.pendingBareError != nil && observed.eventType == "error" {
+		state.pendingBareError.clientDisconnected = disconnected
+	}
+}
+
+func emitTurnOutcome(callback func(RelayTurnResult, bool), state *relayState, observed observedUpstreamEvent) {
+	if callback == nil {
+		return
+	}
+	observed.metricsOnly = false
+	emitTurnComplete(func(turn RelayTurnResult) { callback(turn, observed.clientDisconnected) }, state, observed)
 }
 
 func firstRelayResponseModel(message []byte) string {
@@ -1270,6 +1318,7 @@ func enrichResult(result *RelayResult, state *relayState, duration time.Duration
 	result.Usage = state.usage
 	result.RequestID = state.lastResponseID
 	result.TerminalEventType = state.terminalEventType
+	result.PerformanceOutcome = state.terminalOutcome
 	result.FirstTokenMs = state.firstTokenMs
 }
 

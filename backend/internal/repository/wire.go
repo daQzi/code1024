@@ -102,6 +102,8 @@ var ProviderSet = wire.NewSet(
 	NewPluginRepository,
 	NewNewAPIPluginRepository,
 	NewGenerationTaskRepository,
+	NewNativeVideoPollRepository,
+	NewNativeVideoSettlementRepository,
 	NewModelPlazaMetricsRepository,
 	NewPluginKVStore,
 	NewChannelRepository,

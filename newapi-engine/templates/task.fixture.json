@@ -1,0 +1,296 @@
+{
+  "unixNow": 1805587200,
+  "cases": [
+    {
+      "name": "builds the supported submit request",
+      "hook": "buildSubmitRequest",
+      "args": [
+        {
+          "baseUrl": "https://upstream.example.invalid",
+          "apiKey": "fixture-only",
+          "model": "example-video",
+          "upstreamModel": "example-video",
+          "requestBody": {
+            "prompt": "A quiet ocean",
+            "seconds": 8
+          }
+        }
+      ],
+      "expected": {
+        "url": "https://upstream.example.invalid/jobs",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer fixture-only",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "model": "example-video",
+          "prompt": "A quiet ocean",
+          "seconds": 8
+        }
+      }
+    },
+    {
+      "name": "accepts a JSON video request",
+      "hook": "protocols",
+      "args": [
+        {
+          "model": "example-video",
+          "body": {
+            "kind": "json",
+            "value": {
+              "prompt": "A quiet ocean",
+              "seconds": "8"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "kind": "submit",
+        "model": "example-video",
+        "action": "text_to_video",
+        "requestBody": {
+          "model": "example-video",
+          "prompt": "A quiet ocean",
+          "seconds": 8
+        }
+      },
+      "path": [
+        "openai_video",
+        "decodeRequest"
+      ]
+    },
+    {
+      "name": "rejects an empty prompt",
+      "hook": "protocols",
+      "args": [
+        {
+          "model": "example-video",
+          "body": {
+            "kind": "json",
+            "value": {
+              "prompt": " "
+            }
+          }
+        }
+      ],
+      "expectedError": "prompt required",
+      "path": [
+        "openai_video",
+        "decodeRequest"
+      ]
+    },
+    {
+      "name": "extracts reservation estimates",
+      "hook": "extractUsage",
+      "args": [
+        {
+          "baseUrl": "https://upstream.example.invalid",
+          "apiKey": "fixture-only",
+          "model": "example-video",
+          "upstreamModel": "example-video",
+          "requestBody": {
+            "prompt": "A quiet ocean",
+            "seconds": 8
+          }
+        }
+      ],
+      "expected": {
+        "seconds": 8
+      }
+    },
+    {
+      "name": "retains accepted upstream identity",
+      "hook": "parseSubmitResponse",
+      "args": [
+        {
+          "baseUrl": "https://upstream.example.invalid",
+          "apiKey": "fixture-only",
+          "model": "example-video",
+          "upstreamModel": "example-video",
+          "requestBody": {
+            "prompt": "A quiet ocean",
+            "seconds": 8
+          }
+        },
+        {
+          "body": {
+            "id": "fixture-job"
+          }
+        }
+      ],
+      "expected": {
+        "taskId": "fixture-job",
+        "taskData": {}
+      }
+    },
+    {
+      "name": "rejects acceptance without an identifier",
+      "hook": "parseSubmitResponse",
+      "args": [
+        {
+          "baseUrl": "https://upstream.example.invalid",
+          "apiKey": "fixture-only",
+          "model": "example-video",
+          "upstreamModel": "example-video",
+          "requestBody": {
+            "prompt": "A quiet ocean",
+            "seconds": 8
+          }
+        },
+        {
+          "body": {}
+        }
+      ],
+      "expectedError": "task id required"
+    },
+    {
+      "name": "does not guess an unfamiliar state",
+      "hook": "parseTaskResult",
+      "args": [
+        {},
+        {
+          "status": "future-state"
+        }
+      ],
+      "expected": {
+        "status": "UNKNOWN"
+      }
+    },
+    {
+      "name": "reports successful generation separately from billing",
+      "hook": "parseTaskResult",
+      "args": [
+        {},
+        {
+          "status": "completed",
+          "video_url": "https://media.example.invalid/video.mp4"
+        }
+      ],
+      "expected": {
+        "status": "SUCCESS",
+        "progress": "100%",
+        "url": "https://media.example.invalid/video.mp4"
+      }
+    },
+    {
+      "name": "uses actual final seconds",
+      "hook": "extractUsageOnComplete",
+      "args": [
+        {},
+        {
+          "status": "SUCCESS"
+        },
+        {
+          "seconds": 6
+        }
+      ],
+      "expected": {
+        "seconds": 6
+      }
+    },
+    {
+      "name": "does not replace absent final usage with an estimate",
+      "hook": "extractUsageOnComplete",
+      "args": [
+        {
+          "data": {
+            "seconds": 8
+          }
+        },
+        {
+          "status": "SUCCESS"
+        },
+        {}
+      ],
+      "expected": {}
+    },
+    {
+      "name": "declares a private video artifact",
+      "hook": "listArtifacts",
+      "args": [
+        {
+          "status": "SUCCESS"
+        }
+      ],
+      "expected": [
+        {
+          "key": "video",
+          "type": "video"
+        }
+      ]
+    },
+    {
+      "name": "accepts explicitly measured zero final usage",
+      "hook": "extractUsageOnComplete",
+      "args": [
+        {},
+        {
+          "status": "SUCCESS"
+        },
+        {
+          "seconds": 0
+        }
+      ],
+      "expected": {
+        "seconds": 0
+      }
+    },
+    {
+      "name": "does not convert null to a zero final bill",
+      "hook": "extractUsageOnComplete",
+      "args": [
+        {},
+        {
+          "status": "SUCCESS"
+        },
+        {
+          "seconds": null
+        }
+      ],
+      "expected": {}
+    },
+    {
+      "name": "rejects explicit zero duration instead of silently defaulting",
+      "hook": "protocols",
+      "path": [
+        "openai_video",
+        "decodeRequest"
+      ],
+      "args": [
+        {
+          "model": "example-video",
+          "body": {
+            "kind": "json",
+            "value": {
+              "prompt": "A quiet ocean",
+              "seconds": 0
+            }
+          }
+        }
+      ],
+      "expectedError": "seconds must be between"
+    },
+    {
+      "name": "rejects boolean duration before numeric coercion",
+      "hook": "protocols",
+      "path": [
+        "openai_video",
+        "decodeRequest"
+      ],
+      "args": [
+        {
+          "model": "example-video",
+          "body": {
+            "kind": "json",
+            "value": {
+              "prompt": "A quiet ocean",
+              "seconds": true
+            }
+          }
+        }
+      ],
+      "expectedError": "seconds must be numeric"
+    }
+  ]
+}

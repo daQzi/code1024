@@ -305,6 +305,8 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			result, err = h.gatewayService.ForwardAsResponses(requestCtx, c, account, forwardBody, parsedReq)
 		}
 
+		setForwardPerformance(c, result, err)
+
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
 		}

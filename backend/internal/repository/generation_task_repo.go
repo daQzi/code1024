@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/generation"
 	"github.com/shopspring/decimal"
 )
 
@@ -18,9 +19,19 @@ func NewGenerationTaskRepository(db *sql.DB) service.GenerationTaskRepository {
 	return &generationTaskRepository{db: db}
 }
 
+// Native maintenance shares storage and financial facts, but has separate
+// ownership and claim methods. Its assembly does not require the New API host.
+func NewNativeVideoPollRepository(db *sql.DB) service.NativeVideoPollRepository {
+	return &generationTaskRepository{db: db}
+}
+
+func NewNativeVideoSettlementRepository(db *sql.DB) service.NativeVideoSettlementRepository {
+	return &generationTaskRepository{db: db}
+}
+
 const generationTaskColumns = `id,user_id,api_key_id,group_id,account_id,plugin_version_id,idempotency_key,fingerprint,
- model,upstream_model,platform,protocol,action,request,config_encrypted,upstream_id,state,data,usage,price,
- status,delivery_status,billing_status,progress,error_code,error_message,created_at,updated_at,finished_at,next_run_at,lease_token,attempts,reconciled_amount,connection,funding,public_fields`
+	 model,upstream_model,platform,protocol,action,request,config_encrypted,upstream_id,state,data,usage,price,
+	status,delivery_status,billing_status,progress,error_code,error_message,created_at,updated_at,finished_at,next_run_at,lease_token,attempts,reconciled_amount,connection,funding,public_fields,files,request_plugins_encrypted,request_report_encrypted,origins,credential_binding,preparation_status,preparation_encrypted,public_deleted_at`
 
 func scanGenerationTask(row interface{ Scan(...any) error }) (*service.GenerationTask, error) {
 	t := &service.GenerationTask{}
@@ -28,9 +39,10 @@ func scanGenerationTask(row interface{ Scan(...any) error }) (*service.Generatio
 	var connection []byte
 	var fundingRaw []byte
 	var publicFields []byte
+	var files, origins, credentialBinding []byte
 	err := row.Scan(&t.ID, &t.UserID, &t.APIKeyID, &t.GroupID, &t.AccountID, &t.PluginVersionID, &t.IdempotencyKey, &t.Fingerprint,
 		&t.Model, &t.UpstreamModel, &t.Platform, &t.Protocol, &t.Action, &t.Request, &t.ConfigEncrypted, &t.UpstreamID, &t.State, &t.Data, &t.Usage, &price,
-		&t.Status, &t.DeliveryStatus, &t.BillingStatus, &t.Progress, &t.ErrorCode, &t.ErrorMessage, &t.CreatedAt, &t.UpdatedAt, &t.FinishedAt, &t.NextRunAt, &t.LeaseToken, &t.Attempts, &t.ReconciledAmount, &connection, &fundingRaw, &publicFields)
+		&t.Status, &t.DeliveryStatus, &t.BillingStatus, &t.Progress, &t.ErrorCode, &t.ErrorMessage, &t.CreatedAt, &t.UpdatedAt, &t.FinishedAt, &t.NextRunAt, &t.LeaseToken, &t.Attempts, &t.ReconciledAmount, &connection, &fundingRaw, &publicFields, &files, &t.RequestPluginsEncrypted, &t.RequestReportEncrypted, &origins, &credentialBinding, &t.PreparationStatus, &t.PreparationEncrypted, &t.PublicDeletedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, service.ErrGenerationTaskNotFound
 	}
@@ -51,6 +63,15 @@ func scanGenerationTask(row interface{ Scan(...any) error }) (*service.Generatio
 	if err = json.Unmarshal(publicFields, &t.PublicFields); err != nil {
 		return nil, err
 	}
+	if err = json.Unmarshal(files, &t.Files); err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(origins, &t.Origins); err != nil {
+		return nil, err
+	}
+	if err = json.Unmarshal(credentialBinding, &t.CredentialBinding); err != nil || t.CredentialBinding.Validate() != nil {
+		return nil, service.ErrGenerationCredential
+	}
 	return t, nil
 }
 
@@ -63,7 +84,7 @@ type generationFunding struct {
 }
 
 func (r *generationTaskRepository) CreateHeld(ctx context.Context, t *service.GenerationTask, cmd *service.UsageBillingCommand) (*service.GenerationTask, error) {
-	if err := t.Validate(); err != nil {
+	if err := service.ValidateGenerationTaskSnapshot(t); err != nil {
 		return nil, err
 	}
 	if cmd == nil || cmd.UserID != t.UserID || cmd.APIKeyID != t.APIKeyID || cmd.AccountID != t.AccountID {
@@ -96,6 +117,18 @@ func (r *generationTaskRepository) CreateHeld(ctx context.Context, t *service.Ge
 	if err != nil || len(publicFields) > 16384 {
 		return nil, errors.New("invalid public video fields")
 	}
+	files, err := generationFileSnapshotJSON(t.Files)
+	if err != nil {
+		return nil, err
+	}
+	origins, err := generationOriginJSON(t.Origins)
+	if err != nil {
+		return nil, err
+	}
+	credentialBinding, err := json.Marshal(t.CredentialBinding)
+	if err != nil {
+		return nil, err
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -103,21 +136,30 @@ func (r *generationTaskRepository) CreateHeld(ctx context.Context, t *service.Ge
 	defer tx.Rollback()
 	var inserted string
 	err = tx.QueryRowContext(ctx, `INSERT INTO sub2api_generation_tasks(id,user_id,api_key_id,group_id,account_id,plugin_version_id,idempotency_key,fingerprint,
- model,upstream_model,platform,protocol,action,request,config_encrypted,price,funding,hold_amount,connection,public_fields)
- VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,'{}'::jsonb,$17,$18::jsonb,$19::jsonb)
+ model,upstream_model,platform,protocol,action,request,config_encrypted,price,funding,hold_amount,connection,public_fields,files,request_plugins_encrypted,request_report_encrypted,request_text,origins,credential_binding,preparation_status)
+ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16::jsonb,'{}'::jsonb,$17,$18::jsonb,$19::jsonb,$20::jsonb,$21,$22,$23,$24::jsonb,$25::jsonb,$26)
  ON CONFLICT(api_key_id,idempotency_key) DO NOTHING RETURNING id`, t.ID, t.UserID, t.APIKeyID, t.GroupID, t.AccountID, t.PluginVersionID, t.IdempotencyKey, t.Fingerprint,
-		t.Model, t.UpstreamModel, t.Platform, t.Protocol, t.Action, []byte(t.Request), t.ConfigEncrypted, price, hold.StringFixed(8), connection, publicFields).Scan(&inserted)
+		t.Model, t.UpstreamModel, t.Platform, t.Protocol, t.Action, []byte(t.Request), t.ConfigEncrypted, price, hold.StringFixed(8), connection, publicFields, files, t.RequestPluginsEncrypted, t.RequestReportEncrypted, string(t.Request), origins, credentialBinding, t.PreparationStatus).Scan(&inserted)
 	if errors.Is(err, sql.ErrNoRows) {
-		existing, err := scanGenerationTask(tx.QueryRowContext(ctx, `SELECT `+generationTaskColumns+` FROM sub2api_generation_tasks WHERE api_key_id=$1 AND idempotency_key=$2`, t.APIKeyID, t.IdempotencyKey))
+		existing, err := scanGenerationTask(tx.QueryRowContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE api_key_id=$1 AND idempotency_key=$2 AND public_deleted_at IS NULL FOR SHARE`, t.APIKeyID, t.IdempotencyKey))
+		if errors.Is(err, service.ErrGenerationTaskNotFound) {
+			return nil, service.ErrGenerationIdempotencyConflict
+		}
 		if err != nil {
 			return nil, err
 		}
-		if existing.UserID != t.UserID || existing.Fingerprint != t.Fingerprint {
+		if existing.UserID != t.UserID || existing.Fingerprint != t.Fingerprint || (!service.IsVideoGenerationProtocol(t.Protocol) || service.GenerationTaskSubmitPlugin(ctx) != "") && existing.GroupID != t.GroupID {
 			return nil, service.ErrGenerationIdempotencyConflict
 		}
 		return existing, nil
 	}
 	if err != nil {
+		return nil, err
+	}
+	if err = bindGenerationOrigins(ctx, tx, t); err != nil {
+		return nil, err
+	}
+	if err = bindGenerationFiles(ctx, tx, t); err != nil {
 		return nil, err
 	}
 	// Lock the same funding identities before checking or changing balances.
@@ -177,7 +219,16 @@ func (r *generationTaskRepository) CreateHeld(ctx context.Context, t *service.Ge
 		return nil, err
 	}
 	if !accountActive {
+		if len(t.Origins) > 0 {
+			return nil, service.ErrGenerationOrigin
+		}
 		return nil, errors.New("upstream account is disabled")
+	}
+	if err = validateGenerationTaskAccount(ctx, tx, t); err != nil {
+		return nil, err
+	}
+	if err = bindGenerationCredential(ctx, tx, t); err != nil {
+		return nil, err
 	}
 	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sub2api_generation_tasks WHERE account_id=$1 AND status IN('queued','submitting','running','submission_uncertain')`, t.AccountID).Scan(&active); err != nil {
 		return nil, err
@@ -227,10 +278,15 @@ func (r *generationTaskRepository) CreateHeld(ctx context.Context, t *service.Ge
 }
 
 func (r *generationTaskRepository) GetOwned(ctx context.Context, id string, user, key int64) (*service.GenerationTask, error) {
-	return scanGenerationTask(r.db.QueryRowContext(ctx, `SELECT `+generationTaskColumns+` FROM sub2api_generation_tasks WHERE id=$1 AND user_id=$2 AND api_key_id=$3`, id, user, key))
+	return scanGenerationTask(r.db.QueryRowContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE id=$1 AND user_id=$2 AND api_key_id=$3 AND public_deleted_at IS NULL`, id, user, key))
 }
 func (r *generationTaskRepository) FindIdempotent(ctx context.Context, user, key int64, idempotency string) (*service.GenerationTask, error) {
-	return scanGenerationTask(r.db.QueryRowContext(ctx, `SELECT `+generationTaskColumns+` FROM sub2api_generation_tasks WHERE user_id=$1 AND api_key_id=$2 AND idempotency_key=$3`, user, key, idempotency))
+	// The original key cannot create a second paid task after deletion.
+	task, err := scanGenerationTask(r.db.QueryRowContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE user_id=$1 AND api_key_id=$2 AND idempotency_key=$3`, user, key, idempotency))
+	if err == nil && task.PublicDeletedAt != nil {
+		return nil, service.ErrGenerationIdempotencyConflict
+	}
+	return task, err
 }
 func (r *generationTaskRepository) ListOwned(ctx context.Context, user, key int64, after string, limit int, order string) ([]service.GenerationTask, error) {
 	if limit < 1 || limit > 101 {
@@ -243,7 +299,8 @@ func (r *generationTaskRepository) ListOwned(ctx context.Context, user, key int6
 		return nil, errors.New("invalid generation list order")
 	}
 	// Both fragments are selected from constants; cursor and owner are bound.
-	rows, err := r.db.QueryContext(ctx, `SELECT `+generationTaskColumns+` FROM sub2api_generation_tasks WHERE user_id=$1 AND api_key_id=$2 AND ($3='' OR (created_at,id)`+comparison+`(SELECT created_at,id FROM sub2api_generation_tasks WHERE id=$3 AND user_id=$1 AND api_key_id=$2)) ORDER BY created_at `+direction+`,id `+direction+` LIMIT $4`, user, key, after, limit)
+	const videoOnly = `(protocol='' OR protocol IN ('openai_video','xai_video','xai_video_edit','xai_video_extension','ark_video'))`
+	rows, err := r.db.QueryContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE user_id=$1 AND api_key_id=$2 AND public_deleted_at IS NULL AND `+videoOnly+` AND ($3='' OR (created_at,id)`+comparison+`(SELECT created_at,id FROM sub2api_generation_tasks WHERE id=$3 AND user_id=$1 AND api_key_id=$2 AND `+videoOnly+`)) ORDER BY created_at `+direction+`,id `+direction+` LIMIT $4`, user, key, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -266,18 +323,26 @@ func (r *generationTaskRepository) Claim(ctx context.Context, token string, ttl 
  SELECT id FROM sub2api_generation_tasks WHERE next_run_at<=NOW() AND (lease_until IS NULL OR lease_until<NOW())
  AND billing_status IN('held','pending') AND status<>'submission_uncertain' ORDER BY next_run_at,id FOR UPDATE SKIP LOCKED LIMIT 1
  ) UPDATE sub2api_generation_tasks t SET lease_token=$1,lease_until=NOW()+$2*INTERVAL '1 second',attempts=attempts+1,
- status=CASE WHEN t.status='queued' THEN 'submitting' WHEN t.status='submitting' THEN 'submission_uncertain' ELSE t.status END,
+ status=CASE WHEN t.status='queued' THEN 'submitting' WHEN t.status='submitting' AND t.preparation_status<>'pending' THEN 'submission_uncertain' ELSE t.status END,
  updated_at=NOW() FROM candidate c WHERE t.id=c.id RETURNING `+prefixGenerationColumns("t"), token, int(ttl.Seconds())))
 }
 
 func prefixGenerationColumns(prefix string) string {
-	// Column names are compile-time constants, never caller input.
+	// Column names and the prefix are host-owned, never caller input.
+	if prefix != "" {
+		prefix += "."
+	}
 	result := ""
 	for _, column := range strings.Split(generationTaskColumns, ",") {
 		if result != "" {
 			result += ","
 		}
-		result += prefix + "." + strings.TrimSpace(column)
+		column = strings.TrimSpace(column)
+		if column == "request" {
+			result += "COALESCE(" + prefix + "request_text," + prefix + "request::text)::json AS request"
+		} else {
+			result += prefix + column
+		}
 	}
 	return result
 }
@@ -293,8 +358,9 @@ func (r *generationTaskRepository) SaveProgress(ctx context.Context, t *service.
 	}
 	result, err := r.db.ExecContext(ctx, `UPDATE sub2api_generation_tasks SET upstream_id=$3,state=$4::jsonb,data=$5::jsonb,usage=$6::jsonb,
  status=$7,delivery_status=$8,billing_status=$9,progress=$10,error_code=$11,error_message=$12,
- finished_at=COALESCE(finished_at,$13),next_run_at=NOW()+$14*INTERVAL '1 second',lease_until=NULL,lease_token='',updated_at=NOW()
- WHERE id=$1 AND lease_token=$2 AND lease_until>NOW() AND billing_status<>'settled'`, t.ID, t.LeaseToken, t.UpstreamID, []byte(t.State), []byte(t.Data), []byte(t.Usage), t.Status, t.DeliveryStatus, t.BillingStatus, t.Progress, t.ErrorCode, t.ErrorMessage, t.FinishedAt, int(delay.Seconds()))
+	 finished_at=COALESCE(finished_at,$13),next_run_at=NOW()+$14*INTERVAL '1 second',lease_until=NULL,lease_token='',updated_at=NOW(),request_report_encrypted=$15,
+	 preparation_status=$16
+ WHERE id=$1 AND lease_token=$2 AND lease_until>NOW() AND billing_status<>'settled'`, t.ID, t.LeaseToken, t.UpstreamID, []byte(t.State), []byte(t.Data), []byte(t.Usage), t.Status, t.DeliveryStatus, t.BillingStatus, t.Progress, t.ErrorCode, t.ErrorMessage, t.FinishedAt, int(delay.Seconds()), t.RequestReportEncrypted, t.PreparationStatus)
 	if err != nil {
 		return err
 	}
@@ -317,10 +383,13 @@ func (r *generationTaskRepository) Settle(ctx context.Context, t *service.Genera
 	var fundingRaw []byte
 	var hold decimal.Decimal
 	var status, billing, lease string
+	var errorCode string
 	var userID, keyID int64
 	var leaseUntil sql.NullTime
 	var previous sql.NullString
-	err = tx.QueryRowContext(ctx, `SELECT funding,hold_amount,status,billing_status,lease_token,actual_amount::text,user_id,api_key_id,lease_until FROM sub2api_generation_tasks WHERE id=$1 FOR UPDATE`, t.ID).Scan(&fundingRaw, &hold, &status, &billing, &lease, &previous, &userID, &keyID, &leaseUntil)
+	var persistedPrice, persistedUsage []byte
+	var reconciled sql.NullString
+	err = tx.QueryRowContext(ctx, `SELECT funding,hold_amount,status,billing_status,lease_token,actual_amount::text,user_id,api_key_id,lease_until,price,usage,reconciled_amount::text,error_code FROM sub2api_generation_tasks WHERE id=$1 FOR UPDATE`, t.ID).Scan(&fundingRaw, &hold, &status, &billing, &lease, &previous, &userID, &keyID, &leaseUntil, &persistedPrice, &persistedUsage, &reconciled, &errorCode)
 	if err != nil {
 		return err
 	}
@@ -336,8 +405,74 @@ func (r *generationTaskRepository) Settle(ctx context.Context, t *service.Genera
 	if status != service.GenerationSucceeded && status != service.GenerationFailed {
 		return errors.New("task is not terminal")
 	}
+	if (errorCode == service.GenerationCanceledBeforeSubmit || errorCode == service.GenerationCanceledUpstream) && (!actual.IsZero() || cost != nil) {
+		return service.ErrUsageBillingRequestConflict
+	}
 	if actual.GreaterThan(hold) {
 		return service.ErrGenerationPriceExceedsHold
+	}
+	// Financial effects use the immutable stored expression and separately
+	// persisted completion facts, never a caller-supplied mutable price object.
+	var price service.GenerationPriceSnapshot
+	if err = json.Unmarshal(persistedPrice, &price); err != nil {
+		return err
+	}
+	var expressionCharge *service.GenerationExpressionCharge
+	if (price.Rule.Mode == "expression" || price.Rule.UsesFinalBill()) && reconciled.Valid {
+		confirmed, parseErr := decimal.NewFromString(reconciled.String)
+		if parseErr != nil || !actual.Equal(confirmed) {
+			return service.ErrUsageBillingRequestConflict
+		}
+	} else if (price.Rule.Mode == "expression" || price.Rule.UsesFinalBill()) && status == service.GenerationFailed && !actual.IsZero() {
+		return service.ErrUsageBillingRequestConflict
+	}
+	if price.Rule.Mode == "expression" && status == service.GenerationSucceeded && !reconciled.Valid {
+		var facts map[string]json.RawMessage
+		if json.Unmarshal(persistedUsage, &facts) != nil {
+			return service.ErrGenerationCostPending
+		}
+		expressionCharge, err = price.SettleExpression(facts["_host_final_usage"])
+		if err != nil {
+			return err
+		}
+		if !actual.Equal(expressionCharge.Amount) {
+			return service.ErrUsageBillingRequestConflict
+		}
+	}
+	var finalBillBase *decimal.Decimal
+	if price.Rule.UsesFinalBill() && status == service.GenerationSucceeded && !reconciled.Valid {
+		var facts map[string]json.RawMessage
+		if json.Unmarshal(persistedUsage, &facts) != nil {
+			return service.ErrGenerationCostPending
+		}
+		observed := generation.ObservedCost(facts["_host_final_usage"])
+		base, deriveErr := price.FinalBillBase(observed)
+		if deriveErr != nil {
+			return deriveErr
+		}
+		verified, deriveErr := price.Settle(price.Quantity, observed)
+		if deriveErr != nil {
+			return deriveErr
+		}
+		if !actual.Equal(verified) {
+			return service.ErrUsageBillingRequestConflict
+		}
+		finalBillBase, cost = &base, observed
+	}
+	if price.Rule.Mode == "cost_plus" && !price.Rule.UsesFinalBill() && status == service.GenerationSucceeded && !reconciled.Valid {
+		var facts map[string]json.RawMessage
+		if json.Unmarshal(persistedUsage, &facts) == nil {
+			if observed := generation.ObservedCost(facts["_host_final_usage"]); observed != nil {
+				verified, deriveErr := price.Settle(price.Quantity, observed)
+				if deriveErr != nil {
+					return deriveErr
+				}
+				if !actual.Equal(verified) {
+					return service.ErrUsageBillingRequestConflict
+				}
+				cost = observed
+			}
+		}
 	}
 	var funding generationFunding
 	if err = json.Unmarshal(fundingRaw, &funding); err != nil {
@@ -356,7 +491,18 @@ func (r *generationTaskRepository) Settle(ctx context.Context, t *service.Genera
 	}
 	accountRefund := decimal.Zero
 	if cmd.AccountQuotaCost > 0 {
-		if hold.IsPositive() {
+		var measuredBase *decimal.Decimal
+		if expressionCharge != nil {
+			measuredBase = &expressionCharge.BaseAmount
+		} else if finalBillBase != nil {
+			measuredBase = finalBillBase
+		}
+		if measuredBase != nil {
+			// A zero user/group multiplier must still settle the account's
+			// independent quota by actual usage, rather than the maximum hold.
+			accountActual := decimal.NewFromFloat(cmd.AccountQuotaCost).Mul(*measuredBase).Div(*price.Rule.Maximum).Round(service.UsageBillingMonetaryScale)
+			accountRefund = decimal.NewFromFloat(cmd.AccountQuotaCost).Sub(accountActual)
+		} else if hold.IsPositive() {
 			accountRefund = decimal.NewFromFloat(cmd.AccountQuotaCost).Mul(refund).Div(hold).Round(8)
 		} else if status == service.GenerationFailed {
 			accountRefund = decimal.NewFromFloat(cmd.AccountQuotaCost)
@@ -397,10 +543,20 @@ func (r *generationTaskRepository) Settle(ctx context.Context, t *service.Genera
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE sub2api_generation_tasks SET billing_status='settled',actual_amount=$2,source_cost=$3::jsonb,lease_until=NULL,lease_token='',updated_at=NOW() WHERE id=$1`, t.ID, actual.StringFixed(8), source); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE sub2api_generation_tasks SET billing_status='settled',actual_amount=$2,source_cost=$3::jsonb,lease_until=NULL,lease_token='',updated_at=NOW(),
+ preparation_encrypted=CASE WHEN preparation_status='ready' THEN '' ELSE preparation_encrypted END,
+ preparation_status=CASE WHEN preparation_status='ready' THEN 'cleaned' ELSE preparation_status END
+ WHERE id=$1`, t.ID, actual.StringFixed(8), source); err != nil {
 		return err
 	}
-	event, _ := json.Marshal(map[string]any{"actual_amount": actual, "hold_amount": hold, "source_cost": cost})
+	eventData := map[string]any{"actual_amount": actual, "hold_amount": hold, "source_cost": cost}
+	if expressionCharge != nil {
+		eventData["pricing_expression"] = expressionCharge
+	}
+	if comparison := price.CompareQuote(cost, &actual); comparison != nil {
+		eventData["quote_comparison"] = comparison
+	}
+	event, _ := json.Marshal(eventData)
 	if _, err = tx.ExecContext(ctx, `INSERT INTO sub2api_generation_events(task_id,event_key,event_type,payload) VALUES($1,'settled','funds_settled',$2::jsonb)`, t.ID, event); err != nil {
 		return err
 	}
@@ -411,7 +567,7 @@ func (r *generationTaskRepository) Settle(ctx context.Context, t *service.Genera
  total_cost,actual_cost,account_stats_cost,account_rate_multiplier,rate_multiplier,billing_type,billing_mode,request_type,video_count,video_duration_seconds,output_tokens,duration_ms,created_at)
  SELECT user_id,api_key_id,account_id,group_id,$3,id,model,model,upstream_model,
  CASE WHEN (price->>'group_multiplier')::numeric>0 THEN $2::numeric/(price->>'group_multiplier')::numeric ELSE 0 END,
- $2,$4,1,(price->>'group_multiplier')::numeric,$5,'video',1,CASE WHEN status='succeeded' AND delivery_status='ready' THEN 1 ELSE 0 END,
+ $2,$4,1,(price->>'group_multiplier')::numeric,$5,CASE WHEN (protocol='' OR protocol IN ('openai_video','xai_video','xai_video_edit','xai_video_extension','ark_video')) THEN 'video' ELSE 'per_request' END,1,CASE WHEN (protocol='' OR protocol IN ('openai_video','xai_video','xai_video_edit','xai_video_extension','ark_video')) AND status='succeeded' AND delivery_status='ready' THEN 1 ELSE 0 END,
  CASE WHEN jsonb_typeof(usage->'seconds')='number' THEN LEAST(GREATEST((usage->>'seconds')::numeric,0),3600)::integer ELSE NULL END,
  CASE WHEN jsonb_typeof(usage->'tokens')='number' THEN LEAST(GREATEST((usage->>'tokens')::numeric,0),2147483647)::integer ELSE 0 END,
  LEAST(GREATEST(EXTRACT(EPOCH FROM(COALESCE(finished_at,NOW())-created_at))*1000,0),2147483647)::integer,NOW()
@@ -424,10 +580,18 @@ func (r *generationTaskRepository) Settle(ctx context.Context, t *service.Genera
 	if err != nil {
 		return err
 	}
+	if cmd.SubscriptionID == nil {
+		if err := applyGenerationQuotaTx(ctx, tx, t.ID, userID, actual); err != nil {
+			return err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return err
 	}
 	t.BillingStatus = service.GenerationBillingSettled
+	if t.PreparationStatus == "ready" {
+		t.PreparationStatus, t.PreparationEncrypted = "cleaned", ""
+	}
 	return nil
 }
 
@@ -435,7 +599,7 @@ func (r *generationTaskRepository) ListReview(ctx context.Context, limit int) ([
 	if limit < 1 || limit > 100 {
 		return nil, errors.New("invalid review list limit")
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT `+generationTaskColumns+` FROM sub2api_generation_tasks WHERE status='submission_uncertain' OR billing_status='review' ORDER BY created_at,id LIMIT $1`, limit)
+	rows, err := r.db.QueryContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE status='submission_uncertain' OR billing_status='review' ORDER BY created_at,id LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +624,7 @@ func (r *generationTaskRepository) Reconcile(ctx context.Context, id string, act
 		return err
 	}
 	defer tx.Rollback()
-	task, err := scanGenerationTask(tx.QueryRowContext(ctx, `SELECT `+generationTaskColumns+` FROM sub2api_generation_tasks WHERE id=$1 AND (lease_until IS NULL OR lease_until<NOW()) FOR UPDATE`, id))
+	task, err := scanGenerationTask(tx.QueryRowContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE id=$1 AND (lease_until IS NULL OR lease_until<NOW()) FOR UPDATE`, id))
 	if err != nil {
 		return err
 	}

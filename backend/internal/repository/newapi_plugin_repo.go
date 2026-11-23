@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -79,12 +80,27 @@ func (r *newAPIPluginRepository) Install(ctx context.Context, v *service.NewAPIP
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(734562910245)`); err != nil {
 		return nil, err
 	}
+	if strings.HasPrefix(v.Origin, "community:") {
+		id, parseErr := strconv.ParseInt(strings.TrimPrefix(v.Origin, "community:"), 10, 64)
+		if parseErr != nil || id <= 0 {
+			return nil, service.ErrPluginSubmissionConflict
+		}
+		var status, hash, key, version string
+		// Serialize withdrawal with installation: withdrawn source cannot be
+		// admitted after the publication check and before this commit.
+		if err = tx.QueryRowContext(ctx, `SELECT status,sha256,plugin_key,version FROM sub2api_plugin_submissions WHERE id=$1 FOR SHARE`, id).Scan(&status, &hash, &key, &version); err != nil {
+			return nil, service.ErrPluginSubmissionMissing
+		}
+		if status != "published" || hash != v.SHA256 || key != v.Key || version != v.Version {
+			return nil, service.ErrPluginSubmissionConflict
+		}
+	}
 	var existingID int64
 	var existingHash string
 	err = tx.QueryRowContext(ctx, `SELECT id,sha256 FROM sub2api_js_plugin_versions WHERE plugin_key=$1 AND (version=$2 OR sha256=$3) ORDER BY (version=$2) DESC LIMIT 1`, v.Key, v.Version, v.SHA256).Scan(&existingID, &existingHash)
 	if err == nil {
 		if existingHash != v.SHA256 {
-			return nil, errors.New("相同版本已存在不同源码，请增加插件版本号")
+			return nil, service.ErrPluginVersionConflict
 		}
 		if err = tx.Commit(); err != nil {
 			return nil, err
@@ -125,6 +141,18 @@ func (r *newAPIPluginRepository) Activate(ctx context.Context, id int64, enabled
 	n, err := result.RowsAffected()
 	if err == nil && n != 1 {
 		return sql.ErrNoRows
+	}
+	return err
+}
+
+func (r *newAPIPluginRepository) SelectVersion(ctx context.Context, id int64) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE sub2api_js_plugins p SET active_version_id=v.id,updated_at=NOW() FROM sub2api_js_plugin_versions v WHERE v.id=$1 AND p.plugin_key=v.plugin_key`, id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err == nil && n != 1 {
+		return service.ErrPluginStateChanged
 	}
 	return err
 }

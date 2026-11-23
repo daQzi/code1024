@@ -43,16 +43,28 @@ func (s *GatewayService) ForwardAsChatCompletions(
 	originalModel := ccReq.Model
 	clientStream := ccReq.Stream
 
-	// 2. Convert CC → Responses → Anthropic (chained conversion)
-	responsesReq, err := chatCompletionsToResponses(s.cfg, &ccReq)
-	if err != nil {
-		return nil, fmt.Errorf("convert chat completions to responses: %w", err)
-	}
-
 	// Resolve the final upstream model before model-specific conversion.
 	mappedModel := originalModel
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(originalModel)
+	}
+	modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, body, originalModel, mappedModel, "openai")
+	if modErr != nil {
+		writeNativeModelModifierError(c, "openai")
+		return nil, modErr
+	}
+	if modApplied {
+		ctx, body = modCtx, modBody
+		mappedModel = modSpec.Base
+		if err := json.Unmarshal(body, &ccReq); err != nil {
+			return nil, fmt.Errorf("parse chat completions request: %w", err)
+		}
+	}
+
+	// 2. Convert CC → Responses → Anthropic (chained conversion)
+	responsesReq, err := chatCompletionsToResponses(s.cfg, &ccReq)
+	if err != nil {
+		return nil, fmt.Errorf("convert chat completions to responses: %w", err)
 	}
 	if mappedModel == originalModel && account.Platform == PlatformAnthropic && account.Type == AccountTypeServiceAccount {
 		normalized := normalizeVertexAnthropicModelID(claude.NormalizeModelID(originalModel))

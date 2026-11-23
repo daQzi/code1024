@@ -59,10 +59,12 @@ WORKDIR /app/backend
 
 # Copy go mod files first (better caching)
 COPY backend/go.mod backend/go.sum ./
+COPY newapi-engine/go.mod newapi-engine/go.sum /app/newapi-engine/
 RUN go mod download
 
 # Copy backend source first
 COPY backend/ ./
+COPY newapi-engine/ /app/newapi-engine/
 
 # Copy frontend dist from previous stage (must be after backend copy to avoid being overwritten)
 COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist

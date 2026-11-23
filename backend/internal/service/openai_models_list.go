@@ -21,11 +21,7 @@ func (s *OpenAIGatewayService) FetchOpenAIModelsList(ctx context.Context, accoun
 		return nil, infraerrors.New(http.StatusInternalServerError, "OPENAI_MODELS_ACCOUNT_REQUIRED", "OpenAI account is required")
 	}
 	if account.HasNewAPIPlugin() {
-		var declared []string
-		raw, _ := json.Marshal(account.Credentials[newAPIPluginVideoModelsKey])
-		if err := json.Unmarshal(raw, &declared); err != nil {
-			return nil, invalidOpenAIModelsList(fmt.Errorf("pinned plugin model catalog is missing"))
-		}
+		declared := append(account.NewAPIVideoModels(), account.NewAPIProviderModels()...)
 		entries := make([]map[string]any, 0, len(declared))
 		for _, model := range declared {
 			entries = append(entries, map[string]any{"id": model, "object": "model", "created": 0, "owned_by": "plugin"})

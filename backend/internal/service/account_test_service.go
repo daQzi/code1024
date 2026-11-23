@@ -370,7 +370,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	}
 	bindAccountTestPlatform(c, account)
 	if account.HasNewAPIPlugin() {
-		return s.sendErrorAndEnd(c, "This account uses a video task plugin. Use /v1/videos to run an explicitly billable generation; ordinary text connection tests are not supported.")
+		return s.sendErrorAndEnd(c, "This account uses a protocol plugin. Test it through the plugin's declared API with a scoped API key; the native platform connection test is not supported.")
 	}
 
 	// Synthetic UI load-test accounts exercise the real SSE parsing and modal

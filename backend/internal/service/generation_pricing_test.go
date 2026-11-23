@@ -1,12 +1,24 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
+
+type captureGenerationPricingRepo struct {
+	generationReplayFixture
+	command UsageBillingCommand
+}
+
+func (r *captureGenerationPricingRepo) CreateHeld(ctx context.Context, task *GenerationTask, cmd *UsageBillingCommand) (*GenerationTask, error) {
+	r.command = *cmd
+	return r.generationReplayFixture.CreateHeld(ctx, task, cmd)
+}
 
 func generationDecimal(value string) *decimal.Decimal {
 	d := decimal.RequireFromString(value)
@@ -57,4 +69,31 @@ func TestGenerationPriceBoundsAndLongVideo(t *testing.T) {
 	actual, err = snapshot.Settle(decimal.NewFromInt(24), nil)
 	require.NoError(t, err)
 	require.Equal(t, "0.48", actual.String())
+}
+
+func TestGenerationCatalogShowsExpressionPricingAsDynamic(t *testing.T) {
+	price, ok := generationDisplayPrice(GenerationPriceRule{
+		Mode: "expression", Expression: `tier("standard", u("seconds") * 0.02)`, Maximum: generationDecimal("1"),
+	})
+	require.True(t, ok)
+	require.True(t, price.Dynamic)
+	require.Equal(t, "expression", price.Unit)
+}
+
+func TestGenerationFinalBillReservesBothCeilingsWithoutQuote(t *testing.T) {
+	plugins, account, upstream := generationPluginFixture(t, "sora")
+	account.RateMultiplier = new(float64)
+	*account.RateMultiplier = 2
+	account.Credentials[NewAPIVideoPricingKey] = map[string]any{"sora-2": map[string]any{
+		"mode": "cost_plus", "source_unit": "upstream_cost", "source_currency": "CNY", "exchange_rate": "0.14", "markup": "1.2", "maximum": "1.5",
+	}}
+	repo := &captureGenerationPricingRepo{}
+	svc := &GenerationService{repo: repo, plugins: plugins, gateway: plugins.gateway}
+	key := &APIKey{ID: 5, UserID: 4, User: &User{ID: 4}, Group: &Group{ID: 7, RateMultiplier: 1.5}}
+	task, err := svc.Create(context.Background(), key, nil, account, "sora-2", json.RawMessage(`{"model":"sora-2","seconds":"4","prompt":"Draw"}`), "final-bill")
+	require.NoError(t, err)
+	require.Equal(t, "2.25", task.Price.Hold.String())
+	require.Equal(t, 3.0, repo.command.AccountQuotaCost)
+	require.Nil(t, task.Price.Quote, "the reservation ceiling is not an upstream quote")
+	require.Empty(t, upstream.requests)
 }

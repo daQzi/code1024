@@ -149,6 +149,17 @@ func (e *openAIWSIngressTurnError) Unwrap() error {
 	return e.cause
 }
 
+// OpenAIWSUpstreamTurnFailure distinguishes an upstream clean close without a
+// terminal from a client disconnect. It observes the stage without exposing
+// payloads or changing the existing account-health/billing error flow.
+func OpenAIWSUpstreamTurnFailure(err error) bool {
+	var turn *openAIWSIngressTurnError
+	if !errors.As(err, &turn) || turn == nil {
+		return false
+	}
+	return turn.stage == "read_upstream" || turn.stage == "write_upstream"
+}
+
 func wrapOpenAIWSIngressTurnError(stage string, cause error, wroteDownstream bool) error {
 	if cause == nil {
 		return nil
@@ -267,6 +278,14 @@ type OpenAIWSIngressHooks struct {
 	// that must be written into the upstream response.create frame.
 	MapRequestModel func(turn int, originalModel string) (string, error)
 	AfterTurn       func(turn int, result *OpenAIForwardResult, turnErr error)
+	// AfterTurnPerformance runs after terminal delivery or disconnect drain,
+	// independently of the pre-write usage callback used by passthrough.
+	AfterTurnPerformance func(result *OpenAIForwardResult, turnErr error)
+	// APIKey supplies the authenticated caller key for per-turn Request Plugins.
+	APIKey *APIKey
+	// InitialPluginTurn carries Turn 1's pre-evaluated Request Processing plan
+	// from the handler's first-frame ingress loop.
+	InitialPluginTurn *RequestPluginWSTurn
 }
 
 func (s *OpenAIGatewayService) getOpenAIWSConnPool() *openAIWSConnPool {

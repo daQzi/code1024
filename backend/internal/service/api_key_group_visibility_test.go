@@ -98,3 +98,19 @@ func TestGetUserGroupVisibilityEmptyAndErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestModelPlazaSessionRoleRechecksActiveAndTokenVersion(t *testing.T) {
+	repo := &visibilityUserRepo{user: &User{ID: 1, Status: StatusActive, Role: RoleAdmin, TokenVersion: 2}}
+	svc := &APIKeyService{userRepo: repo}
+	role, err := svc.ModelPlazaSessionRole(context.Background(), 1, 2)
+	require.NoError(t, err)
+	require.Equal(t, RoleAdmin, role)
+	_, err = svc.ModelPlazaSessionRole(context.Background(), 1, 1)
+	require.Error(t, err)
+	repo.user.Status = "disabled"
+	_, err = svc.ModelPlazaSessionRole(context.Background(), 1, 2)
+	require.Error(t, err)
+	repo.err = errors.New("offline")
+	_, err = svc.ModelPlazaSessionRole(context.Background(), 1, 2)
+	require.Error(t, err)
+}

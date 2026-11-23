@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 )
 
@@ -181,6 +183,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if result == nil {
 		return errors.New("openai usage result is nil")
 	}
+	// Early errors, panics and deduplication must not fabricate a zero charge.
+	// A successful committed charge completes this before the defer runs.
+	defer result.pluginReportBilling.complete(decimal.Zero, false)
+	if result.NativeVideoBilling != nil {
+		return s.recordNativeVideoFrozenUsage(ctx, input)
+	}
 	if s.rateLimitService != nil && input.Account != nil && input.Account.Platform == PlatformOpenAI {
 		s.rateLimitService.ResetOpenAI403Counter(ctx, input.Account.ID)
 	}
@@ -261,6 +269,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		modelLongContextExempt,
 		pricingAt,
 	)
+	toolBillingApplied := err == nil && result.providerToolCharges != nil
 	if err != nil {
 		if !isUsagePricingUnavailableError(err) {
 			return err
@@ -286,7 +295,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		result.UpstreamResponseModel,
 		result.UpstreamResponseModelConflict,
 		result.ImageCount > 0 || result.VideoCount > 0 || result.WebSearchCalls > 0 ||
-			result.AudioUsage != nil || result.SearchCount > 0,
+			result.AudioUsage != nil || result.SearchCount > 0 || result.providerToolCharges != nil,
 	); responseModel != "" && !strings.EqualFold(responseModel, baselineBillingModel) {
 		if identified, responseChannelPriced := s.hasIdentifiedOpenAIResponsePricing(ctx, responseModel, apiKey); identified {
 			responseModels := s.filterCNProviderBillingModelCandidates(ctx, account, apiKey, usageBillingModelCandidates(responseModel))
@@ -449,6 +458,19 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		usageLog.RateMultiplier = multiplier
 	}
 	usageLog.AccountRateMultiplier = &accountRateMultiplier
+	if toolBillingApplied {
+		// Tool fees use the unpeaked base multiplier, which can differ from
+		// the token rate displayed on the same row. Never re-read today's
+		// prices when displaying this historical contribution.
+		snapshot, snapshotErr := result.providerToolCharges.Snapshot(baseMultiplier)
+		if snapshotErr != nil {
+			return snapshotErr
+		}
+		usageLog.ProviderToolBilling, err = json.Marshal(snapshot)
+		if err != nil {
+			return fmt.Errorf("encode Provider tool billing snapshot: %w", err)
+		}
+	}
 	usageLog.BillingType = billingType
 	usageLog.Stream = result.Stream
 	if input.CyberBlocked {
@@ -509,6 +531,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
+		result.pluginReportBilling.complete(decimal.Zero, true)
 		return nil
 	}
 
@@ -519,7 +542,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		quotaPlatform = PlatformFromAPIKey(apiKey)
 	}
 
-	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
+	applied, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                       cost,
 		User:                       user,
 		APIKey:                     apiKey,
@@ -539,6 +562,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+	if result.pluginReportBilling != nil && applied && s.usageBillingRepo != nil {
+		amount := decimal.NewFromFloat(usageLog.ActualCost).Round(8)
+		if simpleModeKeyRateLimitOnly {
+			amount = decimal.Zero
+		}
+		result.pluginReportBilling.complete(amount, true)
+	}
 
 	return nil
 }
@@ -603,6 +633,10 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	pricingAt time.Time,
 ) (*CostBreakdown, error) {
 	billingModel := firstUsageBillingModel(billingModels)
+	if result != nil && result.providerAudioPrice != nil {
+		price := *result.providerAudioPrice
+		return &CostBreakdown{TotalCost: price, ActualCost: price * webSearchMultiplier, BillingMode: string(BillingModePerRequest)}, nil
+	}
 	if result != nil && result.WebSearchCalls > 0 {
 		// Codex alpha/search 网页搜索按次计费：上游不返回 usage/token 字段，单价只取
 		// 分组覆盖价（nil 时默认 0.01 = 官方 $10/1000 次），不参与渠道级模型定价。
@@ -672,7 +706,12 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	// Search surcharge is additive. Never let a zero/default search cost mask a
 	// real token-pricing failure for requests that attempted token billing.
 	searchCost := (*CostBreakdown)(nil)
-	if result != nil && result.SearchCount > 0 {
+	if result != nil && result.providerToolCharges != nil {
+		// Hook facts and their operator prices were fixed during this request.
+		// SearchCount remains a compatibility projection, never a second charge.
+		amount := result.providerToolCharges.TotalUSD
+		searchCost = &CostBreakdown{TotalCost: amount, ActualCost: amount * webSearchMultiplier}
+	} else if result != nil && result.SearchCount > 0 {
 		price := groupSearchPricePer1kFromAPIKey(apiKey)
 		if price != nil && *price == 0 {
 			logger.L().Info("openai_usage.search_price_per_1k_explicit_free",

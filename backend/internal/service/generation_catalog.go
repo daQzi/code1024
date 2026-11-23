@@ -33,9 +33,13 @@ func generationDisplayPrice(rule GenerationPriceRule) (GenerationDisplayPrice, b
 		return GenerationDisplayPrice{}, false
 	}
 	price := GenerationDisplayPrice{Unit: rule.Unit, ServiceFee: rule.ServiceFee, Minimum: rule.Minimum}
-	if rule.Mode == "fixed" {
+	switch rule.Mode {
+	case "expression":
+		price.Unit = "expression"
+		price.Dynamic = true
+	case "fixed":
 		price.UnitPrice = *rule.UnitPrice
-	} else {
+	case "cost_plus":
 		if rule.SourceUnit == "upstream_cost" {
 			price.Unit = "upstream_cost"
 			price.Dynamic = true
@@ -86,6 +90,7 @@ func (s *ModelPlazaService) appendGenerationCatalog(ctx context.Context, groups 
 			}
 			item := &group.Models[at]
 			item.Protocols = []string{"openai_video"}
+			item.Capabilities = &PlazaCapabilities{Source: "host_protocol", OutputModalities: []string{"video"}}
 			rule, ok := account.Rules[model]
 			if !ok {
 				rule, ok = account.Rules["*"]

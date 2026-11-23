@@ -1490,7 +1490,7 @@ func filterSchedulerCredentials(credentials map[string]any) map[string]any {
 		"openai_capabilities",
 		// Plugin identity and its pinned model declaration are needed before
 		// hydration, including to exclude these accounts from native protocols.
-		service.NewAPIPluginRevisionKey, "newapi_plugin_video_models",
+		service.NewAPIPluginRevisionKey, "newapi_plugin_key", "newapi_plugin_video_models", "newapi_plugin_suno_models", "newapi_plugin_generic_task_models", "newapi_plugin_responses_task", "newapi_plugin_image_task", "newapi_plugin_native_routes", "newapi_plugin_native_videos", "newapi_plugin_provider",
 		// Gemini 显式缓存的候选过滤（GeminiExplicitCacheExclusions）读本投影判定账号是否支持显式缓存：
 		// 官方地址、Vertex 认证方式与上游网关的显式缓存声明。缺这几个键时只能按类型粗筛，
 		// 不支持的账号要逐个选中后才被剔除。

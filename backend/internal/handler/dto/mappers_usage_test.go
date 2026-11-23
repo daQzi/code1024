@@ -8,6 +8,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestUsageLogToolBillingPreservesPublicSnapshotForOwnerAndAdmin(t *testing.T) {
+	log := &service.UsageLog{ProviderToolBilling: json.RawMessage(`{"schema_version":1,"rate_multiplier":2,"total_usd":0.0075,"actual_usd":0.015,"items":[{"name":"file_search","count":3,"price_per_1k":2.5,"cost_usd":0.0075}]}`)}
+	user, admin := UsageLogFromService(log), UsageLogFromServiceAdmin(log)
+	for _, value := range []any{user, admin} {
+		encoded, err := json.Marshal(value)
+		require.NoError(t, err)
+		var row struct {
+			ToolBilling json.RawMessage `json:"provider_tool_billing"`
+		}
+		require.NoError(t, json.Unmarshal(encoded, &row))
+		require.JSONEq(t, string(log.ProviderToolBilling), string(row.ToolBilling))
+	}
+	user.ProviderToolBilling[0] = ' '
+	require.Equal(t, byte('{'), log.ProviderToolBilling[0], "DTO mutation must not alter the stored billing trace")
+	require.Equal(t, byte('{'), admin.ProviderToolBilling[0])
+	for _, value := range []any{UsageLogFromService(&service.UsageLog{}), UsageLogFromServiceAdmin(&service.UsageLog{})} {
+		encoded, err := json.Marshal(value)
+		require.NoError(t, err)
+		require.NotContains(t, string(encoded), "provider_tool_billing", "legacy records must remain unknown")
+	}
+}
+
 func TestUsageLogFromService_IncludesOpenAIWSMode(t *testing.T) {
 	t.Parallel()
 

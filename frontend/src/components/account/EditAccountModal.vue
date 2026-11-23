@@ -1926,7 +1926,7 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
-      <NewAPIPluginField v-if="account.type === 'apikey'" :key="String(account.id) + String(show)" ref="newAPIPluginField" :credentials="account.credentials" />
+      <NewAPIPluginField v-if="account.type === 'apikey'" :key="String(account.id) + String(show)" ref="newAPIPluginField" :credentials="account.credentials" :account-id="account.id" />
 
       <UpstreamRequestIdHeaderField
         v-model="upstreamRequestIdHeader"
@@ -5759,7 +5759,7 @@ const handleSubmit = async () => {
         props.account.credentials_status?.has_api_key ?? Boolean(currentCredentials.api_key)
       if (editApiKey.value.trim()) {
         newCredentials.api_key = editApiKey.value.trim()
-      } else if (!hasExistingApiKey) {
+      } else if (!hasExistingApiKey && !newAPIPluginField.value?.requiresLogin) {
         appStore.showError(t('admin.accounts.apiKeyIsRequired'))
         return
       }

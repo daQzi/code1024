@@ -113,6 +113,8 @@ func TestFlusher_PopSnapshotUpsert(t *testing.T) {
 			makeEntry(4.0, 5.0, 6.0),
 		},
 	}
+	cache.getEntries[0].QuotaID = 41
+	cache.getEntries[0].GenerationCursor = 9007199254740993
 	writer := &mockQuotaSnapshotWriter{}
 	f := newTestFlusher(cache, writer)
 
@@ -120,6 +122,9 @@ func TestFlusher_PopSnapshotUpsert(t *testing.T) {
 
 	if len(writer.receivedSnaps) != 2 {
 		t.Fatalf("expected 2 snaps, got %d", len(writer.receivedSnaps))
+	}
+	if snap := writer.receivedSnaps[0]; snap.QuotaID != 41 || snap.GenerationCursor != 9007199254740993 {
+		t.Fatalf("quota identity/cursor lost in snapshot: %+v", snap)
 	}
 	if f.metrics.FlushBatchSizeTotal.Load() != 2 {
 		t.Errorf("FlushBatchSizeTotal = %d, want 2", f.metrics.FlushBatchSizeTotal.Load())

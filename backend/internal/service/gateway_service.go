@@ -677,7 +677,8 @@ type AudioUsage struct {
 }
 
 type ForwardResult struct {
-	RequestID string
+	pluginReportBilling *relayReportBilling
+	RequestID           string
 	// UpstreamHeaders 是直接上游的响应头，用于按账户配置解析上游请求标识。
 	UpstreamHeaders http.Header
 	Usage           ClaudeUsage
@@ -1520,7 +1521,7 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 
 	for _, acc := range accounts {
 		if acc.HasNewAPIPlugin() {
-			for _, model := range acc.NewAPIVideoModels() {
+			for _, model := range append(acc.NewAPIVideoModels(), acc.NewAPIProviderModels()...) {
 				modelSet[model] = struct{}{}
 			}
 			hasAnyMapping = true

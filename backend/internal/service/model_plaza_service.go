@@ -22,6 +22,7 @@ type PlazaOfficialPricing struct {
 
 // PlazaModel 模型广场中单个模型条目：按实收口径合成的展示定价 + 官方参考价。
 type PlazaModel struct {
+	Capabilities      *PlazaCapabilities
 	Protocols         []string
 	GenerationPricing []GenerationDisplayPrice
 	Name              string
@@ -69,13 +70,22 @@ type PlazaGroup struct {
 // 模型枚举来自渠道配置；token 模型的展示单价与阶梯由 BillingService 的阶梯表
 // 查询给出（与扣费走同一条解析链与计费函数），图片/按次模型沿用渠道/分组档位价。
 type ModelPlazaService struct {
-	channelRepo       ChannelRepository
-	groupRepo         GroupRepository
-	pricingService    *PricingService
-	billingService    *BillingService
-	resolver          *ModelPricingResolver
-	metrics           ModelPlazaMetricsRepository
-	generationCatalog GenerationCatalogRepository
+	channelRepo         ChannelRepository
+	groupRepo           GroupRepository
+	accountRepo         ModelPlazaAccountRepository
+	pricingService      *PricingService
+	billingService      *BillingService
+	resolver            *ModelPricingResolver
+	metrics             ModelPlazaMetricsRepository
+	performanceRecorder *RelayPerformanceRecorder
+	generationCatalog   GenerationCatalogRepository
+	plugins             NewAPIPluginRepository
+}
+
+// ModelPlazaAccountRepository reads configured support without acquiring a
+// scheduler slot or hiding models during temporary upstream cooldowns.
+type ModelPlazaAccountRepository interface {
+	ListActive(context.Context) ([]Account, error)
 }
 
 // NewModelPlazaService 创建模型广场服务。
@@ -85,6 +95,7 @@ func NewModelPlazaService(
 	pricingService *PricingService,
 	billingService *BillingService,
 	resolver *ModelPricingResolver,
+	accountRepo ModelPlazaAccountRepository,
 ) *ModelPlazaService {
 	return &ModelPlazaService{
 		channelRepo:    channelRepo,
@@ -92,6 +103,7 @@ func NewModelPlazaService(
 		pricingService: pricingService,
 		billingService: billingService,
 		resolver:       resolver,
+		accountRepo:    accountRepo,
 	}
 }
 
@@ -116,6 +128,43 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 	groups, err := s.groupRepo.ListActive(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list active groups: %w", err)
+	}
+	accountsByGroup := make(map[int64][]*Account)
+	providerVersions := make(map[int64]*NewAPIPluginVersion)
+	capabilityMetadata := make(map[*Account]map[string]UpstreamModelMetadata)
+	if s.accountRepo != nil {
+		accounts, err := s.accountRepo.ListActive(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list model plaza accounts: %w", err)
+		}
+		for i := range accounts {
+			a := &accounts[i]
+			if a.Status != StatusActive || !a.Schedulable {
+				continue
+			}
+			if a.HasNewAPIPlugin() {
+				if s.plugins == nil || len(a.newAPIProviderBinding().Routes) == 0 {
+					continue
+				}
+				version := providerVersions[a.NewAPIPluginVersionID()]
+				if version == nil {
+					version, err = s.plugins.Get(ctx, a.NewAPIPluginVersionID())
+					if err != nil {
+						return nil, fmt.Errorf("read Provider model catalog: %w", err)
+					}
+					providerVersions[version.ID] = version
+				}
+				if !version.Enabled || len(pluginProviderBinding(version.Meta, version.Capabilities).Routes) == 0 {
+					continue
+				}
+			}
+			if snapshot := a.GetUpstreamModelMetadataSnapshot(); snapshot != nil {
+				capabilityMetadata[a] = snapshot.Models
+			}
+			for _, groupID := range a.GroupIDs {
+				accountsByGroup[groupID] = append(accountsByGroup[groupID], a)
+			}
+		}
 	}
 
 	sort.SliceStable(channels, func(i, j int) bool {
@@ -164,12 +213,14 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		ch.normalizeBillingModelSource()
 		supported := ch.SupportedModels()
 		fillGlobalPricingFallback(s.pricingService, supported)
+		mappingCache := newEmptyChannelCache()
 
 		for _, gid := range ch.GroupIDs {
 			pg, ok := byGroup[gid]
 			if !ok {
 				continue
 			}
+			expandMappingToCache(mappingCache, ch, gid, pg.Platform)
 			idx := modelIdx[gid]
 			if idx == nil {
 				idx = make(map[modelKey]int, len(supported))
@@ -177,6 +228,30 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			}
 			for j := range supported {
 				m := supported[j]
+				var capabilities *PlazaCapabilities
+				var protocols []string
+				if !groupEnt[gid].ModelAllowlist.Allows(m.Name) {
+					continue
+				}
+				if s.accountRepo != nil {
+					// Scheduling applies channel aliases before the account's own
+					// allowlist/mapping. Use the same exact/wildcard resolver here.
+					routingModel := lookupMappingAcrossPlatforms(mappingCache, gid, m.Platform, strings.ToLower(m.Name))
+					if routingModel == "" {
+						routingModel = m.Name
+					}
+					var supportingAccounts []*Account
+					for _, account := range accountsByGroup[gid] {
+						pluginSupports := !account.HasNewAPIPlugin() || account.SupportsAnyNewAPIProviderModel(routingModel)
+						if account.Platform == m.Platform && account.IsModelSupported(routingModel) && pluginSupports {
+							supportingAccounts = append(supportingAccounts, account)
+						}
+					}
+					if len(supportingAccounts) == 0 {
+						continue
+					}
+					capabilities, protocols = plazaAccountCapabilities(routingModel, supportingAccounts, capabilityMetadata)
+				}
 				if pg.Platform == PlatformComposite {
 					if !isConcreteRequestPlatform(m.Platform) {
 						continue
@@ -194,9 +269,11 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 				}
 				idx[key] = len(pg.Models)
 				pg.Models = append(pg.Models, PlazaModel{
-					Name:     m.Name,
-					Platform: m.Platform,
-					Pricing:  m.Pricing,
+					Capabilities: capabilities,
+					Protocols:    protocols,
+					Name:         m.Name,
+					Platform:     m.Platform,
+					Pricing:      m.Pricing,
 				})
 			}
 		}

@@ -65,6 +65,18 @@ func (s *GatewayService) ForwardAsResponses(
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(originalModel)
 	}
+	modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, adaptedBody, originalModel, mappedModel, "openai_responses")
+	if modErr != nil {
+		writeNativeModelModifierError(c, "openai_responses")
+		return nil, modErr
+	}
+	if modApplied {
+		ctx, body, adaptedBody = modCtx, modBody, modBody
+		mappedModel = modSpec.Base
+		if err := json.Unmarshal(adaptedBody, &responsesReq); err != nil {
+			return nil, fmt.Errorf("parse responses request: %w", err)
+		}
+	}
 	if mappedModel == originalModel && account.Platform == PlatformAnthropic && account.Type == AccountTypeServiceAccount {
 		normalized := normalizeVertexAnthropicModelID(claude.NormalizeModelID(originalModel))
 		if normalized != originalModel {

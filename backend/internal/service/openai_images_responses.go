@@ -1855,22 +1855,26 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		len(parsed.Uploads),
 		uploadParts,
 	)
-	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx, s.openAIImageDrainTimeout())
-	defer releaseUpstreamCtx()
-
-	token, _, err := s.GetAccessToken(upstreamCtx, account)
-	if err != nil {
-		return nil, err
-	}
-
 	var responsesBody []byte
 	var targetURL string
+	var err error
 	if direct {
 		responsesBody, targetURL, err = buildOpenAIImagesOAuthPayload(parsed, upstreamModel)
 	} else {
 		responsesBody, err = buildOpenAIImagesResponsesRequest(parsed, upstreamModel)
 		targetURL = chatgptCodexURL
 	}
+	if err != nil {
+		return nil, err
+	}
+	processed, err := s.nativeImagesOAuthRequestPluginOutbound(ctx, account, parsed.Endpoint, upstreamModel, responsesBody, direct)
+	if err != nil {
+		return nil, err
+	}
+	responsesBody = processed.Body
+	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx, s.openAIImageDrainTimeout())
+	defer releaseUpstreamCtx()
+	token, _, err := s.GetAccessToken(upstreamCtx, account)
 	if err != nil {
 		return nil, err
 	}
@@ -1894,6 +1898,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	} else {
 		upstreamReq.Header.Set("OpenAI-Beta", "responses=experimental")
 	}
+	applyNativeRequestPluginHeaders(upstreamReq, processed.Headers)
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
@@ -2033,6 +2038,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 			)
 		}
 	}
+	performanceOutcome := imageHTTPPerformance(c, imageCount)
 	imageCount = resolveBillableImageCount(imageCount, parsed.N, imageCountBillingEnabled(getAPIKeyFromContext(c)))
 	return &OpenAIForwardResult{
 		RequestID:                     resp.Header.Get("x-request-id"),
@@ -2052,6 +2058,7 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 		ImageSize:                     parsed.SizeTier,
 		ImageInputSize:                parsed.Size,
 		ImageOutputSizes:              imageOutputSizes,
+		PerformanceOutcome:            performanceOutcome,
 	}, nil
 }
 

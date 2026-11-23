@@ -140,6 +140,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 	var accountReleaseFunc func()
 	var nativeResp *websearch.SearchResponse
 	var providerName string
+	var report *service.RequestPluginHTTPReport
 	var err error
 
 	// Acquire + release holder for the whole handler (including failover retries).
@@ -187,6 +188,7 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 		}
 		account = selected.Account
 		accountReleaseFunc = release
+		report = service.BeginNativeHTTPReportAttempt(c.Request.Context(), account, searchModel)
 
 		if isXSearch {
 			nativeResp, providerName, err = h.doGrokNativeXSearch(c.Request.Context(), c, account, req, searchModel, maxResults)
@@ -240,14 +242,17 @@ func (h *GatewayHandler) WebSearch(c *gin.Context) {
 			).Info("gateway.web_search.search_price_per_1k_explicit_free")
 		}
 	}
+	forwardResult := &service.ForwardResult{
+		RequestID:     searchRequestID,
+		Model:         "grok-" + strings.ReplaceAll(searchLabel, "_", "-"),
+		UpstreamModel: searchModel,
+		SearchCount:   1,
+		Duration:      0,
+	}
+	report.NativeResult(forwardResult)
 	h.submitMandatoryUsageRecordTask(c.Request.Context(), func(ctx context.Context) {
 		if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-			Result: &service.ForwardResult{
-				RequestID:   searchRequestID,
-				Model:       "grok-" + strings.ReplaceAll(searchLabel, "_", "-"),
-				SearchCount: 1,
-				Duration:    0,
-			},
+			Result:             forwardResult,
 			APIKey:             apiKey,
 			User:               apiKey.User,
 			Account:            account,

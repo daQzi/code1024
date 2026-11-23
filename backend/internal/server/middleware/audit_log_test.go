@@ -5,6 +5,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -128,6 +129,39 @@ func TestPromptAuditAdminOperationsUseOmittedBodiesAndAllowlistedDetails(t *test
 	require.Equal(t, "success", probe.Extra["result"])
 	require.Equal(t, "guard-1", probe.Extra["guard_endpoint_id"])
 	require.Equal(t, true, probe.Extra["token_applied"])
+}
+
+func TestPluginSourcesAndDryRunBodiesNeverReachAdminAudit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repository := &auditCaptureRepository{}
+	svc := service.NewAuditLogService(repository, nil)
+	svc.Start()
+	r := gin.New()
+	r.Use(gin.HandlerFunc(NewAuditLogMiddleware(svc)))
+	paths := []string{"/api/v1/admin/request-processing", "/api/v1/admin/request-processing/dry-run", "/api/v1/admin/newapi-plugins", "/api/v1/plugin-registry", "/api/v1/admin/newapi-plugins/accounts/:id/credential"}
+	for _, path := range paths {
+		r.POST(path, func(c *gin.Context) {
+			var body map[string]any
+			require.NoError(t, c.ShouldBindJSON(&body))
+			require.NotEmpty(t, body)
+			c.Status(http.StatusOK)
+		})
+	}
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodPost, strings.ReplaceAll(path, ":id", "17"), bytes.NewBufferString(`{"source":"export const personal = 'source-canary'","config":{"keywords":"private-rule-canary"},"body":{"prompt":"private-prompt-canary"},"input":{"fields":{"password":"login-password-canary"},"callback_url":"https://cb/?code=auth-code-canary"}}`))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusOK, w.Code)
+	}
+	svc.Stop()
+	repository.mu.Lock()
+	defer repository.mu.Unlock()
+	require.Len(t, repository.logs, len(paths))
+	for _, entry := range repository.logs {
+		require.Equal(t, "<credential-bearing body omitted>", entry.RequestBody)
+		require.NotContains(t, entry.RequestBody, "canary")
+	}
 }
 
 func TestPromptAuditMutationAuditRoutesHaveStableActionsAndOmitBodies(t *testing.T) {

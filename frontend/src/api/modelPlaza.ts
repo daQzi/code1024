@@ -45,6 +45,14 @@ export interface PlazaTimePricing {
 }
 
 export interface PlazaModel {
+	capabilities?: {
+		source: 'catalog_intersection' | 'host_protocol'
+		input_modalities?: string[]
+		output_modalities?: string[]
+		reasoning?: boolean
+		context_window?: number
+		max_output_tokens?: number
+	}
 	protocols?: string[]
 	generation_pricing?: { dynamic?: boolean; unit: string; unit_price: string; service_fee: string; minimum: string; resolution?: string }[]
 	/** Stable public catalog ID; model names may contain slashes. */
@@ -93,16 +101,18 @@ export interface ModelPlazaResponse {
 }
 
 /** 获取模型广场数据。开关未启用时后端返回 404。 */
-export async function getModelPlaza(options?: { signal?: AbortSignal }): Promise<ModelPlazaResponse> {
+export async function getModelPlaza(options?: { signal?: AbortSignal; groupId?: number }): Promise<ModelPlazaResponse> {
   const { data } = await apiClient.get<ModelPlazaResponse>('/model-plaza', {
-    signal: options?.signal
+    signal: options?.signal,
+    params: { group_id: options?.groupId }
   })
   return data
 }
 
-export async function getModelPlazaModel(id: string, options?: { signal?: AbortSignal }): Promise<ModelPlazaResponse> {
+export async function getModelPlazaModel(id: string, options?: { signal?: AbortSignal; groupId?: number }): Promise<ModelPlazaResponse> {
   const { data } = await apiClient.get<ModelPlazaResponse>(`/model-plaza/models/${encodeURIComponent(id)}`, {
-    signal: options?.signal
+    signal: options?.signal,
+    params: { group_id: options?.groupId }
   })
   return data
 }
@@ -116,7 +126,10 @@ export interface PlazaMetricsPoint {
   p95_ms: number | null
   first_token_ms: number | null
   tokens_per_second: number | null
+  recent?: PlazaHealthBucket[]
 }
+
+export interface PlazaHealthBucket { bucket: string; requests: number; successes: number }
 
 export interface PlazaMetrics {
   start: string
@@ -125,8 +138,8 @@ export interface PlazaMetrics {
   points: PlazaMetricsPoint[]
 }
 
-export async function getModelPlazaPerformance(id: string, signal?: AbortSignal): Promise<PlazaMetrics> {
-  const { data } = await apiClient.get<PlazaMetrics>(`/model-plaza/models/${encodeURIComponent(id)}/performance`, { signal })
+export async function getModelPlazaPerformance(id: string, signal?: AbortSignal, groupId?: number): Promise<PlazaMetrics> {
+  const { data } = await apiClient.get<PlazaMetrics>(`/model-plaza/models/${encodeURIComponent(id)}/performance`, { signal, params: { group_id: groupId } })
   return data
 }
 
@@ -136,8 +149,8 @@ export interface PlazaMetricsSummaries {
   models: Record<string, PlazaMetricsPoint>
 }
 
-export async function getModelPlazaPerformanceSummaries(ids: string[], signal?: AbortSignal): Promise<PlazaMetricsSummaries> {
-  const { data } = await apiClient.get<PlazaMetricsSummaries>('/model-plaza/performance', { params: { ids: ids.join(',') }, signal })
+export async function getModelPlazaPerformanceSummaries(ids: string[], signal?: AbortSignal, groupId?: number): Promise<PlazaMetricsSummaries> {
+  const { data } = await apiClient.get<PlazaMetricsSummaries>('/model-plaza/performance', { params: { ids: ids.join(','), group_id: groupId }, signal })
   return data
 }
 

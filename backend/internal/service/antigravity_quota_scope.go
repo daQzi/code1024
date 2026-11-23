@@ -38,11 +38,11 @@ func (a *Account) IsSchedulableForModelWithContext(ctx context.Context, requeste
 	if a == nil {
 		return false
 	}
-	if a.HasNewAPIPlugin() {
-		allowed, _ := ctx.Value(newAPIPluginRoutingKey{}).(bool)
-		if !allowed || !a.SupportsNewAPIVideoModel(requestedModel) {
-			return false
-		}
+	if !generationVideoRoutingAllows(ctx, a, requestedModel) {
+		return false
+	}
+	if a.HasNewAPIPlugin() && !a.supportsNewAPIPluginScope(ctx, requestedModel) {
+		return false
 	}
 	if !a.IsSchedulable() {
 		return false

@@ -230,6 +230,13 @@
             <div v-if="showAccountBilling && row.account_rate_multiplier != null" class="mt-0.5 text-[11px] text-orange-500 dark:text-orange-400">
               A ${{ accountBilled(row).toFixed(6) }}
             </div>
+            <button
+              v-if="row.provider_tool_billing?.schema_version === 1 && row.provider_tool_billing.items?.length"
+              type="button"
+              data-testid="provider-tool-billing-open"
+              class="mt-1 text-xs text-primary-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-primary-400"
+              @click="toolBillingDetails = row"
+            >{{ t('usage.toolBillingDetails') }}</button>
           </div>
         </template>
 
@@ -542,6 +549,11 @@
       </div>
     </div>
   </Teleport>
+  <ProviderToolBillingDialog
+    :billing="toolBillingDetails?.provider_tool_billing ?? null"
+    :request-id="toolBillingDetails?.request_id ?? ''"
+    @close="toolBillingDetails = null"
+  />
 </template>
 
 <script setup lang="ts">
@@ -596,6 +608,7 @@ import DataTable from '@/components/common/DataTable.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import IpGeoCell from '@/components/common/IpGeoCell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import ProviderToolBillingDialog from './ProviderToolBillingDialog.vue'
 import { fetchBatch, getEntry } from '@/utils/ipGeoLookup'
 import type { AdminUsageLog } from '@/types'
 import type { Column } from '@/components/common/types'
@@ -706,6 +719,7 @@ const copyUpstreamRequestId = (upstreamRequestId: string) =>
 const tooltipVisible = ref(false)
 const tooltipPosition = ref({ x: 0, y: 0 })
 const tooltipData = ref<AdminUsageLog | null>(null)
+const toolBillingDetails = ref<AdminUsageLog | null>(null)
 
 // Tooltip state - token
 const tokenTooltipVisible = ref(false)

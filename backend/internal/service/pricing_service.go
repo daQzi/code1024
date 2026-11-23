@@ -23,6 +23,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 	"go.uber.org/zap"
 )
 
@@ -1379,6 +1380,9 @@ func (s *PricingService) buildModelLookupCandidates(modelLower string) []string 
 		strings.TrimPrefix(modelLower, "models/"),
 		lastSegment(modelLower),
 		lastSegment(strings.TrimPrefix(modelLower, "models/")),
+	}
+	if billingNames := modelmodifier.BillingNames(modelLower); len(billingNames) > 0 {
+		rawCandidates = append(rawCandidates, billingNames...)
 	}
 	normalized := normalizeModelNameForPricing(modelLower)
 

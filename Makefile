@@ -4,6 +4,16 @@ FRONTEND_CRITICAL_VITEST := \
 	src/shell/__tests__/ShellRail.theme.spec.ts \
 	src/composables/__tests__/useTheme.spec.ts \
 	src/components/common/__tests__/BaseDialog.layers.spec.ts \
+	src/views/admin/__tests__/PluginCenterView.spec.ts \
+	src/views/admin/__tests__/PluginsView.spec.ts \
+	packages/newapi-ui/src/PluginCenter.spec.ts \
+	packages/newapi-ui/src/architecture.spec.ts \
+	packages/newapi-ui/src/panels.spec.ts \
+	packages/newapi-ui/src/marketplace.spec.ts \
+	packages/newapi-ui/src/sourceDiff.spec.ts \
+	packages/newapi-ui/src/TaskLogConsole.spec.ts \
+	packages/newapi-ui/src/ProviderToolPricePanel.spec.ts \
+	src/views/__tests__/TaskLogsView.spec.ts \
 	src/views/__tests__/HomeView.compact.spec.ts \
 	src/i18n/__tests__/localeKeyCompleteness.spec.ts \
 	src/api/__tests__/client.spec.ts \
@@ -57,6 +67,7 @@ test-backend:
 test-frontend:
 	@pnpm --dir frontend run lint:check
 	@pnpm --dir frontend run typecheck
+	@pnpm --dir frontend run build:newapi-ui
 	@$(MAKE) test-frontend-critical
 
 test-frontend-critical:

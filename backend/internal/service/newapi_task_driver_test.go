@@ -1,7 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,10 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/newapi/builtin"
-	"github.com/Wei-Shaw/sub2api/internal/newapi/jsplugin"
-	"github.com/Wei-Shaw/sub2api/internal/newapi/runner"
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/builtin"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/jsplugin"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/runner"
+	pluginTask "github.com/Wei-Shaw/sub2api/newapi-engine/task"
 	"github.com/stretchr/testify/require"
 )
 
@@ -155,6 +161,117 @@ func TestGenerationPluginSoraContentUsesPinnedUpstreamIdentity(t *testing.T) {
 	require.Equal(t, "Bearer fixture-key", request.Header.Get("Authorization"))
 }
 
+func TestGenerationEmbeddedContentUsesDescriptorAndExactSignature(t *testing.T) {
+	s, account, upstream := generationPluginFixture(t, "sora")
+	version := s.repo.(*generationPluginFixtureRepo).version
+	version.Source = strings.Replace(version.Source, "export function buildContentRequest(ctx)", "function originalContentRequest(ctx)", 1) + `
+export function buildContentRequest(ctx){return {url:ctx.baseUrl+"/operations:fetch",method:"POST",body:{operationName:ctx.upstreamTaskId},responseType:"json",contentPath:["response","videos",0,"bytesBase64Encoded"],mimeType:"video/webm"};}
+export function signRequest(ctx,req){return {headers:{"X-Content-Digest":req.bodySha256}};}`
+	task := &GenerationTask{ID: "video_" + strings.Repeat("a", 40), PluginVersionID: 1, UpstreamID: "fixed-upstream-operation", Model: "sora-2", UpstreamModel: "sora-2", Action: "text_to_video", State: json.RawMessage(`{}`), Data: json.RawMessage(`{}`)}
+	payload := bytes.Repeat([]byte("simulated video bytes"), 100000)
+	for _, method := range []string{http.MethodGet, http.MethodHead} {
+		upstream.response = `{"done":true,"response":{"videos":[{"bytesBase64Encoded":"` + base64.StdEncoding.EncodeToString(payload) + `"}]}}`
+		response, err := s.OpenTaskContent(context.Background(), account, task, method, "video", http.Header{"Range": {"bytes=0-99"}, "If-None-Match": {"private-validator"}, "Authorization": {"client-secret"}})
+		require.NoError(t, err)
+		require.Equal(t, "video/webm", response.Header.Get("Content-Type"))
+		require.EqualValues(t, len(payload), response.ContentLength)
+		request := upstream.requests[len(upstream.requests)-1]
+		require.Equal(t, http.MethodPost, request.Method, "HEAD still fetches the operation using its declared method")
+		require.Equal(t, "/operations:fetch", request.URL.Path)
+		require.Empty(t, request.Header.Get("Range"))
+		require.Empty(t, request.Header.Get("If-None-Match"))
+		require.NotEqual(t, "client-secret", request.Header.Get("Authorization"))
+		body, err := io.ReadAll(request.Body)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"operationName":"fixed-upstream-operation"}`, string(body))
+		digest := sha256.Sum256(body)
+		require.Equal(t, hex.EncodeToString(digest[:]), request.Header.Get("X-Content-Digest"))
+		got, err := io.ReadAll(response.Body)
+		require.NoError(t, err)
+		if method == http.MethodHead {
+			require.Empty(t, got)
+		} else {
+			require.Equal(t, payload, got)
+			require.Len(t, generationEmbeddedSlots, 1)
+		}
+		require.NoError(t, response.Body.Close())
+		require.NoError(t, response.Body.Close())
+		require.Empty(t, generationEmbeddedSlots)
+	}
+	for _, tc := range []struct {
+		body string
+		want error
+	}{{`{"done":false}`, pluginTask.ErrEmbeddedArtifactNotReady}, {`{"done":true,"response":{}}`, pluginTask.ErrEmbeddedArtifactGone}} {
+		upstream.response = tc.body
+		_, err := s.OpenTaskContent(context.Background(), account, task, http.MethodGet, "video", nil)
+		require.ErrorIs(t, err, tc.want)
+		require.Empty(t, generationEmbeddedSlots)
+	}
+	upstream.response = `{"done":true,"response":{"videos":[{"bytesBase64Encoded":"eA=="}]}}`
+	budgetCtx, release := pkghttputil.WithRequestBodyMemoryBudget(context.Background(), pkghttputil.NewBodyMemoryBudget(1024))
+	defer release()
+	_, err := s.OpenTaskContent(budgetCtx, account, task, http.MethodGet, "video", nil)
+	require.ErrorIs(t, err, pkghttputil.ErrRequestBodyMemoryBudget)
+	require.Empty(t, generationEmbeddedSlots)
+}
+
+type generationArtifactTrackedBody struct {
+	io.Reader
+	closed bool
+}
+
+func (b *generationArtifactTrackedBody) Close() error { b.closed = true; return nil }
+
+func TestGenerationEmbeddedContentBoundsCancellationAndRelease(t *testing.T) {
+	descriptor := &pluginTask.Request{ContentPath: []any{"data"}}
+	newResponse := func(body string, length int64) (*http.Response, *generationArtifactTrackedBody) {
+		tracked := &generationArtifactTrackedBody{Reader: strings.NewReader(body)}
+		return &http.Response{StatusCode: 200, Body: tracked, ContentLength: length}, tracked
+	}
+	for _, tc := range []struct {
+		body   string
+		length int64
+	}{
+		{body: `{"done":true,"data":"!!"}`, length: -1},
+		{body: `{"done":true,"data":"eA=="}`, length: pluginTask.MaxEmbeddedJSONBytes + 1},
+		{body: `{"done":true,"data":"eA=="`, length: -1},
+	} {
+		upstream, tracked := newResponse(tc.body, tc.length)
+		_, err := generationEmbeddedResponse(context.Background(), upstream, descriptor, http.MethodGet)
+		require.Error(t, err)
+		require.True(t, tracked.closed)
+		require.Empty(t, generationEmbeddedSlots)
+	}
+	for range cap(generationEmbeddedSlots) {
+		generationEmbeddedSlots <- struct{}{}
+	}
+	upstream, tracked := newResponse(`{"done":true,"data":"eA=="}`, -1)
+	_, err := generationEmbeddedResponse(context.Background(), upstream, descriptor, http.MethodGet)
+	for range cap(generationEmbeddedSlots) {
+		<-generationEmbeddedSlots
+	}
+	require.ErrorIs(t, err, ErrGenerationArtifactBusy)
+	require.True(t, tracked.closed)
+	budget := pluginTask.MaxEmbeddedJSONBytes*5 + 1<<20
+	ctx, release := pkghttputil.WithRequestBodyMemoryBudget(context.Background(), pkghttputil.NewBodyMemoryBudget(budget))
+	defer release()
+	ctx, cancel := context.WithCancel(ctx)
+	upstream, tracked = newResponse(`{"done":true,"data":"eA=="}`, -1)
+	response, err := generationEmbeddedResponse(ctx, upstream, descriptor, http.MethodGet)
+	require.NoError(t, err)
+	require.True(t, tracked.closed, "the upstream envelope closes before downstream delivery")
+	require.Equal(t, "video/mp4", response.Header.Get("Content-Type"))
+	require.Len(t, generationEmbeddedSlots, 1)
+	require.ErrorIs(t, pkghttputil.ReserveRequestBodyMemory(ctx, 1), pkghttputil.ErrRequestBodyMemoryBudget)
+	cancel()
+	_, err = response.Body.Read(make([]byte, 1))
+	require.ErrorIs(t, err, context.Canceled)
+	require.NoError(t, response.Body.Close())
+	require.NoError(t, response.Body.Close())
+	require.Empty(t, generationEmbeddedSlots)
+	require.NoError(t, pkghttputil.ReserveRequestBodyMemory(ctx, budget), "Close releases the full nested memory reservation exactly once")
+}
+
 func TestGenerationPluginArkEndpointMappingRetainsDeclaredPublicModel(t *testing.T) {
 	s, account, upstream := generationPluginFixture(t, "doubao")
 	model := "doubao-seedance-2-5-260628"
@@ -199,6 +316,9 @@ func TestGenerationPluginAccountsCannotUseNativeScheduler(t *testing.T) {
 	require.False(t, account.SupportsOpenAIEndpointCapability(OpenAIEndpointCapabilityChatCompletions))
 	require.False(t, account.SupportsOpenAIEndpointCapability(""))
 	require.True(t, account.SupportsOpenAIEndpointCapability("plugin_task"))
+	account.Credentials[newAPIPluginVideoModelsKey] = []string{"video-*"}
+	require.True(t, account.SupportsOpenAIEndpointCapability("plugin_task"), "wildcard task families remain eligible even without a concrete public catalog entry")
+	require.True(t, account.SupportsNewAPIVideoModel("video-1"))
 }
 
 func TestGenerationPluginSigningAndConnectionSnapshot(t *testing.T) {

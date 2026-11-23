@@ -4,11 +4,13 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
@@ -266,6 +268,24 @@ func (_u *UsageLogUpdate) SetNillableBillingMode(v *string) *UsageLogUpdate {
 // ClearBillingMode clears the value of the "billing_mode" field.
 func (_u *UsageLogUpdate) ClearBillingMode() *UsageLogUpdate {
 	_u.mutation.ClearBillingMode()
+	return _u
+}
+
+// SetProviderToolBilling sets the "provider_tool_billing" field.
+func (_u *UsageLogUpdate) SetProviderToolBilling(v jsontext.Value) *UsageLogUpdate {
+	_u.mutation.SetProviderToolBilling(v)
+	return _u
+}
+
+// AppendProviderToolBilling appends value to the "provider_tool_billing" field.
+func (_u *UsageLogUpdate) AppendProviderToolBilling(v jsontext.Value) *UsageLogUpdate {
+	_u.mutation.AppendProviderToolBilling(v)
+	return _u
+}
+
+// ClearProviderToolBilling clears the value of the "provider_tool_billing" field.
+func (_u *UsageLogUpdate) ClearProviderToolBilling() *UsageLogUpdate {
+	_u.mutation.ClearProviderToolBilling()
 	return _u
 }
 
@@ -1234,6 +1254,17 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
 	}
+	if value, ok := _u.mutation.ProviderToolBilling(); ok {
+		_spec.SetField(usagelog.FieldProviderToolBilling, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedProviderToolBilling(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, usagelog.FieldProviderToolBilling, value)
+		})
+	}
+	if _u.mutation.ProviderToolBillingCleared() {
+		_spec.ClearField(usagelog.FieldProviderToolBilling, field.TypeJSON)
+	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 	}
@@ -1834,6 +1865,24 @@ func (_u *UsageLogUpdateOne) SetNillableBillingMode(v *string) *UsageLogUpdateOn
 // ClearBillingMode clears the value of the "billing_mode" field.
 func (_u *UsageLogUpdateOne) ClearBillingMode() *UsageLogUpdateOne {
 	_u.mutation.ClearBillingMode()
+	return _u
+}
+
+// SetProviderToolBilling sets the "provider_tool_billing" field.
+func (_u *UsageLogUpdateOne) SetProviderToolBilling(v jsontext.Value) *UsageLogUpdateOne {
+	_u.mutation.SetProviderToolBilling(v)
+	return _u
+}
+
+// AppendProviderToolBilling appends value to the "provider_tool_billing" field.
+func (_u *UsageLogUpdateOne) AppendProviderToolBilling(v jsontext.Value) *UsageLogUpdateOne {
+	_u.mutation.AppendProviderToolBilling(v)
+	return _u
+}
+
+// ClearProviderToolBilling clears the value of the "provider_tool_billing" field.
+func (_u *UsageLogUpdateOne) ClearProviderToolBilling() *UsageLogUpdateOne {
+	_u.mutation.ClearProviderToolBilling()
 	return _u
 }
 
@@ -2831,6 +2880,17 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.ProviderToolBilling(); ok {
+		_spec.SetField(usagelog.FieldProviderToolBilling, field.TypeJSON, value)
+	}
+	if value, ok := _u.mutation.AppendedProviderToolBilling(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, usagelog.FieldProviderToolBilling, value)
+		})
+	}
+	if _u.mutation.ProviderToolBillingCleared() {
+		_spec.ClearField(usagelog.FieldProviderToolBilling, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)

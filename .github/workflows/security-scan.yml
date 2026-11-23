@@ -29,6 +29,8 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
+          cd ../newapi-engine
+          GOWORK=off govulncheck ./...
 
   frontend-security:
     runs-on: ubuntu-latest

@@ -44790,6 +44790,8 @@ type UsageLogMutation struct {
 	model_mapping_chain          *string
 	billing_tier                 *string
 	billing_mode                 *string
+	provider_tool_billing        *jsontext.Value
+	appendprovider_tool_billing  jsontext.Value
 	input_tokens                 *int
 	addinput_tokens              *int
 	output_tokens                *int
@@ -45551,6 +45553,71 @@ func (m *UsageLogMutation) BillingModeCleared() bool {
 func (m *UsageLogMutation) ResetBillingMode() {
 	m.billing_mode = nil
 	delete(m.clearedFields, usagelog.FieldBillingMode)
+}
+
+// SetProviderToolBilling sets the "provider_tool_billing" field.
+func (m *UsageLogMutation) SetProviderToolBilling(j jsontext.Value) {
+	m.provider_tool_billing = &j
+	m.appendprovider_tool_billing = nil
+}
+
+// ProviderToolBilling returns the value of the "provider_tool_billing" field in the mutation.
+func (m *UsageLogMutation) ProviderToolBilling() (r jsontext.Value, exists bool) {
+	v := m.provider_tool_billing
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProviderToolBilling returns the old "provider_tool_billing" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldProviderToolBilling(ctx context.Context) (v jsontext.Value, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProviderToolBilling is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProviderToolBilling requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProviderToolBilling: %w", err)
+	}
+	return oldValue.ProviderToolBilling, nil
+}
+
+// AppendProviderToolBilling adds j to the "provider_tool_billing" field.
+func (m *UsageLogMutation) AppendProviderToolBilling(j jsontext.Value) {
+	m.appendprovider_tool_billing = append(m.appendprovider_tool_billing, j...)
+}
+
+// AppendedProviderToolBilling returns the list of values that were appended to the "provider_tool_billing" field in this mutation.
+func (m *UsageLogMutation) AppendedProviderToolBilling() (jsontext.Value, bool) {
+	if len(m.appendprovider_tool_billing) == 0 {
+		return nil, false
+	}
+	return m.appendprovider_tool_billing, true
+}
+
+// ClearProviderToolBilling clears the value of the "provider_tool_billing" field.
+func (m *UsageLogMutation) ClearProviderToolBilling() {
+	m.provider_tool_billing = nil
+	m.appendprovider_tool_billing = nil
+	m.clearedFields[usagelog.FieldProviderToolBilling] = struct{}{}
+}
+
+// ProviderToolBillingCleared returns if the "provider_tool_billing" field was cleared in this mutation.
+func (m *UsageLogMutation) ProviderToolBillingCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldProviderToolBilling]
+	return ok
+}
+
+// ResetProviderToolBilling resets all changes to the "provider_tool_billing" field.
+func (m *UsageLogMutation) ResetProviderToolBilling() {
+	m.provider_tool_billing = nil
+	m.appendprovider_tool_billing = nil
+	delete(m.clearedFields, usagelog.FieldProviderToolBilling)
 }
 
 // SetGroupID sets the "group_id" field.
@@ -47644,7 +47711,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 49)
+	fields := make([]string, 0, 50)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -47683,6 +47750,9 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.billing_mode != nil {
 		fields = append(fields, usagelog.FieldBillingMode)
+	}
+	if m.provider_tool_billing != nil {
+		fields = append(fields, usagelog.FieldProviderToolBilling)
 	}
 	if m.group != nil {
 		fields = append(fields, usagelog.FieldGroupID)
@@ -47826,6 +47896,8 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingTier()
 	case usagelog.FieldBillingMode:
 		return m.BillingMode()
+	case usagelog.FieldProviderToolBilling:
+		return m.ProviderToolBilling()
 	case usagelog.FieldGroupID:
 		return m.GroupID()
 	case usagelog.FieldSubscriptionID:
@@ -47933,6 +48005,8 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldBillingTier(ctx)
 	case usagelog.FieldBillingMode:
 		return m.OldBillingMode(ctx)
+	case usagelog.FieldProviderToolBilling:
+		return m.OldProviderToolBilling(ctx)
 	case usagelog.FieldGroupID:
 		return m.OldGroupID(ctx)
 	case usagelog.FieldSubscriptionID:
@@ -48104,6 +48178,13 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingMode(v)
+		return nil
+	case usagelog.FieldProviderToolBilling:
+		v, ok := value.(jsontext.Value)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProviderToolBilling(v)
 		return nil
 	case usagelog.FieldGroupID:
 		v, ok := value.(int64)
@@ -48690,6 +48771,9 @@ func (m *UsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(usagelog.FieldBillingMode) {
 		fields = append(fields, usagelog.FieldBillingMode)
 	}
+	if m.FieldCleared(usagelog.FieldProviderToolBilling) {
+		fields = append(fields, usagelog.FieldProviderToolBilling)
+	}
 	if m.FieldCleared(usagelog.FieldGroupID) {
 		fields = append(fields, usagelog.FieldGroupID)
 	}
@@ -48769,6 +48853,9 @@ func (m *UsageLogMutation) ClearField(name string) error {
 		return nil
 	case usagelog.FieldBillingMode:
 		m.ClearBillingMode()
+		return nil
+	case usagelog.FieldProviderToolBilling:
+		m.ClearProviderToolBilling()
 		return nil
 	case usagelog.FieldGroupID:
 		m.ClearGroupID()
@@ -48858,6 +48945,9 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldBillingMode:
 		m.ResetBillingMode()
+		return nil
+	case usagelog.FieldProviderToolBilling:
+		m.ResetProviderToolBilling()
 		return nil
 	case usagelog.FieldGroupID:
 		m.ResetGroupID()

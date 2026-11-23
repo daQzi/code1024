@@ -14,6 +14,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/requestpatch"
 	"github.com/tidwall/gjson"
 
 	"github.com/gin-gonic/gin"
@@ -125,7 +126,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		return nil, fmt.Errorf("parse request: empty request")
 	}
 	// API-key mappings and OAuth native IDs are resolved before mimicry.
-	validationModel := parsed.Model
+	clientModel := parsed.Model
+	validationModel := clientModel
 	if account != nil {
 		if account.IsBedrock() {
 			if resolved, ok := ResolveBedrockModelID(account, validationModel); ok {
@@ -135,12 +137,73 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			validationModel = account.GetMappedModel(validationModel)
 		}
 	}
+	modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, parsed.Body.Bytes(), clientModel, validationModel, "claude")
+	if modErr != nil {
+		writeNativeModelModifierError(c, "claude")
+		return nil, modErr
+	}
+	if modApplied {
+		ctx = modCtx
+		original := parsed
+		parsed, err = original.CloneForBody(modBody)
+		if err != nil {
+			return nil, err
+		}
+		parsed.OnUpstreamAccepted = original.OnUpstreamAccepted
+		validationModel = modSpec.Base
+		defer func() {
+			reconcileNativeForwardModifierResult(ctx, result, modSpec, clientModel, modBody, "claude")
+		}()
+	}
+	report := beginNativeProtocolReport(ctx, account, parsed.Model)
+	defer func() { report.nativeResult(result) }()
+	requestPluginModel := validationModel
+	if account != nil && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey && !account.IsBedrock() {
+		requestPluginModel = claude.NormalizeModelID(parsed.Model)
+		if account.Type == AccountTypeServiceAccount {
+			if mapped, ok := account.ResolveMappedModel(parsed.Model); ok {
+				requestPluginModel = mapped
+			} else {
+				requestPluginModel = normalizeVertexAnthropicModelID(requestPluginModel)
+			}
+		}
+	}
+	ctx, requestBody, finishRequest, requestErr := beginNativeProtocolRequest(ctx, c, account, parsed.Body.Bytes(), requestPluginModel, "claude")
+	if requestErr != nil {
+		return nil, requestErr
+	}
+	defer finishRequest(&err)
+	if !bytes.Equal(requestBody, parsed.Body.Bytes()) {
+		original := parsed
+		parsed, err = original.CloneForBody(requestBody)
+		if err != nil {
+			return nil, err
+		}
+		parsed.OnUpstreamAccepted = original.OnUpstreamAccepted
+	}
+	defer func() {
+		attempt, _ := ctx.Value(nativeRequestPluginKey{}).(*nativeRequestPluginAttempt)
+		if result != nil && attempt != nil && attempt.format == "claude" {
+			wire := parsed.Body.Bytes()
+			if attempt.finalBody != nil {
+				wire = attempt.finalBody
+			}
+			if effort, explicit := requestpatch.ClaudeReasoningEffort(wire); explicit && effort != "" {
+				result.ReasoningEffort = &effort
+			}
+		}
+	}()
 	if account != nil && account.Platform == PlatformAnthropic {
 		if err := validateClaude55Request(parsed.Body.Bytes(), validationModel); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"type": "error", "error": gin.H{"type": "invalid_request_error", "message": err.Error()}})
 			return nil, err
 		}
 	}
+	ctx, finishReply, replyErr := beginNativeProtocolReply(ctx, c, account, validationModel)
+	if replyErr != nil {
+		return nil, replyErr
+	}
+	defer finishReply(&err)
 	// Anthropic Fast is requested with speed=fast rather than OpenAI's
 	// service_tier. Attach it at this shared boundary so passthrough, OAuth and
 	// partial-stream results all use the same billing and usage-log path.
@@ -155,6 +218,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 	// Web Search 模拟：纯 web_search 请求时，直接调用搜索 API 构造响应
 	if account != nil && s.shouldEmulateWebSearch(ctx, account, parsed.GroupID, parsed.Body.Bytes()) {
+		if err := guardUnsupportedNativeProtocolRequest(ctx, c, account); err != nil {
+			return nil, err
+		}
 		return s.handleWebSearchEmulation(ctx, c, account, parsed)
 	}
 
@@ -503,6 +569,10 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					retryCtx, releaseRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
 					retryReq, retryWireBody, buildErr := s.buildUpstreamRequest(retryCtx, c, account, filteredBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 					releaseRetryCtx()
+					var processingFailure *RequestPluginFailure
+					if errors.As(buildErr, &processingFailure) {
+						return nil, buildErr
+					}
 					if buildErr == nil {
 						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 						if retryErr == nil {
@@ -546,6 +616,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 									retryCtx2, releaseRetryCtx2 := detachStreamUpstreamContext(ctx, reqStream)
 									retryReq2, retryWireBody2, buildErr2 := s.buildUpstreamRequest(retryCtx2, c, account, filteredBody2, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 									releaseRetryCtx2()
+									if errors.As(buildErr2, &processingFailure) {
+										return nil, buildErr2
+									}
 									if buildErr2 == nil {
 										retryResp2, retryErr2 := s.httpUpstream.DoWithTLS(retryReq2, proxyURL, account.ID, account.Concurrency, tlsProfile)
 										if retryErr2 == nil {
@@ -629,6 +702,10 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 						budgetRetryCtx, releaseBudgetRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
 						budgetRetryReq, budgetWireBody, buildErr := s.buildUpstreamRequest(budgetRetryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 						releaseBudgetRetryCtx()
+						var processingFailure *RequestPluginFailure
+						if errors.As(buildErr, &processingFailure) {
+							return nil, buildErr
+						}
 						if buildErr == nil {
 							budgetRetryResp, retryErr := s.httpUpstream.DoWithTLS(budgetRetryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 							if retryErr == nil {

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/Wei-Shaw/sub2api/internal/newapi/jsplugin"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/jsplugin"
 )
 
 func (r *newAPIPluginRepository) ListGenerationCatalog(ctx context.Context) ([]service.GenerationCatalogAccount, error) {

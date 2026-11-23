@@ -6,14 +6,21 @@ import (
 )
 
 type PlazaMetricsPoint struct {
-	GroupID         int64      `json:"group_id"`
-	Bucket          *time.Time `json:"bucket,omitempty"`
-	Requests        int64      `json:"requests"`
-	Successes       int64      `json:"successes"`
-	AverageMs       *float64   `json:"average_ms"`
-	P95Ms           *float64   `json:"p95_ms"`
-	FirstTokenMs    *float64   `json:"first_token_ms"`
-	TokensPerSecond *float64   `json:"tokens_per_second"`
+	GroupID         int64               `json:"group_id"`
+	Bucket          *time.Time          `json:"bucket,omitempty"`
+	Requests        int64               `json:"requests"`
+	Successes       int64               `json:"successes"`
+	AverageMs       *float64            `json:"average_ms"`
+	P95Ms           *float64            `json:"p95_ms"`
+	FirstTokenMs    *float64            `json:"first_token_ms"`
+	TokensPerSecond *float64            `json:"tokens_per_second"`
+	Recent          []PlazaHealthBucket `json:"recent,omitempty"`
+}
+
+type PlazaHealthBucket struct {
+	Bucket    time.Time `json:"bucket"`
+	Requests  int64     `json:"requests"`
+	Successes int64     `json:"successes"`
 }
 
 type PlazaMetrics struct {
@@ -63,7 +70,7 @@ func (s *ModelPlazaService) PerformanceSummaries(ctx context.Context, scopes []P
 
 func (s *ModelPlazaService) Performance(ctx context.Context, model, platform string, groupIDs []int64) (*PlazaMetrics, error) {
 	end := time.Now().UTC()
-	result := &PlazaMetrics{Start: end.Add(-24 * time.Hour), End: end, Scope: "http_and_terminal_generation", Points: []PlazaMetricsPoint{}}
+	result := &PlazaMetrics{Start: end.Add(-24 * time.Hour), End: end, Scope: "final_relay_and_terminal_generation_with_legacy", Points: []PlazaMetricsPoint{}}
 	if s.metrics == nil || len(groupIDs) == 0 {
 		return result, nil
 	}

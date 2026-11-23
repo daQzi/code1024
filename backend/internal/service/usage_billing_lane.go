@@ -87,6 +87,9 @@ func newUsageBillingLaneCombiner(repo UsageBillingBatchRepository, maxBatch int)
 // Apply 结算一条计费命令：进入该用户的通道并等待结果，结果与直接调用底层 Apply 一致。
 // 缺少 request_id 的命令与 Stop 之后的命令直接调用底层 Apply。
 func (c *UsageBillingLaneCombiner) Apply(ctx context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error) {
+	if cmd != nil && cmd.NativeVideoLog != nil {
+		return c.repo.Apply(ctx, cmd)
+	}
 	if cmd == nil {
 		return c.repo.Apply(ctx, cmd)
 	}
@@ -104,6 +107,14 @@ func (c *UsageBillingLaneCombiner) Apply(ctx context.Context, cmd *UsageBillingC
 	// 入队后命令可能已在执行中的事务里，必须等到结果，不能以单条 Apply 另行结算。
 	out := <-req.done
 	return out.Result, out.Err
+}
+
+func (c *UsageBillingLaneCombiner) ResolveNativeVideoFinalUsage(ctx context.Context, p *NativeVideoBillingSnapshot, usage *NativeVideoFinalUsage) (*NativeVideoFinalUsage, error) {
+	repo, ok := c.repo.(NativeVideoFinalUsageRepository)
+	if !ok {
+		return nil, errors.New("native video final usage repository unavailable")
+	}
+	return repo.ResolveNativeVideoFinalUsage(ctx, p, usage)
 }
 
 func (c *UsageBillingLaneCombiner) ReserveBatchImageBalance(ctx context.Context, cmd *BatchImageBalanceHoldCommand) (*BatchImageBalanceHoldResult, error) {

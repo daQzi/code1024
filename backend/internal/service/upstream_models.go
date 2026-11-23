@@ -224,7 +224,7 @@ func (s *AccountTestService) FetchUpstreamSupportedModels(ctx context.Context, a
 // untouched.
 func (s *AccountTestService) SyncUpstreamModelCatalog(ctx context.Context, account *Account) (*UpstreamModelCatalog, error) {
 	if account != nil && account.HasNewAPIPlugin() {
-		return nil, newUpstreamModelSyncUnsupportedError("视频插件账号的模型来自固定插件版本及账号映射；不使用平台内置模型同步接口。", nil)
+		return nil, newUpstreamModelSyncUnsupportedError("协议插件账号的模型来自固定插件版本及账号映射；不使用平台内置模型同步接口。", nil)
 	}
 	fetched, err := s.fetchUpstreamModelListWithObservation(ctx, account)
 	var (
@@ -788,7 +788,7 @@ func (s *AccountTestService) fetchUpstreamModelList(ctx context.Context, account
 
 func (s *AccountTestService) fetchUpstreamModelListWithObservation(ctx context.Context, account *Account) (*upstreamModelListFetchResult, error) {
 	if account != nil && account.HasNewAPIPlugin() {
-		return nil, newUpstreamModelSyncUnsupportedError("视频插件账号使用固定版本声明的模型，不使用平台内置发现接口。", nil)
+		return nil, newUpstreamModelSyncUnsupportedError("协议插件账号使用固定版本声明的模型，不使用平台内置发现接口。", nil)
 	}
 	started := time.Now().UTC()
 	models, body, req, err := s.fetchUpstreamModelListRequest(ctx, account)

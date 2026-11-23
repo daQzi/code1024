@@ -315,9 +315,30 @@ func doUpstreamRequest(client *http.Client, req *http.Request, drainTimeouts ...
 		cancel()
 		return resp, err
 	}
+	if resp.StatusCode == http.StatusSwitchingProtocols {
+		if duplex, ok := resp.Body.(io.ReadWriteCloser); ok {
+			resp.Body = &cancelOnCloseUpgradeBody{ReadWriteCloser: duplex, cancel: cancel}
+			return resp, nil
+		}
+	}
 	decompressResponseBody(resp)
 	resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}
 	return resp, nil
+}
+
+type cancelOnCloseUpgradeBody struct {
+	io.ReadWriteCloser
+	cancel context.CancelFunc
+	once   sync.Once
+	err    error
+}
+
+func (b *cancelOnCloseUpgradeBody) Close() error {
+	b.once.Do(func() {
+		b.err = b.ReadWriteCloser.Close() // Unblock frame reads before cancelling their attempt.
+		b.cancel()
+	})
+	return b.err
 }
 
 type cancelOnCloseBody struct {
@@ -1070,6 +1091,9 @@ func (s *httpUpstreamService) resolveOpenAIHTTP2Settings() openAIHTTP2Settings {
 }
 
 func (s *httpUpstreamService) resolveProtocolMode(profile service.HTTPUpstreamProfile, proxyKey string, parsedProxy *url.URL) string {
+	if profile == service.HTTPUpstreamProfileProviderSocket {
+		return upstreamProtocolModeOpenAIH1
+	}
 	if profile == service.HTTPUpstreamProfileLongStream {
 		return upstreamProtocolModeLongStreamH2
 	}
@@ -1515,6 +1539,11 @@ type trackedBody struct {
 	onClose       func() // 关闭时的回调函数
 }
 
+type trackedUpgradeBody struct {
+	*trackedBody
+	io.Writer
+}
+
 // Close 关闭响应体并执行回调
 // 使用 sync.Once 确保回调只执行一次
 func (b *trackedBody) Close() error {
@@ -1538,7 +1567,13 @@ func wrapTrackedBody(body io.ReadCloser, onClose func()) io.ReadCloser {
 	if body == nil {
 		return body
 	}
-	return &trackedBody{ReadCloser: body, onClose: onClose}
+	tracked := &trackedBody{ReadCloser: body, onClose: onClose}
+	if writer, ok := body.(io.Writer); ok {
+		// Upgrade responses are bidirectional; keep that contract while
+		// tracking their lifetime with the same upstream pool.
+		return &trackedUpgradeBody{trackedBody: tracked, Writer: writer}
+	}
+	return tracked
 }
 
 // decompressResponseBody 根据 Content-Encoding 解压响应体。

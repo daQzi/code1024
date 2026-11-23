@@ -19,6 +19,12 @@ import { scrollBehavior } from './scrollBehavior'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/plugin-login/callback/:key',
+    name: 'PluginLoginCallback',
+    component: () => import('@/views/auth/PluginLoginCallbackView.vue'),
+    meta: { requiresAuth: false, title: 'Plugin login', titleKey: 'admin.plugins.credential.callbackTitle' }
+  },
   // ==================== Setup Routes ====================
   {
     path: '/setup',
@@ -250,6 +256,24 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'usage.title',
       descriptionKey: 'usage.description'
     }
+  },
+  {
+    path: '/plugin-developer',
+    name: 'PluginDeveloper',
+    component: () => import('@/views/PluginDeveloperView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Plugin Development', titleKey: 'pluginRegistry.title' }
+  },
+  {
+    path: '/task-logs',
+    name: 'TaskLogs',
+    component: () => import('@/views/TaskLogsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Task Logs', titleKey: 'taskLogs.title', descriptionKey: 'taskLogs.description' }
+  },
+  {
+    path: '/admin/task-logs',
+    name: 'AdminTaskLogs',
+    component: () => import('@/views/TaskLogsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Task Logs', titleKey: 'taskLogs.title', descriptionKey: 'taskLogs.description' }
   },
   {
     path: '/redeem',
@@ -558,6 +582,18 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'admin.accounts.title',
       descriptionKey: 'admin.accounts.description'
     }
+  },
+  {
+    path: '/admin/request-processing',
+    name: 'AdminRequestProcessing',
+    component: () => import('@/views/admin/RequestProcessingView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Request Processing', titleKey: 'requestPlugins.title', descriptionKey: 'requestPlugins.description' }
+  },
+  {
+    path: '/admin/native-plugins',
+    name: 'AdminNativePlugins',
+    component: () => import('@/views/admin/NativePluginsView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: 'Native Extensions', titleKey: 'admin.plugins.center.nativeManager', descriptionKey: 'admin.plugins.nativeDescription' }
   },
   {
     path: '/admin/plugins',

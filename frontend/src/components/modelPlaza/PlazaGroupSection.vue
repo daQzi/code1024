@@ -71,6 +71,7 @@
         <div v-for="(price, index) in model.generation_pricing" :key="index" class="flex flex-wrap justify-between gap-2 text-xs text-gray-600 dark:text-dark-300">
           <span>{{ price.resolution || 'OpenAI Videos' }} · {{ t(`modelPlaza.catalog.units.${price.unit}`) }}</span>
           <span v-if="price.unit === 'upstream_cost'">{{ t('modelPlaza.catalog.dynamicPrice') }}</span>
+          <span v-else-if="price.unit === 'expression'">{{ t('modelPlaza.catalog.expressionPrice') }}</span>
           <span v-else class="font-mono">${{ formatPrice(price.unit_price) }}<template v-if="Number(price.service_fee)"> + ${{ formatPrice(price.service_fee) }} {{ t('modelPlaza.catalog.serviceFee') }}</template><template v-if="Number(price.minimum)"> · {{ t('modelPlaza.catalog.minimum') }} ${{ formatPrice(price.minimum) }}</template></span>
         </div>
       </div>

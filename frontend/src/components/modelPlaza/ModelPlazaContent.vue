@@ -58,7 +58,7 @@
 
       <!-- 分组分节的模型清单(默认按生效倍率升序) -->
       <div v-if="filteredGroups.length > 0" class="space-y-5">
-        <PlazaModelCatalog :groups="filteredGroups" :view="view" />
+        <PlazaModelCatalog :groups="filteredGroups" :view="view" :group-id="selectedGroupId === 'all' ? undefined : selectedGroupId" />
       </div>
       <div
         v-else
@@ -72,6 +72,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -90,11 +91,21 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 const selectedPlatform = ref<string>('all')
 const selectedGroupId = ref<number | 'all'>('all')
+watch([() => props.response?.groups, () => route.query.group_id], ([groups, raw]) => {
+  if (!groups) return
+  const requested = Number(raw)
+  selectedGroupId.value = raw === 'all' ? 'all' : groups.some(group => group.id === requested) ? requested : groups[0]?.id ?? 'all'
+}, { immediate: true })
+watch(selectedGroupId, (id) => {
+  if (String(id) !== route.query.group_id) void router.replace({ query: { ...route.query, group_id: String(id) } })
+})
 const selectedRate = ref<number | 'all'>('all')
 const searchQuery = ref('')
 const selectedKind = ref('all')

@@ -1022,7 +1022,14 @@ func TestAntigravityGatewayService_ForwardGemini_FallbackReportsActualUpstreamMo
 		},
 	}
 
-	result, err := svc.ForwardGemini(context.Background(), c, account, originalModel, "generateContent", true, body, false)
+	_, _, _, plan := providerPolicyFixture(t, providerFixtureSource, providerPolicyMeta+`
+export function reply(ctx,res){
+ if(ctx.format!=="gemini" || ctx.upstreamModel!=="gemini-fallback-upstream")throw Error("wrong fallback identity");
+ return {action:"continue",mask:res.outputs.map(output=>({index:output.index,start:0,end:output.text.length}))};
+}`, []string{"reply"}, newAPIProviderChat)
+	plan.call.Format, plan.call.Model, plan.call.Path = "gemini", originalModel, c.Request.URL.Path
+	plan.items[0].AccountIDs = []int64{account.ID}
+	result, err := svc.ForwardGemini(WithRequestPluginPlan(context.Background(), plan), c, account, originalModel, "generateContent", true, body, false)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, originalModel, result.Model)
@@ -1033,6 +1040,7 @@ func TestAntigravityGatewayService_ForwardGemini_FallbackReportsActualUpstreamMo
 	require.NotNil(t, mismatch)
 	require.False(t, *mismatch)
 	require.Len(t, upstream.requestBodies, 2)
+	require.Contains(t, writer.Body.String(), "***", "the reply hook sees the actual fallback model")
 	require.Contains(t, string(upstream.requestBodies[0]), `"model":"`+mappedModel+`"`)
 	require.Contains(t, string(upstream.requestBodies[1]), `"model":"`+fallbackModel+`"`)
 }

@@ -352,15 +352,17 @@ func TestProxyLiveSidebandForwardsTextAndBinary(t *testing.T) {
 		},
 	}
 	record := &LiveCallRecord{
-		CallID:     "call_proxy",
-		CallHash:   hashLiveCallID("call_proxy"),
-		AccountID:  account.ID,
-		APIKeyID:   22,
-		UserID:     33,
-		LeaseID:    "lease-1",
-		CreatedAt:  time.Now(),
-		ExpiresAt:  time.Now().Add(time.Minute),
-		Controller: LiveControllerPending,
+		CallID:      "call_proxy",
+		CallHash:    hashLiveCallID("call_proxy"),
+		PublicModel: "public-live",
+		GroupID:     7,
+		AccountID:   account.ID,
+		APIKeyID:    22,
+		UserID:      33,
+		LeaseID:     "lease-1",
+		CreatedAt:   time.Now(),
+		ExpiresAt:   time.Now().Add(time.Minute),
+		Controller:  LiveControllerPending,
 	}
 	attestationCipher := newLiveAttestationCipher(&config.Config{
 		JWT: config.JWTConfig{Secret: "live-sideband-test-secret"},
@@ -372,11 +374,15 @@ func TestProxyLiveSidebandForwardsTextAndBinary(t *testing.T) {
 	require.NoError(t, store.SaveLiveCall(context.Background(), record, time.Hour))
 	upstream := newLiveTestFrameConn()
 	dialer := &liveTestDialer{conn: upstream}
+	metrics := &relayPerformanceRepoFixture{}
+	recorder := NewRelayPerformanceRecorder(metrics)
+	t.Cleanup(recorder.Stop)
 	service := &OpenAIGatewayService{
 		accountRepo:               &liveTestAccountRepo{account: account},
 		cache:                     store,
 		openaiWSPassthroughDialer: dialer,
 		liveAttestationCipher:     attestationCipher,
+		performanceRecorder:       recorder,
 	}
 	proxyResult := make(chan error, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -421,6 +427,12 @@ func TestProxyLiveSidebandForwardsTextAndBinary(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, coderws.MessageBinary, messageType)
 	require.Equal(t, []byte{4, 5, 6}, payload)
+	for _, body := range []string{`{"type":"response.created","response":{"id":"r1"}}`, `{"type":"response.done","response":{"id":"r1","status":"completed"}}`} {
+		upstream.reads <- liveTestFrame{messageType: coderws.MessageText, payload: []byte(body)}
+		_, received, readErr := client.Read(ctx)
+		require.NoError(t, readErr)
+		require.JSONEq(t, body, string(received))
+	}
 
 	require.Equal(t, "wss://chatgpt.com/backend-api/codex/call_proxy", dialer.url)
 	require.Equal(t, "Bearer test-access-token", dialer.headers.Get("Authorization"))
@@ -428,6 +440,13 @@ func TestProxyLiveSidebandForwardsTextAndBinary(t *testing.T) {
 	require.Equal(t, `{"v":1,"s":0,"t":"v1.sideband"}`, dialer.headers.Get(liveAttestationHeader))
 	upstream.reads <- liveTestFrame{err: coderws.CloseError{Code: coderws.StatusNormalClosure}}
 	require.ErrorIs(t, <-proxyResult, ErrLiveCallNotFound)
+	recorder.Stop()
+	metrics.mu.Lock()
+	defer metrics.mu.Unlock()
+	require.Len(t, metrics.rows, 1, "only the delivered generation counts, never session closure")
+	require.Equal(t, "public-live", metrics.rows[0].Model)
+	require.EqualValues(t, 7, metrics.rows[0].GroupID)
+	require.True(t, metrics.rows[0].Success)
 }
 
 // TestLiveSessionEndedTreatsLeaseLossAsTerminal 锁定：租约续租失败（ErrLiveUnavailable）

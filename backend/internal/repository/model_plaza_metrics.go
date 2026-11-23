@@ -22,6 +22,22 @@ const plazaMetricsSamples = `
 WITH scope AS (
  SELECT DISTINCT catalog_id,platform,model,group_id FROM jsonb_to_recordset($3::jsonb)
  AS x(catalog_id text,platform text,model text,group_id bigint)
+), request_errors AS (
+ SELECT DISTINCT ON (scope.catalog_id, e.group_id, e.api_key_id, COALESCE(NULLIF(e.request_id,''), 'error:' || e.id::text))
+   scope.catalog_id, e.*
+ FROM ops_error_logs e JOIN scope ON scope.group_id=e.group_id AND scope.platform=e.platform
+   AND scope.model=COALESCE(NULLIF(e.requested_model,''),e.model)
+ WHERE e.created_at >= $1 AND e.created_at < $2
+   AND (CASE WHEN COALESCE(e.request_type,0)=5 OR COALESCE(e.inbound_endpoint,'') IN('/v1/realtime','/realtime')
+     THEN e.created_at < (SELECT media_ws_started_at FROM sub2api_relay_metric_epoch WHERE singleton)
+     WHEN COALESCE(e.request_type,0)=3
+     THEN e.created_at < (SELECT websocket_started_at FROM sub2api_relay_metric_epoch WHERE singleton)
+     WHEN COALESCE(e.request_type,0)<>5 AND COALESCE(e.inbound_endpoint,'') IN('/v1/embeddings','/v1/images/generations','/v1/images/edits','/v1/tts','/v1/stt')
+     THEN e.created_at < (SELECT media_http_started_at FROM sub2api_relay_metric_epoch WHERE singleton)
+     ELSE e.created_at < (SELECT started_at FROM sub2api_relay_metric_epoch WHERE singleton)
+       OR COALESCE(e.request_type,0)=5
+       OR COALESCE(e.inbound_endpoint,'') NOT IN('/v1/chat/completions','/v1/responses','/v1/messages','/v1beta/models') END)
+ ORDER BY scope.catalog_id, e.group_id, e.api_key_id, COALESCE(NULLIF(e.request_id,''), 'error:' || e.id::text), e.created_at DESC,e.id DESC
 ), successes AS (
  SELECT DISTINCT ON (scope.catalog_id, ul.group_id, ul.api_key_id, COALESCE(NULLIF(ul.request_id,''), 'usage:' || ul.id::text))
    scope.catalog_id, ul.group_id, ul.api_key_id, ul.request_id, ul.created_at,
@@ -31,36 +47,61 @@ WITH scope AS (
  JOIN scope ON scope.group_id=ul.group_id AND scope.platform=a.platform
    AND scope.model=COALESCE(NULLIF(ul.requested_model,''),ul.model)
  WHERE ul.created_at >= $1 AND ul.created_at < $2
-   AND ul.actual_cost > 0
+   AND (CASE WHEN COALESCE(ul.request_type,0)=5 OR COALESCE(ul.inbound_endpoint,'') IN('/v1/realtime','/realtime')
+     THEN ul.created_at < (SELECT media_ws_started_at FROM sub2api_relay_metric_epoch WHERE singleton)
+     WHEN COALESCE(ul.request_type,0)=3 OR ul.openai_ws_mode
+     THEN ul.created_at < (SELECT websocket_started_at FROM sub2api_relay_metric_epoch WHERE singleton)
+     WHEN COALESCE(ul.request_type,0)<>5 AND COALESCE(ul.inbound_endpoint,'') IN('/v1/embeddings','/v1/images/generations','/v1/images/edits','/v1/tts','/v1/stt')
+     THEN ul.created_at < (SELECT media_http_started_at FROM sub2api_relay_metric_epoch WHERE singleton)
+     ELSE ul.created_at < (SELECT started_at FROM sub2api_relay_metric_epoch WHERE singleton)
+       OR COALESCE(ul.request_type,0)=5
+       OR COALESCE(ul.inbound_endpoint,'') NOT IN('/v1/chat/completions','/v1/responses','/v1/messages','/v1beta/models') END)
    AND COALESCE(ul.video_duration_seconds,0) = 0
    AND COALESCE(ul.billing_mode,'') <> 'video'
+   AND NOT EXISTS (SELECT 1 FROM sub2api_generation_tasks t WHERE t.id=ul.request_id)
+   AND NOT EXISTS (SELECT 1 FROM sub2api_native_video_tasks t WHERE t.ledger_request_id=ul.request_id AND t.api_key_id=ul.api_key_id AND t.group_id=ul.group_id AND t.account_id=ul.account_id)
+   AND NOT EXISTS (SELECT 1 FROM request_errors e WHERE e.catalog_id=scope.catalog_id AND e.group_id=ul.group_id
+     AND e.api_key_id=ul.api_key_id AND NULLIF(e.request_id,'')=NULLIF(ul.request_id,''))
  ORDER BY scope.catalog_id, ul.group_id, ul.api_key_id, COALESCE(NULLIF(ul.request_id,''), 'usage:' || ul.id::text), ul.created_at DESC
 ), failures AS (
- SELECT DISTINCT ON (scope.catalog_id, e.group_id, e.api_key_id, COALESCE(NULLIF(e.request_id,''), 'error:' || e.id::text))
-   scope.catalog_id, e.group_id, e.api_key_id, e.request_id, e.created_at,
+ SELECT e.catalog_id, e.group_id, e.api_key_id, e.request_id, e.created_at,
    NULL::float8 AS duration_ms, NULL::float8 AS first_token_ms,
    0::bigint AS output_tokens, FALSE AS success
- FROM ops_error_logs e JOIN scope ON scope.group_id=e.group_id AND scope.platform=e.platform
-   AND scope.model=COALESCE(NULLIF(e.requested_model,''),e.model)
- WHERE e.created_at >= $1 AND e.created_at < $2
-   AND COALESCE(e.status_code,0) >= 400
+ FROM request_errors e
+ WHERE (COALESCE(e.status_code,0) >= 400 OR e.stream AND e.error_phase IN ('upstream','network'))
    AND NOT COALESCE(e.is_business_limited,FALSE) AND NOT COALESCE(e.is_count_tokens,FALSE)
+   AND COALESCE(e.status_code,0) NOT IN (400,405,409,413,415,422,499)
+   AND COALESCE(e.provider_error_code,'') NOT IN ('content_policy_violation','content_filter','safety','prompt_blocked','context_length_exceeded')
+   AND COALESCE(e.error_type,'') NOT IN ('context_canceled','context_cancelled')
    AND COALESCE(e.inbound_endpoint,'') NOT LIKE '%video%'
    AND COALESCE(e.request_path,'') NOT LIKE '%video%'
    AND COALESCE(e.request_path,'') NOT LIKE '%contents/generations/tasks%'
-   AND NOT EXISTS (SELECT 1 FROM successes s WHERE s.catalog_id=scope.catalog_id AND s.group_id = e.group_id
-     AND s.api_key_id = e.api_key_id AND NULLIF(s.request_id,'') = NULLIF(e.request_id,''))
- ORDER BY scope.catalog_id, e.group_id, e.api_key_id, COALESCE(NULLIF(e.request_id,''), 'error:' || e.id::text), e.created_at DESC
+   AND NOT EXISTS (SELECT 1 FROM sub2api_generation_tasks t WHERE t.id=e.request_id)
+   AND NOT EXISTS (SELECT 1 FROM sub2api_native_video_tasks t WHERE t.ledger_request_id=e.request_id AND t.api_key_id=e.api_key_id AND t.group_id=e.group_id AND t.account_id=e.account_id)
 ), samples AS (
  SELECT * FROM successes UNION ALL SELECT * FROM failures
  UNION ALL
+ SELECT scope.catalog_id,p.group_id,0::bigint,p.id::text,p.created_at,
+   p.duration_ms::float8,p.first_token_ms::float8,p.output_tokens,p.success
+ FROM sub2api_relay_performance_samples p JOIN scope ON scope.group_id=p.group_id AND scope.platform=p.platform AND scope.model=p.model
+ WHERE p.created_at >= $1 AND p.created_at < $2
+ UNION ALL
  SELECT scope.catalog_id,t.group_id,t.api_key_id,t.id,t.finished_at,
    EXTRACT(EPOCH FROM(t.finished_at-t.created_at))*1000.0,
-   NULL::float8,0::bigint,t.status='succeeded' AND t.delivery_status='ready'
+   NULL::float8,0::bigint,t.status='succeeded'
  FROM sub2api_generation_tasks t JOIN scope ON scope.group_id=t.group_id AND scope.platform=t.platform AND scope.model=t.model
  WHERE t.finished_at >= $1 AND t.finished_at < $2 AND t.status IN('succeeded','failed')
+   AND t.error_code NOT IN('request_processing_rejected','request_processing_failed','canceled_before_submit')
+ UNION ALL
+ SELECT scope.catalog_id,t.group_id,t.api_key_id,t.id,t.finished_at,
+   EXTRACT(EPOCH FROM(t.finished_at-t.created_at))*1000.0,
+   NULL::float8,0::bigint,t.status='succeeded'
+ FROM sub2api_native_video_tasks t JOIN scope ON scope.group_id=t.group_id AND scope.platform=t.platform AND scope.model=t.model
+ WHERE t.finished_at >= $1 AND t.finished_at < $2 AND t.status IN('succeeded','failed')
 ), buckets AS (
- SELECT *, date_trunc('hour', created_at) AS bucket FROM samples
+ SELECT *, date_trunc('hour', created_at) AS bucket,
+   CASE WHEN first_token_ms >= 0 AND duration_ms > first_token_ms THEN duration_ms-first_token_ms END AS generation_ms
+ FROM samples
 )`
 
 const plazaMetricsQuery = plazaMetricsSamples + `
@@ -70,20 +111,20 @@ SELECT CASE WHEN GROUPING(group_id) = 1 THEN 0 ELSE group_id END,
  AVG(duration_ms) FILTER (WHERE success AND duration_ms >= 0),
  percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) FILTER (WHERE success AND duration_ms >= 0),
  AVG(first_token_ms) FILTER (WHERE success AND first_token_ms >= 0),
- SUM(output_tokens) FILTER (WHERE success AND output_tokens > 0 AND duration_ms > 0) * 1000.0 /
- NULLIF(SUM(duration_ms) FILTER (WHERE success AND output_tokens > 0 AND duration_ms > 0),0)
+ SUM(output_tokens) FILTER (WHERE success AND output_tokens > 0 AND generation_ms > 0) * 1000.0 /
+ NULLIF(SUM(generation_ms) FILTER (WHERE success AND output_tokens > 0 AND generation_ms > 0),0)
 FROM buckets
 GROUP BY GROUPING SETS ((group_id,bucket),(group_id),(bucket),())
 ORDER BY 1,2 NULLS FIRST`
 
 const plazaMetricsSummariesQuery = plazaMetricsSamples + `
-SELECT catalog_id,COUNT(*),COUNT(*) FILTER(WHERE success),
+SELECT catalog_id,CASE WHEN GROUPING(bucket)=1 THEN NULL ELSE bucket END,COUNT(*),COUNT(*) FILTER(WHERE success),
  AVG(duration_ms) FILTER(WHERE success AND duration_ms>=0),
  percentile_cont(0.95) WITHIN GROUP(ORDER BY duration_ms) FILTER(WHERE success AND duration_ms>=0),
  AVG(first_token_ms) FILTER(WHERE success AND first_token_ms>=0),
- SUM(output_tokens) FILTER(WHERE success AND output_tokens>0 AND duration_ms>0)*1000.0 /
- NULLIF(SUM(duration_ms) FILTER(WHERE success AND output_tokens>0 AND duration_ms>0),0)
-FROM buckets GROUP BY catalog_id`
+ SUM(output_tokens) FILTER(WHERE success AND output_tokens>0 AND generation_ms>0)*1000.0 /
+ NULLIF(SUM(generation_ms) FILTER(WHERE success AND output_tokens>0 AND generation_ms>0),0)
+FROM buckets GROUP BY GROUPING SETS ((catalog_id),(catalog_id,bucket)) ORDER BY catalog_id,bucket NULLS FIRST`
 
 func encodePlazaMetricsScope(scopes []service.PlazaMetricsScope) ([]byte, error) {
 	type row struct {
@@ -127,10 +168,17 @@ func (r *modelPlazaMetricsRepository) ReadModelSummaries(ctx context.Context, sc
 	for rows.Next() {
 		var id string
 		var p service.PlazaMetricsPoint
-		if err := rows.Scan(&id, &p.Requests, &p.Successes, &p.AverageMs, &p.P95Ms, &p.FirstTokenMs, &p.TokensPerSecond); err != nil {
+		var bucket sql.NullTime
+		if err := rows.Scan(&id, &bucket, &p.Requests, &p.Successes, &p.AverageMs, &p.P95Ms, &p.FirstTokenMs, &p.TokensPerSecond); err != nil {
 			return nil, err
 		}
-		result[id] = p
+		if bucket.Valid {
+			point := result[id]
+			point.Recent = append(point.Recent, service.PlazaHealthBucket{Bucket: bucket.Time.UTC(), Requests: p.Requests, Successes: p.Successes})
+			result[id] = point
+		} else {
+			result[id] = p
+		}
 	}
 	return result, rows.Err()
 }

@@ -12,8 +12,13 @@ import channelMonitorV2 from './channelMonitorV2'
 import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
+import taskLogs from './taskLogs'
+import pluginRegistry from './pluginRegistry'
+import requestPlugins from './requestPlugins'
+import providerToolPrices from './providerToolPrices'
 
 export default {
+  ...providerToolPrices,
   adminAccessKeys,
   ...referenceLanding,
   mcp,
@@ -28,4 +33,7 @@ export default {
   ...batchImage,
   admin,
   ...misc,
+  ...taskLogs,
+  ...pluginRegistry,
+  ...requestPlugins,
 }

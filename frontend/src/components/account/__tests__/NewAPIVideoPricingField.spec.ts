@@ -22,3 +22,43 @@ describe('final-bill pricing configuration', () => {
     expect(rule.exchange_rate).toBe('0.14')
   })
 })
+
+describe('Task expression pricing configuration', () => {
+  function expression(value: Record<string, unknown> = {}) {
+    return mount(NewAPIVideoPricingField, { props: { value: { '*': { mode: 'expression', expression: 'u("seconds") * 0.2', maximum: '10', ...value } } } })
+  }
+  function rules(wrapper: ReturnType<typeof expression>) {
+    return (wrapper.vm as unknown as { rules: () => Record<string, Record<string, unknown>> }).rules()
+  }
+  it('persists a USD expression without a unit price and keeps extension fields', () => {
+    const wrapper = expression({ unit_price: '1', source_unit_price: '2', source_unit: 'token', exchange_rate: '0.1', extension: true })
+    const rule = rules(wrapper)['*']!
+    expect(rule).toEqual({ mode: 'expression', expression: 'u("seconds") * 0.2', maximum: '10', service_fee: '0', minimum: '0', extension: true })
+    expect(wrapper.findAll('textarea')).toHaveLength(1)
+  })
+  it.each(['', ' ', '0', '-1', 'Infinity'])('requires a positive finite ceiling: %s', maximum => {
+    expect(() => rules(expression({ maximum }))).toThrow()
+  })
+  it.each(['', ' ', '1'.repeat(4097), '中'.repeat(1366)])('validates expression byte length', body => {
+    expect(() => rules(expression({ expression: body }))).toThrow()
+  })
+  it('rejects unrecognized pricing modes', () => {
+    expect(() => rules(expression({ mode: 'unknown' }))).toThrow()
+  })
+  it('removes expression fields when switching back to fixed pricing', async () => {
+    const wrapper = expression({ unit: 'second', unit_price: '0.4' })
+    await wrapper.find('select').setValue('fixed')
+    const rule = rules(wrapper)['*']!
+    expect(rule.mode).toBe('fixed')
+    expect(rule.unit_price).toBe('0.4')
+    expect(rule.expression).toBeUndefined()
+  })
+  it('resets the final-bill unit when switching to fixed pricing', async () => {
+    const wrapper = render('10')
+    await wrapper.findAll('select')[0]!.setValue('fixed')
+    await wrapper.findAll('input[type="number"]')[0]!.setValue('0.2')
+    const rule = rules(wrapper)['*']!
+    expect(rule.unit).toBe('second')
+    expect(rule.source_unit).toBeUndefined()
+  })
+})

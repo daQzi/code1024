@@ -60,8 +60,39 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	body []byte,
 	promptCacheKey string,
 	defaultMappedModel string,
-) (*OpenAIForwardResult, error) {
-	return s.forwardAsChatCompletions(ctx, c, account, body, promptCacheKey, defaultMappedModel, false)
+) (result *OpenAIForwardResult, retErr error) {
+	if account.HasNewAPIPlugin() {
+		return s.forwardNewAPIProvider(ctx, c, account, body, newAPIProviderChat, defaultMappedModel)
+	}
+	clientModel := gjson.GetBytes(body, "model").String()
+	mappedForModifier := clientModel
+	if !account.IsOpenAIPassthroughEnabled() {
+		mappedForModifier = resolveOpenAIForwardModel(account, clientModel, defaultMappedModel)
+	}
+	modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, body, clientModel, mappedForModifier, "openai")
+	if modErr != nil {
+		writeNativeModelModifierError(c, "openai")
+		return nil, modErr
+	}
+	if modApplied {
+		ctx, body = modCtx, modBody
+		defaultMappedModel = ""
+	}
+	reportModel := resolveOpenAIForwardModel(account, gjson.GetBytes(body, "model").String(), defaultMappedModel)
+	if modApplied {
+		reportModel = modSpec.Base
+	}
+	report := beginRelayReportAttempt(ctx, account, reportModel, false)
+	defer func() { report.result(result) }()
+	return s.forwardNativeWithRequestPlugins(ctx, c, account, body, newAPIProviderChat, defaultMappedModel, func(ctx context.Context, body []byte) (*OpenAIForwardResult, error) {
+		return s.forwardNativeWithReply(ctx, c, account, body, defaultMappedModel, func(child context.Context) (*OpenAIForwardResult, error) {
+			res, err := s.forwardAsChatCompletions(child, c, account, body, promptCacheKey, defaultMappedModel, false)
+			if modApplied {
+				reconcileNativeOpenAIModifierResult(child, res, modSpec, clientModel, body, "openai")
+			}
+			return res, err
+		})
+	})
 }
 
 func (s *OpenAIGatewayService) forwardAsChatCompletions(

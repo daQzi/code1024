@@ -584,6 +584,8 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if err != nil {
 		return nil, err
 	}
+	previousPluginAccount := *account
+	previousPluginAccount.Credentials = maps.Clone(account.Credentials)
 	if account.Platform == PlatformTypeSafe && input.Type != "" && input.Type != AccountTypeAPIKey {
 		return nil, errors.New("typesafe accounts only support apikey credentials")
 	}
@@ -872,7 +874,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 
 	billingSettingsAppliedAtomically := false
-	if err := normalizeNewAPIPluginAccount(ctx, s.newAPIPlugins, account, input.Credentials); err != nil {
+	if err := normalizeNewAPIPluginAccount(ctx, s.newAPIPlugins, account, input.Credentials, &previousPluginAccount); err != nil {
 		return nil, err
 	}
 	updater := s.accountBillingRepo

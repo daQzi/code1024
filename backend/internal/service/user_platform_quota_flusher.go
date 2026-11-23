@@ -41,14 +41,14 @@ type FlusherMetrics struct {
 const flusherMaxBatchesPerTick = 16
 
 // maxFlushBatchSize 限制单批行数,必须 ≤ repository.BatchSnapshotUsage 的 batchRows(6000),
-// 以保证单次 flush 的 snapshots 仅生成一条 UPSERT(单事务原子)。两处需手动保持一致。
+// 以保证单次 flush 的 snapshots 在一个事务内锁行并回写。两处需手动保持一致。
 const maxFlushBatchSize = 6000
 
 // defaultFlushBatchSize 是配置 flush_batch_size 非法(≤0)时的回退值。
 const defaultFlushBatchSize = 1000
 
 // UserPlatformQuotaUsageFlusher 将 Redis 脏集快照定期批量写入 DB。
-// 不维护任何 delta/in-process 状态；每批读取 Redis 当前绝对值覆盖写入。
+// 不维护任何进程内 delta；每批携带 Redis 绝对值及 Task cursor，数据库合并尚未包含的耐久 Task 事件。
 type UserPlatformQuotaUsageFlusher struct {
 	cache       quotaDirtyCache
 	quotaRepo   quotaSnapshotWriter
@@ -154,6 +154,8 @@ func (s *UserPlatformQuotaUsageFlusher) flushOneBatch(parentCtx context.Context)
 			continue
 		}
 		snaps = append(snaps, UserPlatformQuotaSnapshot{
+			QuotaID:            e.QuotaID,
+			GenerationCursor:   e.GenerationCursor,
 			UserID:             key.UserID,
 			Platform:           key.Platform,
 			DailyUsageUSD:      e.DailyUsageUSD,
@@ -175,17 +177,10 @@ func (s *UserPlatformQuotaUsageFlusher) flushOneBatch(parentCtx context.Context)
 		return true
 	}
 
-	// 已知竞态(admin 写 × flusher 刷,仅 flusher_enabled=true 时存在):
-	// admin ResetExpiredWindow/UpsertForUser 是"先写 DB 再 DeleteCache"。若本批已 SPOP + BatchGet
-	// 读到旧 usage 快照(此刻 member 已离开脏集),而 admin 随后写 DB、本行 UPSERT 又在 admin 写之后落库,
-	// 则旧快照会覆盖 admin 刚写入的值;DeleteCache 后 Redis MISS,下次 preflight 从 DB 重载被覆盖的旧值。
-	// 因 member 已被 SPOP,admin 侧 SREM/清脏标记无法拦截本批(故未做)。影响有限,暂列为已知取舍:
-	//   - UpsertForUser 改 limit,而本 UPDATE 只写既有活跃行的 usage/window 列 → limit 配置不受影响,
-	//     被软删的行不会被本 UPDATE 复活或重建;
-	//   - ResetExpiredWindow 改 usage,但 preflight windowExpired 会在窗口真正过期时自愈重置,
-	//     仅"强制重置未过期窗口"且与本批精确交错时短暂失效;
-	//   - 低频 admin 操作 + 默认 flusher_enabled=false。彻底消除需 version OCC(DB 加 version 列条件 UPSERT),
-	//     成本高;启用 flusher 后如需强一致再评估。
+	// The repository locks quota identities in a consistent order, preserves
+	// newer Task deltas, and checks per-window manual-reset markers. A snapshot
+	// from a removed/recreated identity cannot overwrite the replacement. This
+	// does not make ordinary gateway post-usage increments a durable outbox.
 
 	// 5. 写入 DB
 	start := time.Now()

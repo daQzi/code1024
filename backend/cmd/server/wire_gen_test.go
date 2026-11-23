@@ -104,8 +104,9 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // openAIAutoReset
 		nil, // promptAudit
 		nil, // pluginManager
-		nil, // newAPIPlugins
-		nil, // generations
+		nil, // newAPIHost
+		nil, // nativeVideos
+		nil, // modelPlaza
 	)
 
 	require.NotPanics(t, func() {

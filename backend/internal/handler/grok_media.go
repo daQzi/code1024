@@ -191,10 +191,11 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 	}
 	sessionHash := h.gatewayService.GenerateExplicitSessionHash(c, sessionSeed)
 	boundLookupAccountID := int64(0)
+	var recoveredVideo *service.NativeVideoRecovery
 	if endpoint.IsVideoLookupRequest() {
 		sessionHash = service.GrokMediaVideoRequestSessionHash(requestID, subject.UserID, apiKey.ID)
-		boundLookupAccountID, err = h.gatewayService.ResolveGrokMediaVideoRequestAccount(
-			c.Request.Context(), apiKey.GroupID, requestID, subject.UserID, apiKey.ID,
+		boundLookupAccountID, recoveredVideo, err = h.resolveNativeVideoRequestAccount(
+			c.Request.Context(), apiKey, subject.UserID, endpoint, requestID,
 		)
 		if err != nil || boundLookupAccountID <= 0 {
 			reqLog.Info("grok_media.video_lookup_owner_binding_missing", zap.Error(err))
@@ -383,13 +384,49 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
 		writerSizeBeforeForward := c.Writer.Size()
+		var nativeFinancial *service.NativeVideoBillingSnapshot
+		if isGrokVideoCreateEndpoint(endpoint) && h.generations != nil && account.Type == service.AccountTypeAPIKey && !account.HasNewAPIPlugin() {
+			protocol := service.GenerationProtocolXAI
+			if endpoint.IsSeedance() {
+				protocol = service.GenerationProtocolArk
+			}
+			priceCtx, cancel := context.WithTimeout(requestCtx, 3*time.Second)
+			nativeFinancial, err = h.gatewayService.CaptureNativeVideoBilling(priceCtx, apiKey, account, subscription, protocol, routingModel, clientRequestedModel(c, requestModel), requestInfo.Resolution, service.QuotaPlatform(requestCtx, apiKey), requestStart)
+			cancel()
+			if err != nil {
+				reqLog.Warn("grok_media.native_video_price_snapshot_unavailable", zap.Int64("account_id", account.ID))
+			}
+		}
 		result, err := func() (*service.OpenAIForwardResult, error) {
 			defer releaseAccount()
+			forwardCtx := service.WithNativeVideoObserver(requestCtx, func(result *service.OpenAIForwardResult) {
+				observation := nativeVideoObservation(apiKey, account, endpoint, requestID, clientRequestedModel(c, requestModel), requestInfo, body, result, requestStart, time.Now().UTC())
+				if observation != nil && observation.Create {
+					pending := nativeVideoPendingBilling(requestModel, clientRequestedModel(c, requestModel), videoCreateStartedAt, result)
+					pending.Financial = nativeVideoFinancialForTask(nativeFinancial, result.ResponseID)
+					observation.PendingBilling = &pending
+					if account.Type == service.AccountTypeAPIKey && !account.HasNewAPIPlugin() {
+						hash, err := h.gatewayService.NativeVideoPollConnectionHash(account, observation.Protocol, observation.UpstreamID)
+						if err != nil {
+							reqLog.Warn("grok_media.native_video_monitor_not_enrolled", zap.Int64("account_id", account.ID))
+						} else {
+							observation.PollConnectionHash = hash
+						}
+					}
+				}
+				if err := h.recordNativeVideoObservation(requestCtx, observation); err != nil {
+					// Never include upstream responses or public prompts in this log.
+					reqLog.Warn("grok_media.native_video_history_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+				}
+			})
 			if endpoint.IsSeedance() {
-				return h.gatewayService.ForwardSeedance(requestCtx, c, account, endpoint, requestID, body)
+				return h.gatewayService.ForwardSeedance(forwardCtx, c, account, endpoint, requestID, body)
 			}
-			return h.gatewayService.ForwardGrokMedia(requestCtx, c, account, endpoint, requestID, body, contentType)
+			return h.gatewayService.ForwardGrokMedia(forwardCtx, c, account, endpoint, requestID, body, contentType)
 		}()
+		if endpoint == service.GrokMediaEndpointImagesGenerations || endpoint == service.GrokMediaEndpointImagesEdits {
+			setOpenAIForwardPerformance(c, result, err)
+		}
 
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
 		upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
@@ -489,16 +526,8 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 			// Defer billing until status polling observes video.url. Persist create-time
 			// model/duration/resolution so status can still price if upstream omits them.
 			// Retry once: missing pending causes silent underpricing (status omits resolution).
-			pending := service.GrokVideoPendingBilling{
-				Model:                requestModel,
-				BillingModel:         firstNonEmptyString(result.BillingModel, requestModel),
-				UpstreamModel:        result.UpstreamModel,
-				VideoResolution:      result.VideoResolution,
-				VideoDurationSeconds: result.VideoDurationSeconds,
-				OriginalModel:        clientRequestedModel(c, requestModel),
-				// Wall-clock start for usage duration_ms: create accepted → first done discovery.
-				CreatedAt: videoCreateStartedAt,
-			}
+			pending := nativeVideoPendingBilling(requestModel, clientRequestedModel(c, requestModel), videoCreateStartedAt, result)
+			pending.Financial = nativeVideoFinancialForTask(nativeFinancial, result.ResponseID)
 			if err := h.gatewayService.StoreGrokVideoPendingBilling(requestCtx, result.ResponseID, subject.UserID, apiKey.ID, pending); err != nil {
 				reqLog.Warn("grok_media.store_video_pending_billing_failed_retrying",
 					zap.Int64("account_id", account.ID),
@@ -519,12 +548,12 @@ func (h *OpenAIGatewayHandler) handleGrokMedia(c *gin.Context, endpoint service.
 		// Status poll OR content download can observe official done+video.url.
 		// Both paths share the same claim key so the customer is charged once.
 		if endpoint == service.SeedanceEndpointStatus {
-			if billResult := prepareSeedanceCompletionBilling(requestCtx, h, apiKey, subject, requestID, result); billResult != nil {
+			if billResult := prepareSeedanceCompletionBilling(requestCtx, h, apiKey, subject, account.ID, recoveredVideo, requestID, result); billResult != nil {
 				recordGrokMediaUsage(c, h, reqLog, apiKey, subject, subscription, account, billResult, billResult.Model, body, requestID)
 			}
 		} else if endpoint == service.GrokMediaEndpointVideoStatus || endpoint == service.GrokMediaEndpointVideoContent {
 			taskID := strings.TrimSpace(requestID)
-			if billResult := prepareGrokVideoCompletionBilling(requestCtx, h, reqLog, apiKey, subject, taskID, result); billResult != nil {
+			if billResult := prepareGrokVideoCompletionBilling(requestCtx, h, reqLog, apiKey, subject, account.ID, recoveredVideo, taskID, result); billResult != nil {
 				recordGrokMediaUsage(c, h, reqLog, apiKey, subject, subscription, account, billResult, billResult.Model, body, taskID)
 			}
 		} else if shouldRecordGrokMediaUsage(endpoint, requestModel, result) {
@@ -610,6 +639,8 @@ func prepareGrokVideoCompletionBilling(
 	reqLog *zap.Logger,
 	apiKey *service.APIKey,
 	subject middleware2.AuthSubject,
+	accountID int64,
+	recovered *service.NativeVideoRecovery,
 	taskRequestID string,
 	statusResult *service.OpenAIForwardResult,
 ) *service.OpenAIForwardResult {
@@ -626,9 +657,10 @@ func prepareGrokVideoCompletionBilling(
 	}
 	// Load create-time snapshot before claim so we can fail-closed without burning the claim
 	// when Redis lost pending and status cannot price the job.
-	pending, loadErr := h.gatewayService.LoadGrokVideoPendingBilling(ctx, taskRequestID, subject.UserID, apiKey.ID)
+	pending, loadErr := h.loadNativeVideoPendingBilling(ctx, apiKey, subject.UserID, accountID, recovered, taskRequestID, service.GenerationProtocolXAI)
 	if loadErr != nil {
 		reqLog.Warn("grok_media.video_pending_billing_load_failed", zap.String("request_id", taskRequestID), zap.Error(loadErr))
+		return nil
 	}
 	if pending == nil {
 		// Status omits resolution; without pending we would silently default to 480p and underbill.
@@ -658,6 +690,7 @@ func prepareGrokVideoCompletionBilling(
 	// Re-merge with pending: resolution is request-only; model/duration fill gaps.
 	merged := *statusResult
 	if pending != nil {
+		merged.NativeVideoBilling = pending.Financial
 		if strings.TrimSpace(merged.Model) == "" {
 			merged.Model = firstNonEmptyString(pending.BillingModel, pending.Model, pending.OriginalModel)
 		}

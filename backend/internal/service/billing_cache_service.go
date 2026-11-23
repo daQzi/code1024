@@ -1291,6 +1291,8 @@ func (s *BillingCacheService) checkUserPlatformQuotaEligibility(
 		isSentinel := entry.DailyLimitUSD == nil && entry.WeeklyLimitUSD == nil && entry.MonthlyLimitUSD == nil
 		if windowExpired && s.cache != nil && !isSentinel {
 			refreshed := &UserPlatformQuotaCacheEntry{
+				QuotaID:            entry.QuotaID,
+				GenerationCursor:   entry.GenerationCursor,
 				DailyUsageUSD:      dailyUsage,
 				WeeklyUsageUSD:     weeklyUsage,
 				MonthlyUsageUSD:    monthlyUsage,
@@ -1412,6 +1414,8 @@ func (s *BillingCacheService) checkUserPlatformQuotaEligibility(
 
 	// cache MISS 或旧版 entry → 回填完整 entry（含 limits 和 window_start）
 	newEntry := &UserPlatformQuotaCacheEntry{
+		QuotaID:            rec.QuotaID,
+		GenerationCursor:   rec.GenerationCursor,
 		DailyUsageUSD:      dailyUsage,
 		WeeklyUsageUSD:     weeklyUsage,
 		MonthlyUsageUSD:    monthlyUsage,

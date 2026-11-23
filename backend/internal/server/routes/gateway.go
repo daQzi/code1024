@@ -33,7 +33,7 @@ func RegisterGatewayRoutes(
 	bodyLimit := middleware.RequestBodyLimit(cfg.Gateway.MaxBodySize, bodyMemoryBudget)
 	textBodyLimit := middleware.RequestBodyLimit(cfg.Gateway.TextMaxBodySize, bodyMemoryBudget)
 	clientRequestID := middleware.ClientRequestID()
-	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
+	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService, h.ModelPlaza)
 	endpointNorm := handler.InboundEndpointMiddleware()
 	compositeTarget := compositeTargetPlatformMiddleware(compositeResolver)
 	compositeGeminiTarget := compositeGeminiTargetPlatformMiddleware(compositeResolver)
@@ -45,6 +45,7 @@ func RegisterGatewayRoutes(
 	// 分组级模型白名单准入：在 apiKeyAuth 之后、compositeTarget 之前，
 	// 保证校验发生在合成路由改写与调度之前，且只看客户端书写的模型名。
 	groupModelAllowlist := middleware.GroupModelAllowlist()
+	requestPluginIngress := h.RequestPlugins.Ingress
 
 	isOpenAIResponsesCompatibleGatewayPlatform := func(c *gin.Context) bool {
 		// openai、grok 与多协议 API Key 供应商经 OpenAI 网关转发（平台清单）。
@@ -110,6 +111,9 @@ func RegisterGatewayRoutes(
 	}
 	videoStatusHandler := func(c *gin.Context) {
 		if strings.HasPrefix(c.Param("request_id"), "video_") {
+			if c.FullPath() == "/v1/videos/:request_id" && h.OpenAIGateway.TryNativeTaskQueryAlias(c) {
+				return
+			}
 			h.OpenAIGateway.GenerationVideoGet(c)
 			return
 		}
@@ -127,6 +131,12 @@ func RegisterGatewayRoutes(
 				"message": "Videos API is not supported for this platform",
 			},
 		})
+	}
+	videoRemixHandler := func(c *gin.Context) {
+		if h.OpenAIGateway.TryPluginVideo(c, getGroupPlatform(c)) {
+			return
+		}
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": gin.H{"type": "video_channel_unavailable", "message": "The origin video's plugin channel is unavailable"}})
 	}
 	videoContentHandler := func(c *gin.Context) {
 		if strings.HasPrefix(c.Param("request_id"), "video_") {
@@ -149,7 +159,10 @@ func RegisterGatewayRoutes(
 		})
 	}
 	videoEditHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) == service.PlatformGrok {
+		if h.OpenAIGateway.TryPluginNativeVideo(c, getGroupPlatform(c), service.GenerationProtocolXAIEdit) {
+			return
+		}
+		if getGroupPlatform(c) == service.PlatformGrok || getGroupPlatform(c) == service.PlatformComposite {
 			h.OpenAIGateway.GrokVideoEdit(c)
 			return
 		}
@@ -157,7 +170,10 @@ func RegisterGatewayRoutes(
 		c.JSON(http.StatusNotFound, gin.H{"error": gin.H{"type": "not_found_error", "message": "Videos API is not supported for this platform"}})
 	}
 	videoExtensionHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) == service.PlatformGrok {
+		if h.OpenAIGateway.TryPluginNativeVideo(c, getGroupPlatform(c), service.GenerationProtocolXAIExtend) {
+			return
+		}
+		if getGroupPlatform(c) == service.PlatformGrok || getGroupPlatform(c) == service.PlatformComposite {
 			h.OpenAIGateway.GrokVideoExtension(c)
 			return
 		}
@@ -187,6 +203,25 @@ func RegisterGatewayRoutes(
 		}
 	}
 
+	// Task reads and cancellation only need the original authenticated key.
+	tasks := r.Group("/v1/tasks", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth))
+	tasks.GET("/:key", h.OpenAIGateway.GenerationTaskGet)
+	tasks.DELETE("/:key", h.OpenAIGateway.GenerationTaskCancel)
+	tasks.DELETE("/:key/result", h.OpenAIGateway.GenerationTaskDeleteResult)
+	tasks.POST("/:key/cancel", h.OpenAIGateway.GenerationTaskCancel)
+	tasks.GET("/:key/artifacts", h.OpenAIGateway.GenerationTaskArtifacts)
+	tasks.GET("/:key/artifacts/:artifact_key/content", h.OpenAIGateway.GenerationTaskArtifactContent)
+	tasks.HEAD("/:key/artifacts/:artifact_key/content", h.OpenAIGateway.GenerationTaskArtifactContent)
+	tasks.GET("/:key/native/*subpath", h.OpenAIGateway.GenerationTaskNativeQuery)
+	// Keep the public JSON model intact for plugin-bound scheduling; bounded
+	// multipart uploads enforce their own 129 MiB / 4-file / 1 MiB-JSON limits.
+	taskSubmit := r.Group("/v1/tasks", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth))
+	taskSubmit.POST("/:key", h.OpenAIGateway.GenerationTaskSubmitIngress, requestPluginIngress, groupModelAllowlist, h.OpenAIGateway.GenerationTaskSubmit)
+	taskSubmit.POST("/:key/native/*subpath", h.OpenAIGateway.GenerationTaskNativeSubmit)
+	for _, method := range []string{http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		taskSubmit.Handle(method, "/:key/native/*subpath", h.OpenAIGateway.GenerationTaskNativeSubmit)
+	}
+
 	// API网关（Claude API兼容）
 	gateway := r.Group("/v1")
 	gateway.Use(bodyLimit)
@@ -195,6 +230,13 @@ func RegisterGatewayRoutes(
 	gateway.Use(endpointNorm)
 	gateway.Use(gin.HandlerFunc(apiKeyAuth))
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
+	// Bounded raw media uploads do not pass through JSON/model body readers.
+	gateway.POST("/video-files", h.OpenAIGateway.GenerationFileUpload)
+	gateway.GET("/video-files/:file_id", h.OpenAIGateway.GenerationFileGet)
+	gateway.DELETE("/video-files/:file_id", h.OpenAIGateway.GenerationFileDelete)
+	gateway.Use(h.OpenAIGateway.GenerationMultipartIngress)
+	gateway.Use(h.OpenAIGateway.GenerationRemixIngress)
+	gateway.Use(requestPluginIngress)
 	gateway.Use(groupModelAllowlist)
 	gateway.Use(compositeTarget)
 	gateway.Use(requireGroupAnthropic)
@@ -240,6 +282,7 @@ func RegisterGatewayRoutes(
 		gateway.GET("/responses", func(c *gin.Context) {
 			h.OpenAIGateway.ResponsesWebSocket(c)
 		})
+		gateway.GET("/responses/:response_id", h.OpenAIGateway.GenerationResponsesGet)
 		// OpenAI Chat Completions API: auto-route based on group platform
 		gateway.POST("/chat/completions", func(c *gin.Context) {
 			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
@@ -263,6 +306,24 @@ func RegisterGatewayRoutes(
 		})
 		gateway.POST("/images/generations", imagesHandler)
 		gateway.POST("/images/edits", imagesHandler)
+		providerAudioHandler := func(path string) gin.HandlerFunc {
+			return func(c *gin.Context) {
+				if !isOpenAIOnlyEndpointGatewayPlatform(c) {
+					service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+					c.JSON(http.StatusNotFound, gin.H{
+						"error": gin.H{
+							"type":    "not_found_error",
+							"message": "Audio API is not supported for this platform",
+						},
+					})
+					return
+				}
+				h.OpenAIGateway.ProviderAudio(c, path)
+			}
+		}
+		gateway.POST("/audio/transcriptions", providerAudioHandler("/v1/audio/transcriptions"))
+		gateway.POST("/audio/translations", providerAudioHandler("/v1/audio/translations"))
+		gateway.POST("/audio/speech", providerAudioHandler("/v1/audio/speech"))
 		gateway.POST("/images/generations/async", h.AsyncImage.Submit)
 		gateway.POST("/images/edits/async", h.AsyncImage.Submit)
 		gateway.GET("/images/tasks/:task_id", h.AsyncImage.Get)
@@ -279,6 +340,7 @@ func RegisterGatewayRoutes(
 		// OpenAI-compatible clients may create through /videos; xAI receives the
 		// canonical /videos/generations route inside the Grok media forwarder.
 		gateway.POST("/videos", videoGenerationHandler)
+		gateway.POST("/videos/:request_id/remix", videoRemixHandler)
 		gateway.GET("/videos", h.OpenAIGateway.GenerationVideoList)
 		gateway.POST("/videos/generations", videoGenerationHandler)
 		gateway.POST("/videos/edits", videoEditHandler)
@@ -290,6 +352,7 @@ func RegisterGatewayRoutes(
 		gateway.GET("/videos/edits/:request_id", videoStatusHandler)
 		gateway.GET("/videos/extensions/:request_id", videoStatusHandler)
 		gateway.GET("/videos/:request_id", videoStatusHandler)
+		gateway.DELETE("/videos/:request_id", h.OpenAIGateway.GenerationVideoDelete)
 		gateway.GET("/videos/:request_id/content", videoContentHandler)
 		gateway.HEAD("/videos/:request_id/content", videoContentHandler)
 
@@ -354,6 +417,7 @@ func RegisterGatewayRoutes(
 	gemini.Use(opsErrorLogger)
 	gemini.Use(endpointNorm)
 	gemini.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
+	gemini.Use(requestPluginIngress)
 	gemini.Use(groupModelAllowlist)
 	gemini.Use(compositeGeminiTarget)
 	gemini.Use(requireGroupGoogle)
@@ -361,7 +425,14 @@ func RegisterGatewayRoutes(
 		gemini.GET("/models", h.Gateway.GeminiV1BetaListModels)
 		gemini.GET("/models/:model", h.Gateway.GeminiV1BetaGetModel)
 		// Gin treats ":" as a param marker, but Gemini uses "{model}:{action}" in the same segment.
-		gemini.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
+		gemini.POST("/models/*modelAction", func(c *gin.Context) {
+			if strings.HasSuffix(c.Request.URL.Path, ":predictLongRunning") && h.OpenAIGateway.TryNativeTaskAliasSubmit(c) {
+				return
+			}
+			if !h.OpenAIGateway.TryProviderGemini(c) {
+				h.Gateway.GeminiV1BetaModels(c)
+			}
+		})
 		// 显式上下文缓存：网关自管资源 ID 与账号绑定，list/get 只读本地记录。
 		gemini.POST("/cachedContents", h.Gateway.GeminiCachedContentsCreate)
 		gemini.GET("/cachedContents", h.Gateway.GeminiCachedContentsList)
@@ -381,7 +452,7 @@ func RegisterGatewayRoutes(
 	// 根路径别名共用中间件链：白名单准入在 apiKeyAuth 之后、compositeTarget
 	// 之前，避免逐条路由手工维护链导致漏挂。
 	rootRoute := func(method, path string, limit gin.HandlerFunc, handler gin.HandlerFunc) {
-		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), groupModelAllowlist, compositeTarget, requireGroupAnthropic, handler)
+		r.Handle(method, path, limit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.GenerationMultipartIngress, h.OpenAIGateway.GenerationRemixIngress, requestPluginIngress, groupModelAllowlist, compositeTarget, requireGroupAnthropic, handler)
 	}
 	for _, prefix := range []string{"/api/v3", "/v3", "/v1", ""} {
 		rootRoute(http.MethodPost, prefix+"/contents/generations/tasks", bodyLimit, h.OpenAIGateway.SeedanceTasks)
@@ -394,11 +465,12 @@ func RegisterGatewayRoutes(
 	rootRoute(http.MethodGet, "/responses", bodyLimit, func(c *gin.Context) {
 		h.OpenAIGateway.ResponsesWebSocket(c)
 	})
+	rootRoute(http.MethodGet, "/responses/:response_id", bodyLimit, h.OpenAIGateway.GenerationResponsesGet)
 	rootRoute(http.MethodGet, "/models", bodyLimit, modelsHandler)
 	rootRoute(http.MethodGet, "/models/:model", bodyLimit, h.Gateway.Models)
 	rootRoute(http.MethodPost, "/messages/count_tokens", bodyLimit, countTokensHandler)
 	codexDirect := r.Group("/backend-api/codex")
-	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), groupModelAllowlist, compositeTarget, requireGroupAnthropic)
+	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requestPluginIngress, groupModelAllowlist, compositeTarget, requireGroupAnthropic)
 	{
 		codexDirect.POST("/realtime/calls", h.OpenAIGateway.Live)
 		codexDirect.GET("/:call_id", h.OpenAIGateway.LiveSideband)
@@ -433,10 +505,29 @@ func RegisterGatewayRoutes(
 	})
 	rootRoute(http.MethodPost, "/images/generations", bodyLimit, imagesHandler)
 	rootRoute(http.MethodPost, "/images/edits", bodyLimit, imagesHandler)
+	rootProviderAudioHandler := func(path string) gin.HandlerFunc {
+		return func(c *gin.Context) {
+			if !isOpenAIOnlyEndpointGatewayPlatform(c) {
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonLocalFeatureGate)
+				c.JSON(http.StatusNotFound, gin.H{
+					"error": gin.H{
+						"type":    "not_found_error",
+						"message": "Audio API is not supported for this platform",
+					},
+				})
+				return
+			}
+			h.OpenAIGateway.ProviderAudio(c, path)
+		}
+	}
+	rootRoute(http.MethodPost, "/audio/transcriptions", bodyLimit, rootProviderAudioHandler("/v1/audio/transcriptions"))
+	rootRoute(http.MethodPost, "/audio/translations", bodyLimit, rootProviderAudioHandler("/v1/audio/translations"))
+	rootRoute(http.MethodPost, "/audio/speech", bodyLimit, rootProviderAudioHandler("/v1/audio/speech"))
 	rootRoute(http.MethodPost, "/images/generations/async", bodyLimit, h.AsyncImage.Submit)
 	rootRoute(http.MethodPost, "/images/edits/async", bodyLimit, h.AsyncImage.Submit)
 	rootRoute(http.MethodGet, "/images/tasks/:task_id", bodyLimit, h.AsyncImage.Get)
 	rootRoute(http.MethodPost, "/videos", bodyLimit, videoGenerationHandler)
+	rootRoute(http.MethodPost, "/videos/:request_id/remix", bodyLimit, videoRemixHandler)
 	rootRoute(http.MethodGet, "/videos", bodyLimit, h.OpenAIGateway.GenerationVideoList)
 	rootRoute(http.MethodPost, "/videos/generations", bodyLimit, videoGenerationHandler)
 	rootRoute(http.MethodPost, "/videos/edits", bodyLimit, videoEditHandler)
@@ -448,6 +539,7 @@ func RegisterGatewayRoutes(
 	rootRoute(http.MethodGet, "/videos/edits/:request_id", bodyLimit, videoStatusHandler)
 	rootRoute(http.MethodGet, "/videos/extensions/:request_id", bodyLimit, videoStatusHandler)
 	rootRoute(http.MethodGet, "/videos/:request_id", bodyLimit, videoStatusHandler)
+	rootRoute(http.MethodDelete, "/videos/:request_id", bodyLimit, h.OpenAIGateway.GenerationVideoDelete)
 	rootRoute(http.MethodGet, "/videos/:request_id/content", bodyLimit, videoContentHandler)
 	rootRoute(http.MethodHead, "/videos/:request_id/content", bodyLimit, videoContentHandler)
 
@@ -513,6 +605,7 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(endpointNorm)
 	antigravityV1.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1.Use(gin.HandlerFunc(apiKeyAuth))
+	antigravityV1.Use(requestPluginIngress)
 	antigravityV1.Use(groupModelAllowlist)
 	antigravityV1.Use(requireGroupAnthropic)
 	{
@@ -529,6 +622,7 @@ func RegisterGatewayRoutes(
 	antigravityV1Beta.Use(endpointNorm)
 	antigravityV1Beta.Use(middleware.ForcePlatform(service.PlatformAntigravity))
 	antigravityV1Beta.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
+	antigravityV1Beta.Use(requestPluginIngress)
 	antigravityV1Beta.Use(groupModelAllowlist)
 	antigravityV1Beta.Use(requireGroupGoogle)
 	{

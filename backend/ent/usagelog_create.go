@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"time"
@@ -166,6 +167,12 @@ func (_c *UsageLogCreate) SetNillableBillingMode(v *string) *UsageLogCreate {
 	if v != nil {
 		_c.SetBillingMode(*v)
 	}
+	return _c
+}
+
+// SetProviderToolBilling sets the "provider_tool_billing" field.
+func (_c *UsageLogCreate) SetProviderToolBilling(v jsontext.Value) *UsageLogCreate {
+	_c.mutation.SetProviderToolBilling(v)
 	return _c
 }
 
@@ -1049,6 +1056,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldBillingMode, field.TypeString, value)
 		_node.BillingMode = &value
 	}
+	if value, ok := _c.mutation.ProviderToolBilling(); ok {
+		_spec.SetField(usagelog.FieldProviderToolBilling, field.TypeJSON, value)
+		_node.ProviderToolBilling = value
+	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 		_node.InputTokens = value
@@ -1529,6 +1540,24 @@ func (u *UsageLogUpsert) UpdateBillingMode() *UsageLogUpsert {
 // ClearBillingMode clears the value of the "billing_mode" field.
 func (u *UsageLogUpsert) ClearBillingMode() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldBillingMode)
+	return u
+}
+
+// SetProviderToolBilling sets the "provider_tool_billing" field.
+func (u *UsageLogUpsert) SetProviderToolBilling(v jsontext.Value) *UsageLogUpsert {
+	u.Set(usagelog.FieldProviderToolBilling, v)
+	return u
+}
+
+// UpdateProviderToolBilling sets the "provider_tool_billing" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateProviderToolBilling() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldProviderToolBilling)
+	return u
+}
+
+// ClearProviderToolBilling clears the value of the "provider_tool_billing" field.
+func (u *UsageLogUpsert) ClearProviderToolBilling() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldProviderToolBilling)
 	return u
 }
 
@@ -2455,6 +2484,27 @@ func (u *UsageLogUpsertOne) UpdateBillingMode() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearBillingMode() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearBillingMode()
+	})
+}
+
+// SetProviderToolBilling sets the "provider_tool_billing" field.
+func (u *UsageLogUpsertOne) SetProviderToolBilling(v jsontext.Value) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetProviderToolBilling(v)
+	})
+}
+
+// UpdateProviderToolBilling sets the "provider_tool_billing" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateProviderToolBilling() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateProviderToolBilling()
+	})
+}
+
+// ClearProviderToolBilling clears the value of the "provider_tool_billing" field.
+func (u *UsageLogUpsertOne) ClearProviderToolBilling() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearProviderToolBilling()
 	})
 }
 
@@ -3653,6 +3703,27 @@ func (u *UsageLogUpsertBulk) UpdateBillingMode() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearBillingMode() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearBillingMode()
+	})
+}
+
+// SetProviderToolBilling sets the "provider_tool_billing" field.
+func (u *UsageLogUpsertBulk) SetProviderToolBilling(v jsontext.Value) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetProviderToolBilling(v)
+	})
+}
+
+// UpdateProviderToolBilling sets the "provider_tool_billing" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateProviderToolBilling() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateProviderToolBilling()
+	})
+}
+
+// ClearProviderToolBilling clears the value of the "provider_tool_billing" field.
+func (u *UsageLogUpsertBulk) ClearProviderToolBilling() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearProviderToolBilling()
 	})
 }
 

@@ -16,6 +16,12 @@ type generationReplayFixture struct {
 	task    *GenerationTask
 	err     error
 	lookups int
+	held    *GenerationTask
+}
+
+func (r *generationReplayFixture) CreateHeld(_ context.Context, task *GenerationTask, _ *UsageBillingCommand) (*GenerationTask, error) {
+	r.held = task
+	return task, nil
 }
 
 func (r *generationReplayFixture) FindIdempotent(_ context.Context, user, key int64, idempotency string) (*GenerationTask, error) {
@@ -53,6 +59,57 @@ func TestGenerationReplayBeforeUpstreamAndPricing(t *testing.T) {
 	_, err = s.FindIdempotent(context.Background(), 1, 2, "")
 	require.NoError(t, err)
 	require.Zero(t, repo.lookups)
+}
+
+func TestGenerationClientFingerprintSurvivesRequestProcessing(t *testing.T) {
+	original := json.RawMessage(`{"model":"sora-2","prompt":"Original"}`)
+	transformed := json.RawMessage(`{"model":"sora-2","prompt":"Redacted"}`)
+	ctx, err := WithGenerationClientRequest(context.Background(), original)
+	require.NoError(t, err)
+	originalHash, err := generationRequestFingerprint(original)
+	require.NoError(t, err)
+	hash, err := generationClientFingerprint(ctx, transformed)
+	require.NoError(t, err)
+	require.Equal(t, originalHash, hash)
+	plainHash, err := generationClientFingerprint(context.Background(), transformed)
+	require.NoError(t, err)
+	require.NotEqual(t, hash, plainHash)
+	task := &GenerationTask{ID: "video_original", UserID: 1, APIKeyID: 2, IdempotencyKey: "accepted", Fingerprint: originalHash}
+	s := &GenerationService{repo: &generationReplayFixture{task: task}}
+	key := &APIKey{ID: 2, UserID: 1, User: &User{ID: 1}, Group: &Group{ID: 3}}
+	// The accepted task replays before touching account, plugin or pricing
+	// dependencies, even when a later policy produces different output.
+	replayed, err := s.Create(ctx, key, nil, &Account{}, "sora-2", transformed, "accepted")
+	require.NoError(t, err)
+	require.Same(t, task, replayed)
+	changed, err := WithGenerationClientRequest(context.Background(), json.RawMessage(`{"model":"sora-2","prompt":"Different"}`))
+	require.NoError(t, err)
+	_, err = s.Replay(changed, 1, 2, "accepted", transformed)
+	require.ErrorIs(t, err, ErrGenerationIdempotencyConflict)
+	_, err = WithGenerationClientRequest(context.Background(), json.RawMessage(`[]`))
+	require.Error(t, err)
+}
+
+func TestGenerationCreateStoresClientIdentityAndBillsProcessedBody(t *testing.T) {
+	plugins, account, upstream := generationPluginFixture(t, "sora")
+	account.Credentials[NewAPIVideoPricingKey] = map[string]any{"*": map[string]any{"mode": "fixed", "unit": "second", "unit_price": "0.02"}}
+	original := json.RawMessage(`{"model":"sora-2","prompt":"Original","seconds":"4"}`)
+	processed := json.RawMessage(`{"model":"sora-2","prompt":"Redacted","seconds":"8"}`)
+	ctx, err := WithGenerationClientRequest(context.Background(), original)
+	require.NoError(t, err)
+	repo := &generationReplayFixture{}
+	s := &GenerationService{repo: repo, plugins: plugins}
+	key := &APIKey{ID: 2, UserID: 1, User: &User{ID: 1}, Group: &Group{ID: 3, RateMultiplier: 1}}
+	task, err := s.Create(ctx, key, nil, account, "sora-2", processed, "accepted")
+	require.NoError(t, err)
+	require.Same(t, task, repo.held)
+	wantFingerprint, err := generationRequestFingerprint(original)
+	require.NoError(t, err)
+	require.Equal(t, wantFingerprint, task.Fingerprint)
+	require.Equal(t, "0.16", task.Price.Hold.String(), "the processed duration determines the hold")
+	require.Equal(t, "Redacted", task.PublicFields.Prompt)
+	require.NotContains(t, string(task.Request), "Original")
+	require.Empty(t, upstream.requests, "admission does not submit to the upstream")
 }
 
 type generationSettlementFixture struct {

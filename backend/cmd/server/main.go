@@ -18,11 +18,12 @@ import (
 	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
-	plugincli "github.com/Wei-Shaw/sub2api/internal/newapi/cli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
+	plugincli "github.com/Wei-Shaw/sub2api/newapi-engine/cli"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 
 	"github.com/gin-gonic/gin"
 )
@@ -141,6 +142,9 @@ func runMainServer() {
 	cfg, err := config.LoadForBootstrap()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+	if err := modelmodifier.Configure(cfg.Gateway.ModelModifierExemptions); err != nil {
+		log.Fatalf("Failed to configure model modifiers: %v", err)
 	}
 	if err := logger.Init(logger.OptionsFromConfig(cfg.Log)); err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)

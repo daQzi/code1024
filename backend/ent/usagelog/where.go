@@ -1005,6 +1005,16 @@ func BillingModeContainsFold(v string) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldContainsFold(FieldBillingMode, v))
 }
 
+// ProviderToolBillingIsNil applies the IsNil predicate on the "provider_tool_billing" field.
+func ProviderToolBillingIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldProviderToolBilling))
+}
+
+// ProviderToolBillingNotNil applies the NotNil predicate on the "provider_tool_billing" field.
+func ProviderToolBillingNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldProviderToolBilling))
+}
+
 // GroupIDEQ applies the EQ predicate on the "group_id" field.
 func GroupIDEQ(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldGroupID, v))

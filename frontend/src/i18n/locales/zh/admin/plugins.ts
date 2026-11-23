@@ -1,5 +1,40 @@
 export default {
   plugins: {
+    nativeDescription: '管理 Sub 原生 .s2plugin 扩展，其安装、配置和运行与 New API 协议插件分别管理。',
+    cleanup: {
+      title: '授权清理', hint: '账号删除或连接变化后，后台通过原连接撤销旧授权。这里只显示最近 50 条记录。代理变化或插件停用时会等待人工处理；正在使用的相同上游身份会被保护。',
+      empty: '暂无授权清理记录。', failed: '授权清理操作未完成，请刷新后重试。', retry: '重新排队', queued: '已重新排队，后台将重试。', attempts: '已尝试 {count} 次', account: '原账号 #{id}', version: '插件版本 #{id}',
+      statuses: { pending: '等待清理', completed: '清理完成', protected: '身份仍在使用，已保护', attention: '需要人工处理' }
+    },
+    credential: {
+      upstreamBalance: '上游余额（维护观察值）',
+      autoDisable: '允许插件自动暂停这个账号', autoDisableHint: '默认关闭。开启后，维护钩子可以临时阻止调用，并在额度恢复后重新开放。',
+      saveFirst: '这个插件通过上游登录获取凭据。请先保存账号，再重新打开账号设置完成授权。', keyOptional: 'API Key（登录插件可留空）', operationFailed: '凭据操作未完成，请刷新状态后检查登录步骤、插件配置和连接。',
+      title: '插件登录与凭据维护', hint: '先保存账号和插件配置，再在这里登录或维护凭据。密钥、刷新令牌和插件会话由服务端加密保存。',
+      login: '登录 / 重新授权', renew: '立即续期', maintain: '执行维护', revoke: '撤销凭据', openAuthorization: '打开上游授权页', callbackURL: '授权完成后的回调地址', expires: '有效期至', pollHint: '两次查询至少间隔 {seconds} 秒', checkLogin: '检查登录结果', changed: '账号绑定已变化，请重新打开账号设置', maintenanceFailed: '最近的上游凭据维护未完成，可刷新状态或重新授权',
+      callbackTitle: '插件授权回调', callbackHint: '复制下面的完整地址，回到原账号的授权窗口粘贴并提交。地址只保留在当前页面，关闭后不再保存。', callbackEmpty: '当前页面没有回调参数，请回到原账号窗口重新发起授权。',
+      statuses: { uninitialized: '尚未初始化', static: '使用静态 API Key', login_required: '需要登录', logging_in: '等待完成登录', active: '凭据可用', auto_disabled: '插件暂时停用，等待维护恢复', revoke_pending: '本地已停用，正在重试上游撤销', revoked: '凭据已撤销' }
+    },
+    center: {
+      cleanup: '授权清理',
+      title: '插件中心', description: '按协议管理上游适配、任务驱动和请求处理，账号继续负责连接、分组与价格。',
+      installed: '已安装', market: '插件市场', developer: '开发者提交', review: '投稿审核', nativeManager: '原生扩展管理', back: '返回插件中心',
+      search: '搜索名称、插件 key 或模型', kind: '插件能力', source: '来源', table: '列表', cards: '卡片',
+      kinds: { all: '全部能力', task: '任务驱动', provider: '上游适配', transform: '请求处理', native: '原生扩展' },
+      sources: { all: '全部来源', system: '系统内置', uploaded: '本地上传', community: '本站社区', external: '外部市场', native: '原生包' },
+      allowOverride: '本次上传允许覆盖系统插件 key；历史版本和在途任务仍会保留',
+      factoryHint: '系统版本随服务登记，默认停用。恢复内置版保留当前启停状态，账号的固定版本需在账号编辑页单独切换。',
+      empty: '没有匹配的插件，可调整筛选或上传源码。', unsupported: '宿主尚未接通', details: '详情与版本',
+      author: '作者', models: '声明的模型', compatibility: '宿主兼容情况', runnable: '当前可执行',
+      restore: '恢复内置版本', active: '当前默认', accounts: '配置上游账号', saved: '插件配置已更新。',
+      attribution: '协议运行时参考并复用开源项目'
+    },
+    source: {
+      title: '查看源码与版本对比', hint: '查看当前所选的固定版本，或与同一插件的历史版本比较。账号升级仍在账号编辑页进行。',
+      compare: '对比基准版本', raw: '所选版本完整源码（只读）', diff: '版本源码差异', unchanged: '源码没有变化。',
+      limit: '源码超过行级对比限制（每份最多 64K 字符、1500 行）。可在完整源码框中查看和复制。',
+      loadFailed: '源码读取或摘要校验失败，请刷新版本信息后重试。'
+    },
     js: {
       serviceFee: '每单服务费（USD）', minimumCharge: '最低收费（USD）', maximumHold: '最高基础费用（USD，可留空）',
       upstreamKind: '上游服务类型', vendorUpstream: '原厂接口', newAPIUpstream: 'New API 网关',
@@ -12,20 +47,25 @@ export default {
         confirm: '确认处理', saved: '处理已记录，后台将继续查询或完成资金结算。'
       },
       pricingTitle: '视频售价', addPrice: '添加定价', pricingHint: '留空时使用分组视频价格。成本加价可按单价与用量，或上游最终账单结算。最终账单模式必须填写最大冻结额（加分组倍率前的 USD）；超额转人工对账，差额退回。',
+      expressionPrice: 'Task 多维表达式', expressionBody: '售价表达式（结果为 USD）', expressionHint: '使用 New API Task 的 u("字段")、tier("档位", 金额)、条件和数学运算，最多 4096 字节。支持 hour/minute/weekday/month/day("时区")，时间与时区偏移在下单时固定，周日为 0，空或无效时区按 UTC。仅使用插件声明的用量字段；填写正数最大冻结额。数字用量必须有最终观测，缺失或超额转人工对账。暂不支持请求探针及普通 relay token 变量。', invalidExpressionPrice: '请填写 1–4096 字节的 Task 售价表达式。',
       priceModel: '模型名（* 表示所有模型）', priceMode: '定价方式', fixedPrice: '固定单价', costPlus: '上游成本 × 加价倍率', priceUnit: '计费单位', salePrice: '售价（USD / 单位）', sourcePrice: '上游单价（原币 / 单位）', sourceCurrency: '上游币种', exchangeRate: '1 原币折算 USD', markup: '售价倍率（如 1.2）', invalidPrice: '请填写有效价格；模型不能重复。', units: { request: '每个任务', second: '每秒', token: '每个 Token', credit: '每个积分', upstream_cost: '上游最终账单' },
       title: 'New API 协议插件',
-      description: '按上游协议安装插件，再到账号管理中选择。目前账号接入支持 OpenAI Videos 任务插件；Provider 和请求处理标签仅表示脚本声明，通用接点尚未开放。',
+      description: '按上游协议安装插件，再到账号管理中选择。支持 OpenAI Videos 任务、已接入的 Chat / Responses Provider，以及独立配置的 JSON 入口处理；具体范围请查看版本兼容信息。',
       builtin: '内置插件', choose: '选择插件', installBuiltin: '安装内置版本', upload: '上传 plugin.js',
       empty: '尚未安装 JS 插件', versions: '历史版本', useVersion: '启用此版本', modelCount: '声明 {count} 个模型',
       versionNote: '历史版本保留。切换默认版本不会修改已有账号固定的插件版本，请在账号编辑页显式升级。装载通过只代表契约可读取，实际能力以宿主支持和联调结果为准。',
       installed: '已保存 v{version}，可在历史版本中选择启用。', tooLarge: '源码文件不能超过 1 MiB',
       accountTitle: '上游协议插件', native: '使用当前平台内置协议',
       accountHint: '先在插件管理安装并启用。上游地址、Key、分组和并发继续使用本账号设置。',
+      genericVideoHint: '通用视频插件必须在账号模型映射中逐个配置“公开模型名 → 上游模型名”，同名也需要填写。不能用 * 代替具体模型；只会开放这些模型，售价使用下方视频定价或分组价格。',
+      modelsTitle: '上游模型列表', modelsHint: '通过已保存插件的模型发现路由查询；结果不会自动修改模型映射、能力或售价。', modelsQuery: '查询上游模型', modelsCount: '上游返回 {count} 个模型', modelsEmpty: '上游返回空模型列表。', modelsFailed: '模型查询失败，请稍后重试。',
+      providerHint: 'Provider 支持 OpenAI 平台的 Chat / Responses 文本转发、准备、签名和 JSON / SSE / NDJSON 转换；支持保存时 Key 校验、令牌交换与缓存，以及凭据被拒绝后的一次换令牌重试。请配置具体模型映射，沿用现有分组价格与倍率。内置 OpenAI 转发插件填写不含 /v1 的上游根路径。凭据校验、交换、登录、续期、撤销与维护钩子可受限联网；支持最多 32 个后续请求和插件明确输出的流转 JSON。固定 RelayKit 支持 Chat 转 Responses/Anthropic/Gemini、Responses 转 Chat/Gemini 及其 +plugin 组合；Anthropic 目标需要明确的输出 Token 上限。支持保存账号后登录、密文凭据、多实例防重续期和定时维护；Task OAuth、文件及 WS 尚未开放。',
       pinned: '固定插件版本 #{id}', configSaved: '配置已加密保存，留空时保留原配置。',
+      balanceTitle: '上游余额', balanceHint: '使用已保存的账号和插件配置查询；不修改本站余额或未保存的表单。', balanceQuery: '查询上游余额', balanceUnlimited: '不限额', balanceUnknown: '上游未提供余额', balanceFetched: '查询时间', balanceResets: '重置时间', balanceChanged: '账号插件已变化，请刷新后查询。', balanceFailed: '余额查询失败，请稍后重试。',
       replaceConfig: '重新填写插件配置', invalidJSON: '{name} 必须是有效 JSON', loadFailed: '插件列表加载失败，请刷新后重试。'
     },
     title: '插件管理',
-    description: '安装和管理独立运行的 OAuth 出站传输插件。API Key 流程不受影响。',
+    description: '统一管理上游协议、请求处理和原生传输插件，安装系统或社区版本，并查看实际宿主兼容范围。',
     upload: '安装插件',
     uploadHint: '仅接受 .s2plugin 包；默认要求可信发布者签名。',
     runtimeNotice: '插件安装、启用、停用和配置由 Sub2API 宿主动态处理，通常不需要重启宿主实例。只有宿主版本或宿主配置本身变化时，才按部署方式执行重启。',
@@ -52,6 +92,7 @@ export default {
     untested: '未验证版本',
     incompatible: '不兼容',
     enabled: '已启用',
+    instanceControlled: '由处理实例独立控制',
     disabled: '已停用',
     error: '异常',
     starting: '启动中',

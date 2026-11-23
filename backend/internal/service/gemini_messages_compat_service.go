@@ -27,6 +27,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -530,7 +531,9 @@ func (s *GeminiMessagesCompatService) HasAntigravityAccounts(ctx context.Context
 	return len(accounts) > 0, nil
 }
 
-func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*ForwardResult, error) {
+func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *ForwardResult, retErr error) {
+	report := beginNativeProtocolReport(ctx, account, gjson.GetBytes(body, "model").String())
+	defer func() { report.nativeResult(result) }()
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -551,11 +554,34 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(req.Model)
 	}
+	modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, body, originalModel, mappedModel, "claude")
+	if modErr != nil {
+		writeNativeModelModifierError(c, "claude")
+		return nil, modErr
+	}
+	if modApplied {
+		ctx, body, mappedModel = modCtx, modBody, modSpec.Base
+		defer func() {
+			reconcileNativeForwardModifierResult(ctx, result, modSpec, originalModel, body, "claude")
+		}()
+	}
+	ctx, requestBody, finishRequest, requestErr := beginNativeProtocolRequest(ctx, c, account, body, mappedModel, "claude")
+	if requestErr != nil {
+		return nil, requestErr
+	}
+	body = requestBody
+	defer finishRequest(&retErr)
+	ctx, finishReply, replyErr := beginNativeProtocolReply(ctx, c, account, mappedModel)
+	if replyErr != nil {
+		return nil, replyErr
+	}
+	defer finishReply(&retErr)
 
 	geminiReq, err := convertClaudeMessagesToGeminiGenerateContent(body, mappedModel)
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
+	defer func() { recordNativeRequestReasoning(ctx, result, geminiReq, "gemini") }()
 	if geminiImageGenerationDenied(c, geminiReq, originalModel, mappedModel) {
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", ImageGenerationPermissionMessage())
 	}
@@ -723,7 +749,14 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	for attempt := 1; attempt <= maxAttempts+signatureRetryStage; attempt++ {
 		checkedPolicy = nil
 		upstreamReq, idHeader, err := buildReq(ctx)
+		if err == nil {
+			err = processNativeGeminiHTTPRequest(ctx, account, upstreamReq, mappedModel)
+		}
 		if err != nil {
+			var processingFailure *RequestPluginFailure
+			if errors.As(err, &processingFailure) {
+				return nil, err
+			}
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
 			}
@@ -1093,7 +1126,9 @@ func isGeminiSignatureRelatedError(respBody []byte) bool {
 	return strings.Contains(msg, "thought_signature") || strings.Contains(msg, "signature")
 }
 
-func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (*ForwardResult, error) {
+func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte) (result *ForwardResult, retErr error) {
+	report := beginNativeProtocolReport(ctx, account, originalModel)
+	defer func() { report.nativeResult(result) }()
 	beginUpstreamResponseModelObservation(c)
 	beginGeminiImageOutputObservation(c)
 	startTime := time.Now()
@@ -1127,6 +1162,47 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	mappedModel := originalModel
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(originalModel)
+	}
+	if action == "countTokens" {
+		spec, modErr := modelmodifier.Resolve(originalModel, mappedModel)
+		if modErr != nil {
+			writeNativeModelModifierError(c, "gemini")
+			return nil, modErr
+		}
+		mappedModel = spec.Base
+	} else {
+		modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, body, originalModel, mappedModel, "gemini")
+		if modErr != nil {
+			writeNativeModelModifierError(c, "gemini")
+			return nil, modErr
+		}
+		if modApplied {
+			ctx, body, mappedModel = modCtx, modBody, modSpec.Base
+			defer func() {
+				reconcileNativeForwardModifierResult(ctx, result, modSpec, originalModel, body, "gemini")
+			}()
+		}
+	}
+	if action == "countTokens" {
+		if err := guardUnsupportedNativeProtocolRequest(ctx, c, account); err != nil {
+			return nil, err
+		}
+	} else {
+		child, requestBody, finishRequest, requestErr := beginNativeProtocolRequest(ctx, c, account, body, mappedModel, "gemini")
+		if requestErr != nil {
+			return nil, requestErr
+		}
+		ctx, body = child, requestBody
+		defer finishRequest(&retErr)
+		defer func() { recordNativeRequestReasoning(ctx, result, body, "gemini") }()
+	}
+	if action != "countTokens" {
+		child, finishReply, replyErr := beginNativeProtocolReply(ctx, c, account, mappedModel)
+		if replyErr != nil {
+			return nil, replyErr
+		}
+		ctx = child
+		defer finishReply(&retErr)
 	}
 	if action != "countTokens" && geminiImageGenerationDenied(c, body, originalModel, mappedModel) {
 		return nil, s.writeGoogleError(c, http.StatusBadRequest, ImageGenerationPermissionMessage())
@@ -1280,7 +1356,14 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		checkedPolicy = nil
 		upstreamReq, idHeader, err := buildReq(ctx)
+		if err == nil && action != "countTokens" {
+			err = processNativeGeminiHTTPRequest(ctx, account, upstreamReq, mappedModel)
+		}
 		if err != nil {
+			var processingFailure *RequestPluginFailure
+			if errors.As(err, &processingFailure) {
+				return nil, err
+			}
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
 			}

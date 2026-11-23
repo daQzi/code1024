@@ -355,7 +355,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 	// URL 里的模型名最终会被拼进上游 /v1beta/models/{model}:{action}，
 	// 先在入口校验片段合规性，见 service/upstream_path_guard.go。
-	if !service.IsSafeGeminiModelPathSegment(modelName) {
+	if !service.IsSafeGeminiClientModelName(modelName) {
 		googleError(c, http.StatusBadRequest, "Invalid model in URL")
 		return
 	}
@@ -765,6 +765,8 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		} else {
 			result, err = h.geminiCompatService.ForwardNative(requestCtx, c, account, modelName, action, stream, body)
 		}
+		setForwardPerformance(c, result, err)
+
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
 		}
@@ -865,8 +867,8 @@ func parseGeminiModelAction(rest string) (model string, action string, err error
 		return "", "", &pathParseError{"missing path"}
 	}
 
-	// Standard: {model}:{action}
-	if i := strings.Index(rest, ":"); i > 0 && i < len(rest)-1 {
+	// Standard: {model}:{action} (use LastIndex so @key:value model modifiers keep their colons)
+	if i := strings.LastIndex(rest, ":"); i > 0 && i < len(rest)-1 {
 		return rest[:i], rest[i+1:], nil
 	}
 

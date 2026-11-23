@@ -194,11 +194,16 @@ func (s *GatewayService) executeBedrockUpstream(
 	var err error
 	retryStart := time.Now()
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
+		processed, processingErr := nativeProtocolRequestOutbound(ctx, account, body, false)
+		if processingErr != nil {
+			return nil, processingErr
+		}
+		// Patch before signing, so SigV4 hashes the exact transmitted bytes.
 		var upstreamReq *http.Request
 		if account.IsBedrockAPIKey() {
-			upstreamReq, err = s.buildUpstreamRequestBedrockAPIKey(ctx, body, modelID, region, stream, apiKey)
+			upstreamReq, err = s.buildUpstreamRequestBedrockAPIKey(ctx, processed.Body, modelID, region, stream, apiKey, processed.Headers)
 		} else {
-			upstreamReq, err = s.buildUpstreamRequestBedrock(ctx, body, modelID, region, stream, signer)
+			upstreamReq, err = s.buildUpstreamRequestBedrock(ctx, processed.Body, modelID, region, stream, signer, processed.Headers)
 		}
 		if err != nil {
 			return nil, err
@@ -352,6 +357,7 @@ func (s *GatewayService) buildUpstreamRequestBedrock(
 	region string,
 	stream bool,
 	signer *BedrockSigner,
+	businessHeaders ...map[string]string,
 ) (*http.Request, error) {
 	targetURL := BuildBedrockURL(region, modelID, stream)
 
@@ -362,6 +368,9 @@ func (s *GatewayService) buildUpstreamRequestBedrock(
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	if len(businessHeaders) > 0 {
+		applyNativeProtocolRequestHeaders(req, businessHeaders[0])
+	}
 
 	// SigV4 签名
 	if err := signer.SignRequest(ctx, req, body); err != nil {
@@ -379,6 +388,7 @@ func (s *GatewayService) buildUpstreamRequestBedrockAPIKey(
 	region string,
 	stream bool,
 	apiKey string,
+	businessHeaders ...map[string]string,
 ) (*http.Request, error) {
 	targetURL := BuildBedrockURL(region, modelID, stream)
 
@@ -390,6 +400,9 @@ func (s *GatewayService) buildUpstreamRequestBedrockAPIKey(
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if len(businessHeaders) > 0 {
+		applyNativeProtocolRequestHeaders(req, businessHeaders[0])
+	}
 
 	return req, nil
 }

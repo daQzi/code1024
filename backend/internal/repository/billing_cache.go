@@ -423,6 +423,8 @@ func parseUserPlatformQuotaHash(m map[string]string) *service.UserPlatformQuotaC
 		return n
 	}
 	return &service.UserPlatformQuotaCacheEntry{
+		QuotaID:            parseInt64(m["quota_id"]),
+		GenerationCursor:   parseInt64(m["generation_cursor"]),
 		DailyUsageUSD:      parseFloat(m["daily_usage"]),
 		WeeklyUsageUSD:     parseFloat(m["weekly_usage"]),
 		MonthlyUsageUSD:    parseFloat(m["monthly_usage"]),
@@ -456,7 +458,6 @@ func (c *billingCache) SetUserPlatformQuotaCache(ctx context.Context, userID int
 		return nil
 	}
 	key := userPlatformQuotaCacheKey(userID, platform)
-	pipe := c.rdb.TxPipeline()
 
 	// 浮点可空字段：nil → 空字符串（读取时 parseFloatPtr 返回 nil，表示无限额）
 	fmtFloatPtr := func(p *float64) string {
@@ -473,7 +474,9 @@ func (c *billingCache) SetUserPlatformQuotaCache(ctx context.Context, userID int
 		return strconv.FormatInt(p.Unix(), 10)
 	}
 
-	pipe.HSet(ctx, key,
+	values := []any{
+		"quota_id", strconv.FormatInt(entry.QuotaID, 10),
+		"generation_cursor", strconv.FormatInt(entry.GenerationCursor, 10),
 		"daily_usage", entry.DailyUsageUSD,
 		"weekly_usage", entry.WeeklyUsageUSD,
 		"monthly_usage", entry.MonthlyUsageUSD,
@@ -485,11 +488,33 @@ func (c *billingCache) SetUserPlatformQuotaCache(ctx context.Context, userID int
 		"daily_window_start", fmtTimePtr(entry.DailyWindowStart),
 		"weekly_window_start", fmtTimePtr(entry.WeeklyWindowStart),
 		"monthly_window_start", fmtTimePtr(entry.MonthlyWindowStart),
-	)
-	pipe.Expire(ctx, key, ttl)
-	_, err := pipe.Exec(ctx)
+	}
+	args := []any{strconv.FormatInt(entry.QuotaID, 10), strconv.FormatInt(entry.GenerationCursor, 10), int64(ttl.Seconds())}
+	args = append(args, values...)
+	_, err := c.rdb.Eval(ctx, setGenerationAwareQuotaCacheScript, []string{key}, args...).Result()
 	return err
 }
+
+// Compare decimal int64 strings without Lua's floating point integer limit.
+const quotaCursorLua = `
+local function intcmp(a,b)
+    a = string.gsub(a or "0", "^0+", "")
+    b = string.gsub(b or "0", "^0+", "")
+    if #a ~= #b then if #a < #b then return -1 else return 1 end end
+    if a == b then return 0 end
+    if a < b then return -1 else return 1 end
+end
+`
+
+const setGenerationAwareQuotaCacheScript = quotaCursorLua + `
+local oldID = redis.call("HGET",KEYS[1],"quota_id") or "0"
+local oldCursor = redis.call("HGET",KEYS[1],"generation_cursor") or "0"
+if intcmp(oldID,ARGV[1]) > 0 then return 0 end
+if oldID == ARGV[1] and intcmp(oldCursor,ARGV[2]) > 0 then return 0 end
+for i=4,#ARGV,2 do redis.call("HSET",KEYS[1],ARGV[i],ARGV[i+1]) end
+redis.call("EXPIRE",KEYS[1],ARGV[3])
+return 1
+`
 
 func (c *billingCache) DeleteUserPlatformQuotaCache(ctx context.Context, userID int64, platform string) error {
 	return c.rdb.Del(ctx, userPlatformQuotaCacheKey(userID, platform)).Err()

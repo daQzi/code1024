@@ -16,6 +16,8 @@ import (
 // UserPlatformQuotaRecord 是 repository 层的传输结构体，
 // 与 ent.UserPlatformQuota 实体解耦，供业务层使用。
 type UserPlatformQuotaRecord struct {
+	QuotaID            int64
+	GenerationCursor   int64
 	UserID             int64
 	Platform           string
 	DailyLimitUSD      *float64
@@ -44,6 +46,8 @@ var ErrUserPlatformQuotaFKViolation = errors.New("user platform quota snapshot F
 // UserPlatformQuotaSnapshot 是 BatchSnapshotUsage 的输入结构体，
 // 表示 Redis 当前窗口快照（用于绝对值覆盖写入 DB）。
 type UserPlatformQuotaSnapshot struct {
+	QuotaID            int64
+	GenerationCursor   int64
 	UserID             int64
 	Platform           string
 	DailyUsageUSD      float64
@@ -134,23 +138,26 @@ func (r *userPlatformQuotaRepository) BulkInsertInitial(ctx context.Context, rec
 	return err
 }
 
-// GetByUserPlatform 通过 ent 查询单条配额（排除软删除）。未找到返回 (nil, nil)。
+// Read usage and the included Task cursor in one database snapshot. Reading
+// them separately could label old usage with a newer cursor and lose a delta.
 func (r *userPlatformQuotaRepository) GetByUserPlatform(ctx context.Context, userID int64, platform string) (*UserPlatformQuotaRecord, error) {
 	client := clientFromContext(ctx, r.client)
-	entity, err := client.UserPlatformQuota.Query().
-		Where(
-			userplatformquota.UserIDEQ(userID),
-			userplatformquota.PlatformEQ(platform),
-			userplatformquota.DeletedAtIsNil(),
-		).
-		Only(ctx)
-	if dbent.IsNotFound(err) {
-		return nil, nil
-	}
+	rows, err := client.QueryContext(ctx, `SELECT id,generation_cursor,user_id,platform,daily_limit_usd,weekly_limit_usd,monthly_limit_usd,
+ daily_usage_usd,weekly_usage_usd,monthly_usage_usd,daily_window_start,weekly_window_start,monthly_window_start
+ FROM user_platform_quotas WHERE user_id=$1 AND platform=$2 AND deleted_at IS NULL`, userID, platform)
 	if err != nil {
 		return nil, err
 	}
-	return entQuotaToRecord(entity), nil
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, rows.Err()
+	}
+	value := &UserPlatformQuotaRecord{}
+	if err := rows.Scan(&value.QuotaID, &value.GenerationCursor, &value.UserID, &value.Platform, &value.DailyLimitUSD, &value.WeeklyLimitUSD, &value.MonthlyLimitUSD,
+		&value.DailyUsageUSD, &value.WeeklyUsageUSD, &value.MonthlyUsageUSD, &value.DailyWindowStart, &value.WeeklyWindowStart, &value.MonthlyWindowStart); err != nil {
+		return nil, err
+	}
+	return value, rows.Err()
 }
 
 // ListByUser 查询用户的所有平台配额记录（排除软删除）。
@@ -227,23 +234,19 @@ func (r *userPlatformQuotaRepository) IncrementUsageWithReset(ctx context.Contex
 // 未命中活跃记录时返回 ErrUserPlatformQuotaNotFound。
 func (r *userPlatformQuotaRepository) ResetExpiredWindow(ctx context.Context, userID int64, platform string, window string, newStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
-	upd := client.UserPlatformQuota.Update().
-		Where(
-			userplatformquota.UserIDEQ(userID),
-			userplatformquota.PlatformEQ(platform),
-			userplatformquota.DeletedAtIsNil(),
-		)
 	switch window {
-	case "daily":
-		upd = upd.SetDailyUsageUsd(0).SetDailyWindowStart(newStart)
-	case "weekly":
-		upd = upd.SetWeeklyUsageUsd(0).SetWeeklyWindowStart(newStart)
-	case "monthly":
-		upd = upd.SetMonthlyUsageUsd(0).SetMonthlyWindowStart(newStart)
+	case "daily", "weekly", "monthly":
 	default:
 		return fmt.Errorf("unknown window %q", window)
 	}
-	n, err := upd.Save(ctx)
+	// window is an allowlisted identifier. Keep a reset marker in the same
+	// write so a previously read Redis snapshot cannot restore reset charges.
+	result, err := client.ExecContext(ctx, `UPDATE user_platform_quotas SET `+window+`_usage_usd=0,`+window+`_window_start=$3,generation_`+window+`_reset_at=$3,updated_at=$3
+ WHERE user_id=$1 AND platform=$2 AND deleted_at IS NULL`, userID, platform, newStart)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
@@ -424,24 +427,18 @@ func insertLimitsRow(ctx context.Context, client *dbent.Client, userID int64, re
 	return nil
 }
 
-// batchRows 是 BatchSnapshotUsage 每批最大行数（8 参/行 × 6000 + 1 ≈ 48001 参,低于 Postgres 65535 上限）。
+// batchRows 是 BatchSnapshotUsage 每批最大行数（10 参/行 × 6000 + 1 = 60001 参,低于 Postgres 65535 上限）。
 const batchRows = 6000
 
-// BatchSnapshotUsage 用一条多行 UPDATE ... FROM (VALUES ...) 把整批 usage 以绝对值覆盖写入既有活跃行（非累加）。
-// 每批最多 batchRows 行；$1=now 共用；每行 8 个 per-row 参（user_id, platform, 3×usage, 3×window_start）。
-// 只命中 deleted_at IS NULL 的既有行：行不存在或已软删的 (user, platform) 直接跳过，不建行。
-//
-// 注意:snapshots 超过 batchRows 会分多条 SQL 执行且【非单事务】——若某子批失败,
-// 先前子批已写入无法回滚。调用方(flusher)应保证单次 batchSize ≤ batchRows
-// (默认 flush_batch_size=1000 < 6000,安全)。
-// 另注:启用 flusher 后,本绝对值覆盖与 admin 直写 DB(ResetExpiredWindow/UpsertForUser)存在覆盖竞态,
-// 详见 service/user_platform_quota_flusher.go 中 flushOneBatch 的"已知竞态"注释。
+// BatchSnapshotUsage keeps absolute ordinary usage while merging only Task
+// events newer than the snapshot's included cursor. Each bounded batch locks
+// quota rows before reading the event log in a new statement snapshot: a task
+// committed while waiting for the lock must not be overwritten by stale reads.
+// Larger inputs remain multiple independently committed batches.
 func (r *userPlatformQuotaRepository) BatchSnapshotUsage(ctx context.Context, snapshots []UserPlatformQuotaSnapshot, now time.Time) error {
 	if len(snapshots) == 0 {
 		return nil
 	}
-
-	client := clientFromContext(ctx, r.client)
 
 	for start := 0; start < len(snapshots); start += batchRows {
 		end := start + batchRows
@@ -451,40 +448,67 @@ func (r *userPlatformQuotaRepository) BatchSnapshotUsage(ctx context.Context, sn
 		batch := snapshots[start:end]
 
 		var sb strings.Builder
-		_, _ = sb.WriteString(
-			"UPDATE user_platform_quotas AS q SET" +
-				"  daily_usage_usd      = v.daily_usage_usd," +
-				"  weekly_usage_usd     = v.weekly_usage_usd," +
-				"  monthly_usage_usd    = v.monthly_usage_usd," +
-				"  daily_window_start   = v.daily_window_start," +
-				"  weekly_window_start  = v.weekly_window_start," +
-				"  monthly_window_start = v.monthly_window_start," +
-				"  updated_at           = $1" +
-				" FROM (VALUES ")
-
-		// $1 = now（共用）；每行 8 个 per-row 参，从 $2 起连续编号。
-		// VALUES 里的占位符显式转型，避免 Postgres 对多行 VALUES 推断不出参数类型。
+		_, _ = sb.WriteString("(VALUES ")
+		// $1 = now; ten typed parameters per row stay below PostgreSQL's
+		// parameter limit for the existing 6000-row maximum batch.
 		args := []any{now}
 		for i, s := range batch {
 			if i > 0 {
 				_, _ = sb.WriteString(",")
 			}
 			b := len(args) // 当前 per-row 第一个参数的 0-based 索引，实际占位符 = b+1
-			fmt.Fprintf(&sb, "($%d::bigint,$%d::varchar,$%d::numeric,$%d::numeric,$%d::numeric,$%d::timestamptz,$%d::timestamptz,$%d::timestamptz)",
-				b+1, b+2, b+3, b+4, b+5, b+6, b+7, b+8)
+			fmt.Fprintf(&sb, "($%d::bigint,$%d::varchar,$%d::numeric,$%d::numeric,$%d::numeric,$%d::timestamptz,$%d::timestamptz,$%d::timestamptz,$%d::bigint,$%d::bigint)",
+				b+1, b+2, b+3, b+4, b+5, b+6, b+7, b+8, b+9, b+10)
 			args = append(args,
 				s.UserID, s.Platform,
 				s.DailyUsageUSD, s.WeeklyUsageUSD, s.MonthlyUsageUSD,
 				s.DailyWindowStart, s.WeeklyWindowStart, s.MonthlyWindowStart,
+				s.QuotaID, s.GenerationCursor,
 			)
 		}
 
 		_, _ = sb.WriteString(
 			") AS v(user_id, platform, daily_usage_usd, weekly_usage_usd, monthly_usage_usd," +
-				" daily_window_start, weekly_window_start, monthly_window_start)" +
-				" WHERE q.user_id = v.user_id AND q.platform = v.platform AND q.deleted_at IS NULL")
-
-		if _, err := client.ExecContext(ctx, sb.String(), args...); err != nil {
+				" daily_window_start, weekly_window_start, monthly_window_start,quota_id,generation_cursor)")
+		values := sb.String()
+		if err := r.withTx(ctx, func(txCtx context.Context, client *dbent.Client) error {
+			join := `q.user_id=v.user_id AND q.platform=v.platform AND q.deleted_at IS NULL AND (v.quota_id=0 OR v.quota_id=q.id)`
+			rows, err := client.QueryContext(txCtx, `SELECT q.id FROM user_platform_quotas q JOIN `+values+` ON `+join+` WHERE $1::timestamptz IS NOT NULL ORDER BY q.id FOR UPDATE OF q`, args...)
+			if err != nil {
+				return err
+			}
+			for rows.Next() {
+				var id int64
+				if err := rows.Scan(&id); err != nil {
+					rows.Close()
+					return err
+				}
+			}
+			readErr := rows.Err()
+			rows.Close()
+			if readErr != nil {
+				return readErr
+			}
+			var set strings.Builder
+			set.WriteString("UPDATE user_platform_quotas q SET ")
+			for _, window := range []string{"daily", "weekly", "monthly"} {
+				// Redis stores starts at second precision. A manual reset marks
+				// the same precision boundary, including zero-usage snapshots.
+				condition := `basis.generation_` + window + `_reset_at IS NOT NULL AND v.` + window + `_window_start<date_trunc('second',basis.generation_` + window + `_reset_at)`
+				fmt.Fprintf(&set, `%[1]s_usage_usd=CASE WHEN %[2]s THEN q.%[1]s_usage_usd ELSE v.%[1]s_usage_usd+COALESCE(d.%[1]s,0) END,
+ %[1]s_window_start=CASE WHEN %[2]s THEN q.%[1]s_window_start ELSE v.%[1]s_window_start END,`, window, condition)
+			}
+			set.WriteString(`generation_cursor=GREATEST(q.generation_cursor,v.generation_cursor),updated_at=$1
+ FROM user_platform_quotas basis JOIN ` + values + ` ON basis.user_id=v.user_id AND basis.platform=v.platform
+ LEFT JOIN LATERAL(SELECT
+ SUM(e.amount) FILTER(WHERE e.created_at>=v.daily_window_start) AS daily,
+ SUM(e.amount) FILTER(WHERE e.created_at>=v.weekly_window_start) AS weekly,
+ SUM(e.amount) FILTER(WHERE e.created_at>=v.monthly_window_start) AS monthly
+ FROM sub2api_generation_quota_outbox e WHERE e.quota_id=basis.id AND e.id>v.generation_cursor AND e.id<=basis.generation_cursor) d ON true
+ WHERE q.id=basis.id AND q.deleted_at IS NULL AND (v.quota_id=0 OR v.quota_id=q.id) AND v.generation_cursor<=q.generation_cursor`)
+			_, err = client.ExecContext(txCtx, set.String(), args...)
+			return err
+		}); err != nil {
 			return err
 		}
 	}

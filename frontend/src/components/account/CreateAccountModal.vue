@@ -1551,11 +1551,11 @@
           :plan="currentOpenCodeOrCNMode()"
         />
         <div>
-          <label class="input-label">{{ t('admin.accounts.apiKeyRequired') }}</label>
+          <label class="input-label">{{ t(newAPIPluginField?.requiresLogin ? 'admin.plugins.credential.keyOptional' : 'admin.accounts.apiKeyRequired') }}</label>
           <input
             v-model="apiKeyValue"
             type="password"
-            required
+            :required="!newAPIPluginField?.requiresLogin"
             class="input font-mono"
             :placeholder="apiKeyValuePlaceholder"
           />
@@ -6149,7 +6149,7 @@ const handleSubmit = async () => {
   }
 
   // For apikey type, create directly
-  if (!apiKeyValue.value.trim()) {
+  if (!apiKeyValue.value.trim() && !newAPIPluginField.value?.requiresLogin) {
     appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
     return
   }

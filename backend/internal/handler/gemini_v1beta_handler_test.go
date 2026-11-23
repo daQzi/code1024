@@ -288,3 +288,15 @@ func TestGeminiV1BetaGetModel_CompositeAntigravityRoute(t *testing.T) {
 		require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
 	})
 }
+
+func TestParseGeminiModelActionWithModifiers(t *testing.T) {
+	model, action, err := parseGeminiModelAction("gemini-2.5-pro@thinking:2048@temperature:0.2:generateContent")
+	require.NoError(t, err)
+	require.Equal(t, "gemini-2.5-pro@thinking:2048@temperature:0.2", model)
+	require.Equal(t, "generateContent", action)
+
+	model, action, err = parseGeminiModelAction("gemini-3-pro@effort:low:streamGenerateContent")
+	require.NoError(t, err)
+	require.Equal(t, "gemini-3-pro@effort:low", model)
+	require.Equal(t, "streamGenerateContent", action)
+}

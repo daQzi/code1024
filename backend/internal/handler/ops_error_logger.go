@@ -542,6 +542,7 @@ type opsCaptureWriterState struct {
 	sseCapturing   bool
 	terminalError  parsedOpsError
 	terminalFound  bool
+	deliveryFailed bool
 	ctx            *gin.Context
 }
 
@@ -590,6 +591,7 @@ func acquireOpsCaptureWriterFromPool(pool opsCaptureWriterStatePool, rw gin.Resp
 	state.sseCapturing = false
 	state.terminalError = parsedOpsError{}
 	state.terminalFound = false
+	state.deliveryFailed = false
 	state.ctx = nil
 	generation := state.generation
 	state.mu.Unlock()
@@ -818,7 +820,9 @@ func (w *opsCaptureWriter) Write(b []byte) (int, error) {
 	}
 	state.mu.Unlock()
 	defer finishDelegatedCall(state)
-	return rw.Write(b)
+	n, err := rw.Write(b)
+	w.observeDelivery(state, n, len(b), err)
+	return n, err
 }
 
 func (w *opsCaptureWriter) WriteString(s string) (int, error) {
@@ -831,7 +835,32 @@ func (w *opsCaptureWriter) WriteString(s string) (int, error) {
 	}
 	state.mu.Unlock()
 	defer finishDelegatedCall(state)
-	return rw.WriteString(s)
+	n, err := rw.WriteString(s)
+	w.observeDelivery(state, n, len(s), err)
+	return n, err
+}
+
+func (w *opsCaptureWriter) observeDelivery(state *opsCaptureWriterState, written, expected int, err error) {
+	if err == nil && written == expected {
+		return
+	}
+	state.mu.Lock()
+	if state.generation == w.generation {
+		state.deliveryFailed = true
+	}
+	state.mu.Unlock()
+}
+
+func (w *opsCaptureWriter) deliveryFailed() bool {
+	if w == nil {
+		return false
+	}
+	state, _ := w.lockActive()
+	if state == nil {
+		return true
+	}
+	defer state.mu.RUnlock()
+	return state.deliveryFailed
 }
 
 var _ gin.ResponseWriter = (*opsCaptureWriter)(nil)
@@ -1074,8 +1103,12 @@ func (state *opsCaptureWriterState) shouldCapture() bool {
 // Notes:
 // - It buffers response bodies only for status >= 400 or terminal SSE frames.
 // - Streaming errors after the response has started (SSE) may still need explicit logging.
-func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
+func OpsErrorLoggerMiddleware(ops *service.OpsService, performance ...relayPerformanceSink) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		started := time.Now()
+		if len(performance) > 0 && performance[0] != nil {
+			c.Set(relayPerformanceSinkKey, performance[0])
+		}
 		originalWriter := c.Writer
 		w := acquireOpsCaptureWriter(originalWriter)
 		w.setContext(c)
@@ -1090,6 +1123,9 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		c.Writer = w
 		c.Next()
 		w.finalizeCapture()
+		if len(performance) > 0 {
+			recordFinalRelayPerformance(c, w, performance[0], started)
+		}
 
 		if _, rejected := middleware2.GetIngressRejectReason(c); rejected {
 			return

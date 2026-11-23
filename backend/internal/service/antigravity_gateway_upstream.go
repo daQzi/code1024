@@ -51,6 +51,11 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 	if sanitized, changed := sanitizeAnthropicBodyForBetaTokens(body, clientBeta); changed {
 		body = sanitized
 	}
+	policy, err := nativeProtocolRequestOutbound(ctx, account, body, true)
+	if err != nil {
+		return nil, err
+	}
+	body = policy.Body
 
 	// 创建请求
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, upstreamURL, bytes.NewReader(body))
@@ -70,6 +75,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 	if v := clientBeta; v != "" {
 		req.Header.Set("anthropic-beta", v)
 	}
+	applyNativeProtocolRequestHeaders(req, policy.Headers)
 
 	// 代理 URL
 	proxyURL := ""

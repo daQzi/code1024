@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/newapi/builtin"
-	"github.com/Wei-Shaw/sub2api/internal/newapi/jsplugin"
-	"github.com/Wei-Shaw/sub2api/internal/newapi/runner"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/builtin"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/jsplugin"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/runner"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 )
@@ -103,6 +103,30 @@ func TestGenerationLocalPostgresAtomicFundingAndRecovery(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, service.GenerationSubmitting, claimed.Status)
 	require.Equal(t, task.PublicFields, claimed.PublicFields)
+	logs := repo.(service.TaskLogRepository)
+	items, total, err := logs.ListTaskLogs(ctx, service.TaskLogFilter{UserID: user, Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	require.EqualValues(t, 1, total)
+	require.Len(t, items, 1)
+	require.Equal(t, id, items[0].ID)
+	require.Equal(t, "generation-fixture", items[0].GroupName)
+	detail, err := logs.GetTaskLog(ctx, id, user)
+	require.NoError(t, err)
+	require.Equal(t, task.PublicFields, detail.Fields)
+	require.NotEmpty(t, detail.Events)
+	_, err = logs.GetTaskLog(ctx, id, user+1)
+	require.ErrorIs(t, err, service.ErrGenerationTaskNotFound)
+	for _, filter := range []service.TaskLogFilter{
+		{UserID: user + 1}, {UserID: user, Status: "succeeded"}, {UserID: user, Model: "other"}, {UserID: user, PluginKey: "other"}, {UserID: user, AccountID: account + 1}, {UserID: user, GroupID: group + 1},
+	} {
+		filter.Page, filter.PageSize = 1, 20
+		items, total, err := logs.ListTaskLogs(ctx, filter)
+		require.NoError(t, err)
+		require.Zero(t, total)
+		require.Empty(t, items)
+	}
+	// All migrations, including task log indexes, must remain idempotent.
+	require.NoError(t, ApplyMigrations(ctx, db))
 	// A crashed submit cannot be blindly repeated by another replica.
 	_, err = db.Exec(`UPDATE sub2api_generation_tasks SET lease_until=NOW()-INTERVAL '1 second' WHERE id=$1`, id)
 	require.NoError(t, err)

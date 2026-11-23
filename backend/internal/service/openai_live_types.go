@@ -40,6 +40,7 @@ type LiveCallRequest struct {
 }
 
 type LiveCallIdentity struct {
+	PublicModel     string
 	APIKeyID        int64
 	UserID          int64
 	GroupID         *int64
@@ -50,6 +51,7 @@ type LiveCallIdentity struct {
 }
 
 type LiveCallRecord struct {
+	PublicModel     string
 	CallID          string
 	CallHash        string
 	AccountID       int64

@@ -19,21 +19,27 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/typesafe"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
+	contract "github.com/Wei-Shaw/sub2api/newapi-engine/contract"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 )
 
 type Account struct {
-	ID                      int64
-	Name                    string
-	Notes                   *string
-	Platform                string
-	Type                    string
-	Credentials             map[string]any
-	Extra                   map[string]any
-	ProxyID                 *int64
-	ProxyFallbackOriginID   *int64
-	ProxyFallbackOriginName *string // 仅展示用
-	Concurrency             int
-	Priority                int
+	// Per-request decrypted plugin credential; never serialized or persisted
+	// in account snapshots, admin DTOs or scheduler caches.
+	newAPIProviderCredential string
+	newAPITaskJWTAuth        *newAPITaskJWTAuth
+	ID                       int64
+	Name                     string
+	Notes                    *string
+	Platform                 string
+	Type                     string
+	Credentials              map[string]any
+	Extra                    map[string]any
+	ProxyID                  *int64
+	ProxyFallbackOriginID    *int64
+	ProxyFallbackOriginName  *string // 仅展示用
+	Concurrency              int
+	Priority                 int
 	// RateMultiplier 账号计费倍率（>=0，允许 0 表示该账号计费为 0）。
 	// 使用指针用于兼容旧版本调度缓存（Redis）中缺字段的情况：nil 表示按 1.0 处理。
 	RateMultiplier     *float64
@@ -94,6 +100,7 @@ const openAILongContextBillingEnabledKey = "openai_long_context_billing_enabled"
 
 const (
 	OpenAIEndpointCapabilityChatCompletions OpenAIEndpointCapability = "chat_completions"
+	OpenAIEndpointCapabilityMessages        OpenAIEndpointCapability = "messages"
 	OpenAIEndpointCapabilityEmbeddings      OpenAIEndpointCapability = "embeddings"
 	OpenAIEndpointCapabilityAlphaSearch     OpenAIEndpointCapability = "alpha_search"
 	OpenAIEndpointCapabilityLive            OpenAIEndpointCapability = "live"
@@ -980,6 +987,12 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 }
 
 func (a *Account) isModelMappingSupported(requestedModel string) bool {
+	// Plugin routes own their protocol. Native passthrough switches must not
+	// widen a plugin account's explicit model allowlist.
+	if a.HasNewAPIPlugin() {
+		mapping := a.GetModelMapping()
+		return len(mapping) == 0 || mappingSupportsRequestedModel(mapping, strings.TrimSpace(requestedModel)) || len(a.newAPIProviderBinding().Routes) > 0 && mappingSupportsRequestedModel(mapping, modelmodifier.Base(requestedModel))
+	}
 	// 透传模式仅替换认证、模型语义完全交由上游决定，因此放行所有模型。
 	// 该短路必须在 model_mapping 判定之前：账号从"白名单模式"切换到透传后，
 	// credentials 里常残留旧的非空 model_mapping，若不在此放行，透传账号会被
@@ -991,15 +1004,18 @@ func (a *Account) isModelMappingSupported(requestedModel string) bool {
 		// Explicit opt-in filters candidates by source keys only. Forward still
 		// ignores mapping targets and preserves the passthrough request body.
 		mapping := a.GetModelMapping()
-		return len(mapping) == 0 || mappingSupportsRequestedModel(mapping, strings.TrimSpace(requestedModel))
+		trimmed := strings.TrimSpace(requestedModel)
+		base := modelmodifier.Base(trimmed)
+		return len(mapping) == 0 || mappingSupportsRequestedModel(mapping, trimmed) || (base != trimmed && mappingSupportsRequestedModel(mapping, base))
 	}
 	mapping := a.GetModelMapping()
 	if len(mapping) == 0 {
+		base := modelmodifier.Base(requestedModel)
 		if a.IsOpenAIOAuth() {
-			return isOpenAIOAuthServableModel(requestedModel)
+			return isOpenAIOAuthServableModel(base)
 		}
 		if a.Platform == PlatformDeepseek {
-			return isDeepseekServableModel(requestedModel)
+			return isDeepseekServableModel(base)
 		}
 		return true // 无映射 = 允许所有
 	}
@@ -1007,7 +1023,19 @@ func (a *Account) isModelMappingSupported(requestedModel string) bool {
 		return true
 	}
 	normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
-	return normalized != requestedModel && mappingSupportsRequestedModel(mapping, normalized)
+	if normalized != requestedModel && mappingSupportsRequestedModel(mapping, normalized) {
+		return true
+	}
+	if base := modelmodifier.Base(requestedModel); base != requestedModel {
+		if mappingSupportsRequestedModel(mapping, base) {
+			return true
+		}
+		normalizedBase := normalizeRequestedModelForLookup(a.Platform, base)
+		if normalizedBase != base && mappingSupportsRequestedModel(mapping, normalizedBase) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetMappedModel 获取映射后的模型名（支持通配符，最长优先匹配）
@@ -1031,6 +1059,17 @@ func (a *Account) ResolveMappedModel(requestedModel string) (mappedModel string,
 	if normalized != requestedModel {
 		if mappedModel, matched := resolveRequestedModelInMapping(mapping, normalized); matched {
 			return mappedModel, true
+		}
+	}
+	if base := modelmodifier.Base(requestedModel); base != requestedModel {
+		if mappedModel, matched := resolveRequestedModelInMapping(mapping, base); matched {
+			return mappedModel, true
+		}
+		normalizedBase := normalizeRequestedModelForLookup(a.Platform, base)
+		if normalizedBase != base {
+			if mappedModel, matched := resolveRequestedModelInMapping(mapping, normalizedBase); matched {
+				return mappedModel, true
+			}
 		}
 	}
 	return requestedModel, false
@@ -1938,9 +1977,66 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 		return false
 	}
 	if a.HasNewAPIPlugin() {
-		return capability == OpenAIEndpointCapability("plugin_task") && a.NewAPIPluginVersionID() > 0 && a.Type == AccountTypeAPIKey
+		if a.NewAPIPluginVersionID() <= 0 || a.Type != AccountTypeAPIKey {
+			return false
+		}
+		if capability == OpenAIEndpointCapability("plugin_task") {
+			var models []string
+			raw, _ := json.Marshal(a.Credentials[newAPIPluginVideoModelsKey])
+			_ = json.Unmarshal(raw, &models)
+			return len(models) > 0
+		}
+		if capability == OpenAIEndpointCapability("plugin_suno_task") {
+			var models []string
+			raw, _ := json.Marshal(a.Credentials[newAPIPluginSunoModelsKey])
+			return json.Unmarshal(raw, &models) == nil && len(models) > 0
+		}
+		if capability == OpenAIEndpointCapabilityPluginGenericTask {
+			var models []string
+			raw, _ := json.Marshal(a.Credentials[newAPIPluginGenericTaskModelsKey])
+			return json.Unmarshal(raw, &models) == nil && len(models) > 0
+		}
+		if capability == OpenAIEndpointCapabilityPluginResponsesTask {
+			return len(a.NewAPIResponsesTaskBinding().Models) > 0
+		}
+		if capability == OpenAIEndpointCapabilityPluginImageTask {
+			var models []string
+			raw, _ := json.Marshal(a.Credentials[newAPIPluginImageTaskKey])
+			return json.Unmarshal(raw, &models) == nil && len(models) > 0
+		}
+		if capability == OpenAIEndpointCapabilityPluginNativeRoutes {
+			return len(a.NewAPINativeRoutesBinding().Routes) > 0
+		}
+		if capability == OpenAIEndpointCapabilityPluginProviderGemini {
+			return slices.ContainsFunc(a.newAPIProviderBinding().Routes, func(r contract.AdvancedCustomRoute) bool {
+				_, _, gemini := providerGeminiPath(r.IncomingPath)
+				return gemini && newAPIProviderRouteSupported(r)
+			})
+		}
+		path := ""
+		switch capability {
+		case OpenAIEndpointCapabilityChatCompletions:
+			path = newAPIProviderChat
+		case OpenAIEndpointCapabilityMessages:
+			path = newAPIProviderMessages
+		case OpenAIEndpointCapabilityResponses:
+			path = newAPIProviderResponses
+		case OpenAIEndpointCapabilityEmbeddings:
+			path = newAPIProviderEmbeddings
+		case OpenAIEndpointCapability("plugin_provider_audio_transcriptions"):
+			path = newAPIProviderAudioTranscriptions
+		case OpenAIEndpointCapability("plugin_provider_audio_translations"):
+			path = newAPIProviderAudioTranslations
+		case OpenAIEndpointCapability("plugin_provider_audio_speech"):
+			path = newAPIProviderAudioSpeech
+		default:
+			return false
+		}
+		return slices.ContainsFunc(a.newAPIProviderBinding().Routes, func(r contract.AdvancedCustomRoute) bool {
+			return r.IncomingPath == path && newAPIProviderRouteSupported(r)
+		})
 	}
-	if capability == OpenAIEndpointCapability("plugin_task") {
+	if strings.HasPrefix(string(capability), "plugin_") {
 		return false
 	}
 	if capability == OpenAIEndpointCapabilitySeedance {
@@ -1956,7 +2052,7 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 	}
 	if a.IsGrok() {
 		switch capability {
-		case OpenAIEndpointCapabilityChatCompletions:
+		case OpenAIEndpointCapabilityChatCompletions, OpenAIEndpointCapabilityMessages:
 			return true
 		case OpenAIEndpointCapabilityGrokMediaGeneration:
 			eligible, reason := a.GrokMediaGenerationEligibility()
@@ -1971,6 +2067,8 @@ func (a *Account) SupportsOpenAIEndpointCapability(capability OpenAIEndpointCapa
 	}
 	switch capability {
 	case OpenAIEndpointCapabilityChatCompletions:
+	case OpenAIEndpointCapabilityMessages:
+		capability = OpenAIEndpointCapabilityChatCompletions
 	case OpenAIEndpointCapabilityLive:
 		return a.Platform == PlatformOpenAI &&
 			a.Type == AccountTypeOAuth &&

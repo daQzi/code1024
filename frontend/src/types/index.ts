@@ -1823,6 +1823,19 @@ export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2' | 'cyber'
 export type ImageSizeSource = 'output' | 'input' | 'default' | 'legacy'
 export type ImageSizeBreakdown = Record<string, number>
 
+export interface ProviderToolBilling {
+  schema_version: 1
+  rate_multiplier: number
+  total_usd: number
+  actual_usd: number
+  items: Array<{
+    name: string
+    count: number
+    price_per_1k?: number
+    cost_usd: number
+  }>
+}
+
 export interface UsageLog {
   id: number
   user_id: number
@@ -1853,6 +1866,7 @@ export interface UsageLog {
   cache_read_cost: number
   total_cost: number
   actual_cost: number
+  provider_tool_billing?: ProviderToolBilling | null
   rate_multiplier: number
   long_context_billing_applied: boolean
   billing_type: number

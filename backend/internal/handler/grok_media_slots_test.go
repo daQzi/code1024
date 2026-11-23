@@ -120,11 +120,13 @@ func (s *grokMediaSlotsCache) assertReleased(t *testing.T) {
 
 type grokMediaSlotBindings struct {
 	testutil.StubGatewayCache
-	owner   int64
-	writes  int
-	key     string
-	billed  map[string]bool
-	pending map[string][]byte
+	owner                           int64
+	writes                          int
+	key                             string
+	billed                          map[string]bool
+	pending                         map[string][]byte
+	lookupErr, pendingErr, claimErr error
+	claims                          int
 }
 
 func (s *grokMediaSlotBindings) SetGrokVideoPendingBilling(_ context.Context, key string, body []byte, _ time.Duration) error {
@@ -135,10 +137,13 @@ func (s *grokMediaSlotBindings) SetGrokVideoPendingBilling(_ context.Context, ke
 	return nil
 }
 func (s *grokMediaSlotBindings) GetGrokVideoPendingBilling(_ context.Context, key string) ([]byte, error) {
-	return s.pending[key], nil
+	return s.pending[key], s.pendingErr
 }
 
 func (s *grokMediaSlotBindings) GetSessionAccountID(_ context.Context, groupID int64, key string) (int64, error) {
+	if s.lookupErr != nil {
+		return 0, s.lookupErr
+	}
 	if groupID != 24 || key != s.key {
 		return 0, service.ErrStickySessionNotFound
 	}
@@ -159,6 +164,10 @@ func (s *grokMediaSlotBindings) DeleteSessionAccountID(context.Context, int64, s
 }
 
 func (s *grokMediaSlotBindings) ClaimGrokVideoBilled(_ context.Context, key string, _ time.Duration) (bool, error) {
+	s.claims++
+	if s.claimErr != nil {
+		return false, s.claimErr
+	}
 	if s.billed == nil {
 		s.billed = make(map[string]bool)
 	}
@@ -167,6 +176,11 @@ func (s *grokMediaSlotBindings) ClaimGrokVideoBilled(_ context.Context, key stri
 	}
 	s.billed[key] = true
 	return true, nil
+}
+
+func (s *grokMediaSlotBindings) ReleaseGrokVideoBilled(_ context.Context, key string) error {
+	delete(s.billed, key)
+	return nil
 }
 
 type grokMediaSlotRepo struct {
@@ -199,6 +213,10 @@ func (p grokMediaSlotProber) ProbeMediaEligibility(ctx context.Context, id int64
 }
 
 func newGrokMediaSlotHandler(t *testing.T, oauth, mismatch bool, platforms ...string) (*OpenAIGatewayHandler, *grokMediaSlotsCache, *grokMediaSlotBindings, *grokMediaSlotUpstream) {
+	return newGrokMediaSlotHandlerWithBilling(t, oauth, mismatch, nil, platforms...)
+}
+
+func newGrokMediaSlotHandlerWithBilling(t *testing.T, oauth, mismatch bool, billingService *service.BillingService, platforms ...string) (*OpenAIGatewayHandler, *grokMediaSlotsCache, *grokMediaSlotBindings, *grokMediaSlotUpstream) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	accounts := make([]service.Account, 3)
@@ -234,7 +252,11 @@ func newGrokMediaSlotHandler(t *testing.T, oauth, mismatch bool, platforms ...st
 		_, err := provider.GetAccessToken(context.Background(), &accounts[1])
 		require.NoError(t, err)
 	}
-	gateway := service.NewOpenAIGatewayService(repo, nil, nil, nil, nil, nil, bindings, cfg, nil, concurrency, nil, nil, nil, upstream, nil, nil, provider, nil, nil, nil, nil, nil)
+	var resolver *service.ModelPricingResolver
+	if billingService != nil {
+		resolver = service.NewModelPricingResolver(nil, billingService)
+	}
+	gateway := service.NewOpenAIGatewayService(repo, nil, nil, nil, nil, nil, bindings, cfg, nil, concurrency, billingService, nil, nil, upstream, nil, nil, provider, resolver, nil, nil, nil, nil)
 	groupID := int64(24)
 	require.NoError(t, gateway.BindGrokMediaVideoRequestAccount(context.Background(), &groupID, "task", 10, 20, 1))
 	bindings.writes = 0
@@ -410,7 +432,7 @@ func TestGrokMediaVideoCompletionStillClaimsBillingOnce(t *testing.T) {
 	result := &service.OpenAIForwardResult{ResponseID: "task", Model: "grok-imagine-video",
 		VideoCount: 1, VideoDurationSeconds: 6}
 	for i := range 20 {
-		bill := prepareGrokVideoCompletionBilling(c.Request.Context(), h, zap.NewNop(), key, subject, "task", result)
+		bill := prepareGrokVideoCompletionBilling(c.Request.Context(), h, zap.NewNop(), key, subject, 1, nil, "task", result)
 		if i == 0 {
 			require.NotNil(t, bill)
 			require.Equal(t, service.StableGrokVideoBillingRequestID("task"), bill.RequestID)

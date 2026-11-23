@@ -839,7 +839,7 @@ func findHandlerRefresherStarted(router *gin.Engine) <-chan struct{} {
 	return value.(chan struct{})
 }
 
-func newGrokCredentialFailoverHandler(t *testing.T, mode string) (*OpenAIGatewayHandler, *grokCredentialHandlerRepo, *grokCredentialHandlerUpstream, *gin.Engine, func()) {
+func newGrokCredentialFailoverHandler(t *testing.T, mode string, performance ...relayPerformanceSink) (*OpenAIGatewayHandler, *grokCredentialHandlerRepo, *grokCredentialHandlerUpstream, *gin.Engine, func()) {
 	t.Helper()
 	groupID := int64(901)
 	accounts := []service.Account{
@@ -940,6 +940,9 @@ func newGrokCredentialFailoverHandler(t *testing.T, mode string) (*OpenAIGateway
 		Group: &service.Group{ID: groupID, Platform: service.PlatformGrok, Status: service.StatusActive, AllowImageGeneration: true},
 	}
 	router := gin.New()
+	if len(performance) > 0 {
+		router.Use(OpsErrorLoggerMiddleware(nil, performance...))
+	}
 	router.Use(func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyAPIKey), apiKey)
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: apiKey.User.ID, Concurrency: 1})

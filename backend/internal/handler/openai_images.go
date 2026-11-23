@@ -11,6 +11,7 @@ import (
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -68,7 +69,21 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 		setOpsRequestContext(c, "", false)
 	}
 
-	parsed, err := h.gatewayService.ParseOpenAIImagesRequest(c, body)
+	imagesEndpointPath := "/v1/images/generations"
+	if strings.Contains(c.Request.URL.Path, "/images/edits") {
+		imagesEndpointPath = "/v1/images/edits"
+	}
+	rawModel := strings.TrimSpace(requestmodel.FromBodyForRoute(c.FullPath(), c.GetHeader("Content-Type"), body))
+	if rawModel != "" && h.TryPluginTaskImage(c, apiKey, subject, rawModel, imagesEndpointPath, body, reqLog) {
+		return
+	}
+	allowPluginModel := rawModel != "" && h.gatewayService.HasNewAPIProviderImageModel(c.Request.Context(), apiKey.GroupID, imagesEndpointPath, rawModel)
+	var parsed *service.OpenAIImagesRequest
+	if allowPluginModel {
+		parsed, err = h.gatewayService.ParseOpenAIImagesRequestForPlugin(c, body)
+	} else {
+		parsed, err = h.gatewayService.ParseOpenAIImagesRequest(c, body)
+	}
 	if err != nil {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 		return
@@ -156,7 +171,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	defer inflightDone()
 
 	sessionHash := h.gatewayService.GenerateExplicitSessionHash(c, body)
-	requestCtx := service.WithOpenAIImageSizeRouting(service.WithOpenAIImagesEndpoint(service.WithOpenAIImageGenerationIntent(c.Request.Context())), parsed.Size)
+	requestCtx := service.WithNewAPIProviderRouting(service.WithOpenAIImageSizeRouting(service.WithOpenAIImagesEndpoint(service.WithOpenAIImageGenerationIntent(c.Request.Context())), parsed.Size), parsed.Endpoint)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
@@ -267,6 +282,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			}()
 			return h.gatewayService.ForwardImages(requestCtx, c, account, body, parsed, channelMapping.MappedModel)
 		}()
+		setOpenAIForwardPerformance(c, result, err)
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
 		upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
 		responseLatencyMs := forwardDurationMs

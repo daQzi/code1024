@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	pluginTask "github.com/Wei-Shaw/sub2api/internal/newapi/task"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	pluginTask "github.com/Wei-Shaw/sub2api/newapi-engine/task"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )

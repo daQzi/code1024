@@ -38,7 +38,7 @@ const loading = ref(true)
 const loadFailed = ref(false)
 const modelId = computed(() => typeof route.params.modelId === 'string' ? route.params.modelId : '')
 
-watch([modelId, () => authStore.isAuthenticated], async ([id], _, onCleanup) => {
+watch([modelId, () => authStore.isAuthenticated, () => modelId.value ? route.query.group_id : undefined], async ([id], _, onCleanup) => {
   const controller = new AbortController()
   onCleanup(() => controller.abort())
   data.value = null
@@ -48,7 +48,7 @@ watch([modelId, () => authStore.isAuthenticated], async ([id], _, onCleanup) => 
   void appStore.fetchPublicSettings()
   try {
     const result = id
-      ? await getModelPlazaModel(id, { signal: controller.signal })
+      ? await getModelPlazaModel(id, { signal: controller.signal, groupId: Number(route.query.group_id) || undefined })
       : await getModelPlaza({ signal: controller.signal })
     if (!controller.signal.aborted) data.value = result
   } catch {

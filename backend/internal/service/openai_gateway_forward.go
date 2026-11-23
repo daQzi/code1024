@@ -19,7 +19,41 @@ import (
 )
 
 // Forward forwards request to OpenAI API
-func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *OpenAIForwardResult, retErr error) {
+	if account.HasNewAPIPlugin() {
+		return s.forwardNewAPIProvider(ctx, c, account, body, newAPIProviderResponses, "")
+	}
+	clientModel := gjson.GetBytes(body, "model").String()
+	mappedForModifier := clientModel
+	if !account.IsOpenAIPassthroughEnabled() {
+		mappedForModifier = resolveOpenAIForwardModel(account, clientModel, "")
+	}
+	modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, body, clientModel, mappedForModifier, "openai_responses")
+	if modErr != nil {
+		writeNativeModelModifierError(c, "openai_responses")
+		return nil, modErr
+	}
+	if modApplied {
+		ctx, body = modCtx, modBody
+	}
+	reportModel := resolveOpenAIForwardModel(account, gjson.GetBytes(body, "model").String(), "")
+	if modApplied {
+		reportModel = modSpec.Base
+	}
+	report := beginRelayReportAttempt(ctx, account, reportModel, false)
+	defer func() { report.result(result) }()
+	return s.forwardNativeWithRequestPlugins(ctx, c, account, body, newAPIProviderResponses, "", func(ctx context.Context, body []byte) (*OpenAIForwardResult, error) {
+		return s.forwardNativeWithReply(ctx, c, account, body, "", func(child context.Context) (*OpenAIForwardResult, error) {
+			res, err := s.forwardNative(child, c, account, body)
+			if modApplied {
+				reconcileNativeOpenAIModifierResult(child, res, modSpec, clientModel, body, "openai_responses")
+			}
+			return res, err
+		})
+	})
+}
+
+func (s *OpenAIGatewayService) forwardNative(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
 	beginUpstreamResponseModelObservation(c)
 	ClearActualOpenAIUpstreamEndpoint(c)
 	if shouldForwardOpenAIResponsesViaRawChatCompletions(account) {
@@ -1432,6 +1466,11 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	// DeepSeek / Kimi 原生 Responses 端点为无状态实现：强制 store=false、清除
 	// previous_response_id，避免携带状态字段被上游拒绝。
 	body = normalizeDeepSeekResponsesRequestBody(account, body)
+	processed, err := s.nativeRequestPluginOutbound(ctx, account, newAPIProviderResponses, body)
+	if err != nil {
+		return nil, err
+	}
+	body = processed.Body
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -1545,6 +1584,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	applyOpenCodeUpstreamUserAgent(account, targetURL, req.Header)
 
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效；OAuth 路径 no-op）
+	applyNativeRequestPluginHeaders(req, processed.Headers)
 	account.ApplyHeaderOverrides(req.Header)
 	applyOpenCodeSessionHeader(c, account, targetURL, req.Header, body, openCodeSessionHintBody(promptCacheKey))
 	// x-codex-beta-features：按真实 Codex 的会话级行为补注（在账号级覆写之后，
