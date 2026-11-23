@@ -2,6 +2,7 @@
 package dto
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -720,6 +721,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		ActualCost:                l.ActualCost,
 		RateMultiplier:            l.RateMultiplier,
 		LongContextBillingApplied: l.LongContextBillingApplied,
+		ProviderToolBilling:       append(json.RawMessage(nil), l.ProviderToolBilling...),
 		BillingType:               l.BillingType,
 		RequestType:               requestType.String(),
 		Stream:                    stream,

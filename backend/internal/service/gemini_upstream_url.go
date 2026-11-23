@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 )
 
 // geminiAIStudioActions 是允许出现在上游 URL 里的 action 集合，与 ForwardNative
@@ -48,4 +50,30 @@ func buildGeminiAIStudioModelActionURL(baseURL, model, action string, stream boo
 // 让客户端拿到明确的 400，而不是等到构造上游请求时才报错。
 func IsSafeGeminiModelPathSegment(model string) bool {
 	return isSafeUpstreamPathSegment(strings.TrimSpace(model))
+}
+
+// IsSafeGeminiClientModelName validates the client-supplied Gemini model name
+// in /v1beta/models/{model}:{action}. It admits ordinary safe path segments as
+// well as @key:value modifier suffixes whose base model is a safe path segment
+// and whose full name contains no path/query/control delimiters. Upstream URL
+// construction still validates the stripped base with validateUpstreamPathSegment.
+func IsSafeGeminiClientModelName(model string) bool {
+	trimmed := strings.TrimSpace(model)
+	if isSafeUpstreamPathSegment(trimmed) {
+		return true
+	}
+	if trimmed == "" || len(trimmed) > 4096 {
+		return false
+	}
+	base := modelmodifier.Base(trimmed)
+	if base == trimmed || !isSafeUpstreamPathSegment(base) {
+		return false
+	}
+	for i := 0; i < len(trimmed); i++ {
+		b := trimmed[i]
+		if b <= 0x20 || b == 0x7f || b == '/' || b == '\\' || b == '?' || b == '#' || b == '%' {
+			return false
+		}
+	}
+	return true
 }

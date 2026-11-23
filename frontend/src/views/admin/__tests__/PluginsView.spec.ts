@@ -1,7 +1,7 @@
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import PluginsView from '../PluginsView.vue'
+import PluginsView from '@/components/admin/NativePluginsPanel.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import type { PluginUISession } from '@/api/admin'
 

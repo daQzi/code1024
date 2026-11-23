@@ -604,3 +604,25 @@ func TestAccountHandlerGetAvailableModels_TypeSafeOnlyReturnsJev(t *testing.T) {
 		require.Equal(t, "jev-latest", resp.Data[0].ID)
 	}
 }
+
+func TestAccountHandlerGetAvailableModels_PluginProviderUsesPublicMapping(t *testing.T) {
+	svc := &availableModelsAdminService{stubAdminService: newStubAdminService(), account: service.Account{
+		ID: 42, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Status: service.StatusActive,
+		Credentials: map[string]any{
+			service.NewAPIPluginRevisionKey: 91,
+			"newapi_plugin_provider":        map[string]any{"routes": []map[string]any{{"incoming_path": "/v1/chat/completions", "upstream_path": "/chat", "models": []string{"vendor-model"}}}, "models": []string{"vendor-model"}},
+			"model_mapping":                 map[string]any{"public-model": "vendor-model"},
+		},
+	}}
+	recorder := httptest.NewRecorder()
+	setupAvailableModelsRouter(svc).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/42/models", nil))
+	require.Equal(t, 200, recorder.Code)
+	var response struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	require.Len(t, response.Data, 1)
+	require.Equal(t, "public-model", response.Data[0].ID)
+}

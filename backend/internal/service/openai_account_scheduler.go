@@ -17,6 +17,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/jsplugin"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -1774,6 +1775,9 @@ func (s *defaultOpenAIAccountScheduler) isAccountRequestCompatibleReason(ctx con
 	if account == nil {
 		return false, "account_nil"
 	}
+	if account.HasNewAPIPlugin() && !account.supportsNewAPIPluginScope(ctx, req.RequestedModel) {
+		return false, "plugin_protocol_mismatch"
+	}
 	if source, ok := CompositeRouteSourceFromContext(ctx); ok && source == CompositeRouteSourceAccount {
 		if publicModel, modelOK := RequestedPublicModelFromContext(ctx); modelOK && !explicitModelMappingClaims(*account, publicModel) {
 			return false, "account_model_not_owned"
@@ -2541,6 +2545,12 @@ func (s *OpenAIGatewayService) isOpenAIAccountTransportCompatible(account *Accou
 		return false
 	}
 	if requiredTransport == OpenAIUpstreamTransportResponsesWebsocketV2Ingress {
+		if account.HasNewAPIPlugin() {
+			if s.cfg == nil || !s.cfg.Gateway.OpenAIWS.Enabled || !s.cfg.Gateway.OpenAIWS.APIKeyEnabled || s.cfg.Gateway.OpenAIWS.ForceHTTP || account.IsOpenAIWSForceHTTPEnabled() {
+				return false
+			}
+			return (jsplugin.Meta{Relay: account.newAPIProviderBinding().Routes}).ServesResponsesWebSocket("")
+		}
 		if s.cfg == nil || !s.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled {
 			return s.getOpenAIWSProtocolResolver().Resolve(account).Transport == OpenAIUpstreamTransportResponsesWebsocketV2
 		}
@@ -2558,6 +2568,12 @@ func (s *OpenAIGatewayService) isOpenAIAccountTransportCompatible(account *Accou
 func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(account *Account, model string, success bool, firstTokenMs *int, observedErr ...error) bool {
 	if account == nil {
 		return false
+	}
+	if !success && len(observedErr) > 0 {
+		var policy *RequestPluginFailure
+		if errors.As(observedErr[0], &policy) {
+			return false // Local processing cannot lower upstream account health.
+		}
 	}
 	accountID := account.ID
 	healthTripped := false
@@ -2584,6 +2600,10 @@ func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(account *Accoun
 // scheduler-result path, for example after semantic response bytes were sent.
 func (s *OpenAIGatewayService) ObserveOpenAIAccountHealthFailure(ctx context.Context, account *Account, observedErr error) bool {
 	if s == nil || s.rateLimitService == nil || account == nil || observedErr == nil {
+		return false
+	}
+	var policy *RequestPluginFailure
+	if errors.As(observedErr, &policy) {
 		return false
 	}
 	return s.rateLimitService.ObserveOpenAIAPIKeyHealthFailure(ctx, account, observedErr)

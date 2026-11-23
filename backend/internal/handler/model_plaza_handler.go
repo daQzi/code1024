@@ -1,8 +1,15 @@
 package handler
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
 
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -18,9 +25,13 @@ import (
 //   - 登录：非专属分组 + user_allowed_groups 授权或持有有效订阅的专属分组；
 //     若该用户开启了公开分组限制，则公开分组同样需要落在授权集合内。
 type ModelPlazaHandler struct {
-	plazaService   *service.ModelPlazaService
-	apiKeyService  *service.APIKeyService
-	settingService *service.SettingService
+	plazaService        *service.ModelPlazaService
+	apiKeyService       *service.APIKeyService
+	settingService      *service.SettingService
+	authService         *service.AuthService
+	notificationSlots   chan struct{}
+	notificationContext context.Context
+	notificationCancel  context.CancelFunc
 }
 
 // NewModelPlazaHandler 创建模型广场 handler。
@@ -29,11 +40,21 @@ func NewModelPlazaHandler(
 	apiKeyService *service.APIKeyService,
 	settingService *service.SettingService,
 ) *ModelPlazaHandler {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &ModelPlazaHandler{
-		plazaService:   plazaService,
-		apiKeyService:  apiKeyService,
-		settingService: settingService,
+		plazaService:        plazaService,
+		apiKeyService:       apiKeyService,
+		settingService:      settingService,
+		notificationSlots:   make(chan struct{}, 16),
+		notificationContext: ctx,
+		notificationCancel:  cancel,
 	}
+}
+
+func ProvideModelPlazaHandler(plaza *service.ModelPlazaService, keys *service.APIKeyService, settings *service.SettingService, auth *service.AuthService) *ModelPlazaHandler {
+	h := NewModelPlazaHandler(plaza, keys, settings)
+	h.authService = auth
+	return h
 }
 
 // modelPlazaOfficialPricing 官方参考价（USD per token，与计费目录同源）。
@@ -65,10 +86,14 @@ type modelPlazaTimePricing struct {
 
 // modelPlazaModel 广场模型条目：实收口径展示定价（白名单形态）+ 官方参考价。
 type modelPlazaModel struct {
-	Name            string                     `json:"name"`
-	Platform        string                     `json:"platform"`
-	Pricing         *userSupportedModelPricing `json:"pricing"`
-	OfficialPricing *modelPlazaOfficialPricing `json:"official_pricing"`
+	Capabilities      *service.PlazaCapabilities       `json:"capabilities,omitempty"`
+	Protocols         []string                         `json:"protocols,omitempty"`
+	GenerationPricing []service.GenerationDisplayPrice `json:"generation_pricing,omitempty"`
+	ID                string                           `json:"id"`
+	Name              string                           `json:"name"`
+	Platform          string                           `json:"platform"`
+	Pricing           *userSupportedModelPricing       `json:"pricing"`
+	OfficialPricing   *modelPlazaOfficialPricing       `json:"official_pricing"`
 	// LongContextBasis 多档时的计价基准："whole_request"（整单按档）| "marginal"（仅超出部分）。
 	LongContextBasis string `json:"long_context_basis,omitempty"`
 	// TimePricing 分时倍率时段，落在时段内的请求整单乘倍率；无分时省略。
@@ -109,48 +134,86 @@ type modelPlazaResponse struct {
 // Get 返回模型广场数据。
 // GET /api/v1/model-plaza
 func (h *ModelPlazaHandler) Get(c *gin.Context) {
-	if h.settingService == nil {
-		response.NotFound(c, "Model plaza is not enabled")
-		return
-	}
-	rt := h.settingService.GetModelPlazaRuntime(c.Request.Context())
-	if !rt.Enabled {
-		response.NotFound(c, "Model plaza is not enabled")
-		return
-	}
+	h.get(c, "", false)
+}
 
+// GetModel serves a stable, shareable model detail resource. It uses exactly
+// the same visibility and personal-price rules as the catalog.
+func (h *ModelPlazaHandler) GetModel(c *gin.Context) {
+	h.get(c, c.Param("model_id"), false)
+}
+
+func (h *ModelPlazaHandler) GetPerformance(c *gin.Context) {
+	h.get(c, c.Param("model_id"), true)
+}
+
+func (h *ModelPlazaHandler) GetPerformanceSummaries(c *gin.Context) {
+	h.get(c, "", true)
+}
+
+func (h *ModelPlazaHandler) get(c *gin.Context, modelID string, performance bool) {
 	subject, authed := middleware.GetAuthSubjectFromContext(c)
-	if rt.RequireAuth && !authed {
-		response.Unauthorized(c, "Authentication required")
-		return
+	var userID int64
+	if authed {
+		userID = subject.UserID
 	}
-
-	groups, err := h.plazaService.ListGroups(c.Request.Context())
+	rt, visible, err := h.visibleScope(c.Request.Context(), userID, c.Query("group_id"), modelID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
-
-	// allowedGroups == nil 表示匿名；登录用户恒为非 nil（可能为空集合）。
-	var allowedGroups map[int64]struct{}
-	var restrictPublicGroups bool
 	var userRates map[int64]float64
-	if authed {
-		allowedGroups, restrictPublicGroups, err = h.apiKeyService.GetUserGroupVisibility(c.Request.Context(), subject.UserID)
+	if authed && !performance {
+		userRates, err = h.apiKeyService.GetUserGroupRates(c.Request.Context(), userID)
 		if err != nil {
-			// 可见性数据拿不到时不能静默降级成匿名视图（会错漏专属分组），直接报错。
-			response.ErrorFrom(c, err)
-			return
-		}
-		userRates, err = h.apiKeyService.GetUserGroupRates(c.Request.Context(), subject.UserID)
-		if err != nil {
-			// 专属倍率仅是展示增强，失败降级为分组默认倍率。
-			slog.Warn("model_plaza_user_rates_failed", "error", err, "user_id", subject.UserID)
+			slog.Warn("model_plaza_user_rates_failed", "error", err, "user_id", userID)
 			userRates = nil
 		}
 	}
 
-	visible := filterPlazaVisibleGroups(groups, allowedGroups, restrictPublicGroups)
+	// Prices and visibility may be personalized, even on an otherwise public
+	// route. Shared caches must never reuse one user's catalog for another.
+	c.Header("Cache-Control", "private, no-store")
+	if performance {
+		if modelID == "" {
+			ids := strings.Split(c.Query("ids"), ",")
+			if len(ids) > 100 {
+				response.BadRequest(c, "At most 100 model IDs are allowed")
+				return
+			}
+			requested := make(map[string]bool, len(ids))
+			for _, id := range ids {
+				if len(id) != 36 || !strings.HasPrefix(id, "mdl_") || strings.Trim(id[4:], "0123456789abcdef") != "" {
+					response.BadRequest(c, "Invalid model ID")
+					return
+				}
+				requested[id] = true
+			}
+			metrics, err := h.plazaService.PerformanceSummaries(c.Request.Context(), plazaSummaryScopes(visible, requested))
+			if err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+			response.Success(c, metrics)
+			return
+		}
+		if len(visible) == 0 {
+			response.NotFound(c, "Model not found")
+			return
+		}
+		model := visible[0].Models[0]
+		groupIDs := make([]int64, 0, len(visible))
+		for _, group := range visible {
+			groupIDs = append(groupIDs, group.ID)
+		}
+		metrics, err := h.plazaService.Performance(c.Request.Context(), model.Name, model.Platform, groupIDs)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		response.Success(c, metrics)
+		return
+	}
 
 	// 广场可匿名访问，分组文案随请求语言变化，提示中间缓存按语言区分。
 	// 追加而非覆盖：CORS 中间件已为具体来源写入 Vary: Origin。
@@ -160,6 +223,78 @@ func (h *ModelPlazaHandler) Get(c *gin.Context) {
 		Description: rt.Description,
 		Groups:      out,
 	})
+}
+
+func (h *ModelPlazaHandler) visibleScope(ctx context.Context, userID int64, rawGroup, modelID string) (service.ModelPlazaRuntime, []service.PlazaGroup, error) {
+	var rt service.ModelPlazaRuntime
+	if h.settingService == nil {
+		return rt, nil, infraerrors.NotFound("MODEL_PLAZA_DISABLED", "Model plaza is not enabled")
+	}
+	rt = h.settingService.GetModelPlazaRuntime(ctx)
+	if !rt.Enabled {
+		return rt, nil, infraerrors.NotFound("MODEL_PLAZA_DISABLED", "Model plaza is not enabled")
+	}
+	if rt.RequireAuth && userID == 0 {
+		return rt, nil, infraerrors.New(http.StatusUnauthorized, "AUTH_REQUIRED", "Authentication required")
+	}
+	groups, err := h.plazaService.ListGroups(ctx)
+	if err != nil {
+		return rt, nil, err
+	}
+	var allowed map[int64]struct{}
+	var restricted bool
+	if userID > 0 {
+		allowed, restricted, err = h.apiKeyService.GetUserGroupVisibility(ctx, userID)
+		if err != nil {
+			return rt, nil, err
+		}
+	}
+	visible := filterPlazaVisibleGroups(groups, allowed, restricted)
+	if rawGroup != "" {
+		groupID, err := strconv.ParseInt(rawGroup, 10, 64)
+		if err != nil || groupID <= 0 {
+			return rt, nil, infraerrors.BadRequest("INVALID_GROUP", "Invalid group ID")
+		}
+		selected := make([]service.PlazaGroup, 0, 1)
+		for _, group := range visible {
+			if group.ID == groupID {
+				selected = append(selected, group)
+				break
+			}
+		}
+		if len(selected) == 0 {
+			return rt, nil, infraerrors.NotFound("GROUP_NOT_FOUND", "Group not found")
+		}
+		visible = selected
+	}
+	if modelID != "" {
+		visible = filterPlazaModel(visible, modelID)
+		if len(visible) == 0 {
+			return rt, nil, infraerrors.NotFound("MODEL_NOT_FOUND", "Model not found")
+		}
+	}
+	return rt, visible, nil
+}
+
+func plazaSummaryScopes(visible []service.PlazaGroup, requested map[string]bool) []service.PlazaMetricsScope {
+	indices := map[string]int{}
+	scopes := make([]service.PlazaMetricsScope, 0, len(requested))
+	for _, group := range visible {
+		for _, model := range group.Models {
+			id := plazaModelID(model.Platform, model.Name)
+			if !requested[id] {
+				continue
+			}
+			index, exists := indices[id]
+			if !exists {
+				index = len(scopes)
+				indices[id] = index
+				scopes = append(scopes, service.PlazaMetricsScope{ID: id, Model: model.Name, Platform: model.Platform})
+			}
+			scopes[index].GroupIDs = append(scopes[index].GroupIDs, group.ID)
+		}
+	}
+	return scopes
 }
 
 // filterPlazaVisibleGroups 按登录态裁剪分组可见性。
@@ -203,12 +338,16 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 	for i := range g.Models {
 		m := &g.Models[i]
 		models = append(models, modelPlazaModel{
-			Name:             m.Name,
-			Platform:         m.Platform,
-			Pricing:          toUserPricing(m.Pricing),
-			OfficialPricing:  toModelPlazaOfficialPricing(m.OfficialPricing),
-			LongContextBasis: string(m.LongContextBasis),
-			TimePricing:      toModelPlazaTimePricing(m.TimePricing),
+			Protocols:         m.Protocols,
+			Capabilities:      m.Capabilities,
+			GenerationPricing: m.GenerationPricing,
+			ID:                plazaModelID(m.Platform, m.Name),
+			Name:              m.Name,
+			Platform:          m.Platform,
+			Pricing:           toUserPricing(m.Pricing),
+			OfficialPricing:   toModelPlazaOfficialPricing(m.OfficialPricing),
+			LongContextBasis:  string(m.LongContextBasis),
+			TimePricing:       toModelPlazaTimePricing(m.TimePricing),
 		})
 	}
 	dto := modelPlazaGroup{
@@ -234,6 +373,30 @@ func toModelPlazaGroupDTO(g *service.PlazaGroup, userRates map[int64]float64) mo
 		dto.UserRateMultiplier = &rate
 	}
 	return dto
+}
+
+// Hash the platform and the complete model ID rather than putting arbitrary
+// provider model paths (including slashes) in a route parameter.
+func plazaModelID(platform, model string) string {
+	digest := sha256.Sum256([]byte(platform + "\x00" + model))
+	return "mdl_" + hex.EncodeToString(digest[:16])
+}
+
+func filterPlazaModel(groups []service.PlazaGroup, modelID string) []service.PlazaGroup {
+	result := make([]service.PlazaGroup, 0, len(groups))
+	for _, group := range groups {
+		models := make([]service.PlazaModel, 0, 1)
+		for _, model := range group.Models {
+			if plazaModelID(model.Platform, model.Name) == modelID {
+				models = append(models, model)
+			}
+		}
+		if len(models) > 0 {
+			group.Models = models
+			result = append(result, group)
+		}
+	}
+	return result
 }
 
 // toModelPlazaTimePricing 转换分时倍率；nil 透传（JSON 省略）。

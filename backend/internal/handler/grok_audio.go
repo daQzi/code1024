@@ -49,6 +49,8 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	if strings.TrimSpace(model) == "" {
 		model = "grok-voice-latest"
 	}
+	setOpsRequestContext(c, model, true)
+	setOpsEndpointContext(c, "", int16(service.RequestTypeWSV2))
 	// 余额模式在途预留（与计费同口径估算；计费任务扣减余额缓存后才释放）。
 	inflightDone, inflightErr := reserveInflightBalance(c, h.billingCacheService, h.gatewayService, apiKey, subscription, service.InflightEstimateRequest{Model: model, Kind: service.InflightEstimateAudio, AudioMode: "realtime", AudioUnits: 1})
 	if inflightErr != nil {
@@ -134,6 +136,7 @@ func (h *OpenAIGatewayHandler) GrokRealtime(c *gin.Context) {
 	}
 	defer release()
 	defer func() { _ = upstream.Close() }()
+	setOpsSelectedAccount(c, selection.Account.ID, selection.Account.Platform)
 
 	conn, err := coderws.Accept(c.Writer, c.Request, &coderws.AcceptOptions{CompressionMode: coderws.CompressionContextTakeover})
 	if err != nil {
@@ -190,6 +193,12 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 	}
 	if !h.ensureResponsesDependencies(c, nil) {
 		return
+	}
+	if endpoint == "tts" || endpoint == "stt" {
+		// The native Voice API's public billing/model identity is its mode,
+		// not the text model used solely for account selection below.
+		setOpsRequestContext(c, endpoint, false)
+		setOpsEndpointContext(c, "", int16(service.RequestTypeSync))
 	}
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
@@ -279,6 +288,7 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 			return
 		}
 		account := selection.Account
+		setOpsSelectedAccount(c, account.ID, account.Platform)
 		var started bool
 		release, status := h.acquireResponsesAccountSlot(c, apiKey.GroupID, "", selection, false, &started, reqLog)
 		if status == openAISlotAcquireProfitVetoed {
@@ -298,6 +308,9 @@ func (h *OpenAIGatewayHandler) GrokVoice(c *gin.Context, endpoint string) {
 			defer release()
 			return h.gatewayService.ForwardGrokVoice(c.Request.Context(), c, account, endpoint, body, contentType)
 		}()
+		if endpoint == "tts" || endpoint == "stt" {
+			setOpenAIForwardPerformance(c, result, forwardErr)
+		}
 		if forwardErr == nil {
 			h.recordGrokVoiceUsage(c, apiKey, account, subscription, endpoint, body, result)
 			return

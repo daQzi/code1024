@@ -1225,6 +1225,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					Stream:                        true,
 					OpenAIWSMode:                  true,
 					UpstreamTerminalEvent:         normalizeOpenAIWSTerminalEvent(turn.TerminalEventType),
+					PerformanceOutcome:            turn.PerformanceOutcome,
 					ResponseHeaders:               cloneHeader(handshakeHeaders),
 					Duration:                      turn.Duration,
 					FirstTokenMs:                  turn.FirstTokenMs,
@@ -1246,6 +1247,18 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				if hooks != nil && hooks.AfterTurn != nil {
 					hooks.AfterTurn(turnNo, turnResult, nil)
 				}
+			},
+			OnTurnOutcome: func(turn openaiwsv2.RelayTurnResult, disconnected bool) {
+				if hooks == nil || hooks.AfterTurnPerformance == nil {
+					return
+				}
+				publicModel, _ := usageMeta.turnModels(turn.RequestModel)
+				hooks.AfterTurnPerformance(&OpenAIForwardResult{
+					Model: publicModel, PerformanceOutcome: turn.PerformanceOutcome,
+					Usage:    OpenAIUsage{OutputTokens: turn.Usage.OutputTokens},
+					Duration: turn.Duration, FirstTokenMs: turn.FirstTokenMs,
+					ClientDisconnect: disconnected, OpenAIWSMode: true,
+				}, nil)
 			},
 			BeforeClientWrite: func(msgType coderws.MessageType, payload []byte) {
 				if msgType == coderws.MessageText && openAIWSPassthroughIsTerminalOutput(payload) {

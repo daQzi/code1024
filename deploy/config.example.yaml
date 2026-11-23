@@ -230,6 +230,9 @@ security:
 # 网关配置
 # =============================================================================
 gateway:
+  # Exact real model IDs or re: patterns that retain literal @key:value segments.
+  # 修改后重启；所有白名单、路由、计费和插件作用范围共用该豁免配置。
+  model_modifier_exemptions: []
   # Minimum max_output_tokens when converting Chat Completions or Anthropic requests to Responses (minimum 16, default 128)
   # Chat Completions 或 Anthropic 请求转换为 Responses 时的最小 max_output_tokens（最小 16，默认 128）
   min_output_tokens: 128

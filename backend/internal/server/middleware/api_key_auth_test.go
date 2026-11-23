@@ -21,6 +21,146 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type generationAuthReplayFixture struct {
+	service.GenerationTaskRepository
+	err error
+}
+
+func (r *generationAuthReplayFixture) FindIdempotent(_ context.Context, user, key int64, idempotency string) (*service.GenerationTask, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	if user == 7 && key == 100 && idempotency == "accepted" {
+		return &service.GenerationTask{UserID: user, APIKeyID: key}, nil
+	}
+	return nil, service.ErrGenerationTaskNotFound
+}
+func (r *generationAuthReplayFixture) Claim(context.Context, string, time.Duration) (*service.GenerationTask, error) {
+	return nil, service.ErrGenerationTaskNotFound
+}
+
+func TestAPIKeyAuthVideoReplayAfterBalanceExhausted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	group := &service.Group{ID: 42, Status: service.StatusActive, Hydrated: true, Platform: service.PlatformOpenAI}
+	key := &service.APIKey{ID: 100, UserID: 7, Key: "replay-fixture", Status: service.StatusActive, GroupID: &group.ID, Group: group,
+		User: &service.User{ID: 7, Status: service.StatusActive, Balance: 0}}
+	for _, tc := range []struct {
+		name, idempotency, path, keyStatus string
+		lookupErr                          error
+		want                               int
+	}{
+		{name: "accepted task", idempotency: "accepted", path: "/v1/videos", want: 204},
+		{name: "accepted alias", idempotency: "accepted", path: "/videos/generations", want: 204},
+		{name: "accepted edit", idempotency: "accepted", path: "/v1/videos/edits", want: 204},
+		{name: "accepted extension", idempotency: "accepted", path: "/videos/extensions", want: 204},
+		{name: "accepted remix", idempotency: "accepted", path: "/v1/videos/video_" + strings.Repeat("1", 40) + "/remix", want: 204},
+		{name: "accepted plugin task", idempotency: "accepted", path: "/v1/tasks/sora", want: 204},
+		{name: "new plugin task", idempotency: "new", path: "/v1/tasks/sora", want: 403},
+		{name: "accepted remix alias", idempotency: "accepted", path: "/videos/video_" + strings.Repeat("1", 40) + "/remix", want: 204},
+		{name: "new remix", idempotency: "new", path: "/v1/videos/video_" + strings.Repeat("1", 40) + "/remix", want: 403},
+		{name: "accepted ark", idempotency: "accepted", path: "/api/v3/contents/generations/tasks", want: 204},
+		{name: "accepted ark alias", idempotency: "accepted", path: "/v3/contents/generations/tasks", want: 204},
+		{name: "new native request", idempotency: "new", path: "/api/v3/contents/generations/tasks", want: 403},
+		{name: "new request", idempotency: "new", path: "/v1/videos", want: 403},
+		{name: "no identity", path: "/v1/videos", want: 403},
+		{name: "different endpoint", idempotency: "accepted", path: "/v1/responses", want: 403},
+		{name: "disabled key", idempotency: "accepted", path: "/v1/videos", keyStatus: service.StatusDisabled, want: 401},
+		{name: "database unavailable", idempotency: "accepted", path: "/v1/videos", lookupErr: errors.New("offline"), want: 503},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixtureKey := *key
+			if tc.keyStatus != "" {
+				fixtureKey.Status = tc.keyStatus
+			}
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			apiKeyService := service.NewAPIKeyService(&stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) { return &fixtureKey, nil }}, nil, nil, nil, nil, nil, cfg)
+			generations := service.NewGenerationService(&generationAuthReplayFixture{err: tc.lookupErr}, nil, nil, nil, nil, nil)
+			defer generations.Stop()
+			router := gin.New()
+			router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, generations)))
+			pattern := tc.path
+			if tc.path == "/v1/tasks/sora" {
+				pattern = service.GenerationTaskSubmitRoute
+			}
+			router.POST(pattern, func(c *gin.Context) { c.Status(204) })
+			req := httptest.NewRequest(http.MethodPost, tc.path, nil)
+			req.Header.Set("Authorization", "Bearer replay-fixture")
+			req.Header.Set("Idempotency-Key", tc.idempotency)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, req)
+			require.Equal(t, tc.want, response.Code, response.Body.String())
+		})
+	}
+}
+
+func TestAPIKeyAuthNativeVideoReadsAfterBalanceExhausted(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	group := &service.Group{ID: 42, Status: service.StatusActive, Hydrated: true, Platform: service.PlatformOpenAI}
+	key := &service.APIKey{ID: 100, UserID: 7, Key: "read-fixture", Status: service.StatusActive, GroupID: &group.ID, Group: group, User: &service.User{ID: 7, Status: service.StatusActive, Balance: 0}}
+	for _, tc := range []struct {
+		path   string
+		status int
+	}{
+		{"/v1/videos/video_public", 204},
+		{"/v1/videos/edits/video_public", 204},
+		{"/videos/extensions/video_public/content", 204},
+		{"/api/v3/contents/generations/tasks/video_public", 204},
+		{"/v3/contents/generations/tasks/video_public", 204},
+		{"/v1/contents/generations/tasks/video_public", 204},
+		{"/contents/generations/tasks/video_public", 204},
+		{"/api/v3/contents/generations/tasks/legacy-upstream", 403},
+		{"/v1/responses", 403},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			svc := service.NewAPIKeyService(&stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) { return key, nil }}, nil, nil, nil, nil, nil, cfg)
+			r := gin.New()
+			r.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(svc, nil, cfg, nil)))
+			r.GET(tc.path, func(c *gin.Context) { c.Status(http.StatusNoContent) })
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Header.Set("Authorization", "Bearer read-fixture")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+		})
+	}
+}
+
+func TestAPIKeyAuthPluginTaskLifecycleAfterQuotaExhausted(t *testing.T) {
+	group := &service.Group{ID: 42, Status: service.StatusActive, Hydrated: true, Platform: service.PlatformOpenAI}
+	key := &service.APIKey{ID: 100, UserID: 7, Key: "task-read-fixture", Status: service.StatusAPIKeyQuotaExhausted, GroupID: &group.ID, Group: group, User: &service.User{ID: 7, Status: service.StatusActive, Balance: 0}}
+	base := "/v1/tasks/video_" + strings.Repeat("1", 40)
+	for _, tc := range []struct {
+		method, path string
+		status       int
+	}{
+		{http.MethodGet, base, 204},
+		{http.MethodGet, base + "/artifacts", 204},
+		{http.MethodHead, base + "/artifacts/video/content", 204},
+		{http.MethodPost, base + "/cancel", 204},
+		{http.MethodPost, "/v1/tasks/plugin-key", 429},
+		{http.MethodPost, base + "/cancel/extra", 429},
+		{http.MethodDelete, base, 429},
+	} {
+		t.Run(tc.method+tc.path, func(t *testing.T) {
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			svc := service.NewAPIKeyService(&stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) { return key, nil }}, nil, nil, nil, nil, nil, cfg)
+			r := gin.New()
+			r.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(svc, nil, cfg, nil)))
+			route := tc.path
+			if tc.method == http.MethodPost && tc.path == base+"/cancel" {
+				route = "/v1/tasks/:key/cancel"
+			}
+			r.Handle(tc.method, route, func(c *gin.Context) { c.Status(http.StatusNoContent) })
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("Authorization", "Bearer task-read-fixture")
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+		})
+	}
+}
+
 func TestAPIKeyAuthRejectsOversizedCredentialsBeforeLookup(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	var calls atomic.Int32
@@ -37,7 +177,7 @@ func TestAPIKeyAuthRejectsOversizedCredentialsBeforeLookup(t *testing.T) {
 		{"Authorization": strings.Repeat("x", maxAPIKeyAuthorizationHeaderBytes+1)},
 	} {
 		r := gin.New()
-		r.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(svc, nil, cfg)))
+		r.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(svc, nil, cfg, nil)))
 		r.GET("/t", func(c *gin.Context) { c.Status(http.StatusOK) })
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/t", nil)
@@ -75,7 +215,7 @@ func TestAPIKeyAuthLookupFailureWhenClientGoneReturns499(t *testing.T) {
 			svc := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
 
 			for _, mw := range []gin.HandlerFunc{
-				gin.HandlerFunc(NewAPIKeyAuthMiddleware(svc, nil, cfg)),
+				gin.HandlerFunc(NewAPIKeyAuthMiddleware(svc, nil, cfg, nil)),
 				APIKeyAuthWithSubscriptionGoogle(svc, nil, cfg),
 			} {
 				var ctx context.Context
@@ -105,7 +245,7 @@ func TestAPIKeyAuthRejectsNonUTF8KeyAsInvalid(t *testing.T) {
 	svc := service.NewAPIKeyService(repo, nil, nil, nil, nil, nil, cfg)
 
 	r := gin.New()
-	r.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(svc, nil, cfg)))
+	r.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(svc, nil, cfg, nil)))
 	r.GET("/t", func(c *gin.Context) { c.Status(http.StatusOK) })
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/t", nil)
@@ -374,7 +514,7 @@ func TestAPIKeyAuthSetsGroupContext(t *testing.T) {
 	cfg := &config.Config{RunMode: config.RunModeSimple}
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 	router := gin.New()
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 	router.GET("/t", func(c *gin.Context) {
 		groupFromCtx, ok := c.Request.Context().Value(ctxkey.Group).(*service.Group)
 		if !ok || groupFromCtx == nil || groupFromCtx.ID != group.ID {
@@ -488,7 +628,7 @@ func TestAPIKeyAuthOverwritesInvalidContextGroup(t *testing.T) {
 	cfg := &config.Config{RunMode: config.RunModeSimple}
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 	router := gin.New()
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 
 	invalidGroup := &service.Group{
 		ID:       group.ID,
@@ -617,7 +757,7 @@ func TestAPIKeyAuthRejectsUnavailableGroup(t *testing.T) {
 					businessLimitedReason, _ = v.(string)
 				}
 			})
-			router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+			router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 			router.GET("/t", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"ok": true})
 			})
@@ -726,7 +866,7 @@ func TestAPIKeyAuthMarksOnlyExpectedIngressRejections(t *testing.T) {
 				c.Next()
 				reason, rejected = GetIngressRejectReason(c)
 			})
-			router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+			router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 			router.GET("/t", func(c *gin.Context) { c.Status(http.StatusOK) })
 
 			w := httptest.NewRecorder()
@@ -792,7 +932,7 @@ func TestAPIKeyAuthSetsOpsFallbackKeyOnEarlyAbort(t *testing.T) {
 		c.Next()
 		fallback, fallbackOK = GetOpsFallbackAPIKey(c)
 	})
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 	router.GET("/t", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -970,7 +1110,7 @@ func TestAPIKeyAuthIPRestrictionUsesTrustedPathWhenSwitchDisabled(t *testing.T) 
 			businessLimitedReason, _ = v.(string)
 		}
 	})
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 	router.GET("/t", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -1023,7 +1163,7 @@ func TestAPIKeyAuthIPRestrictionIncludesClientIPForBlacklistDenial(t *testing.T)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 	router := gin.New()
 	require.NoError(t, router.SetTrustedProxies(nil))
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 	router.GET("/t", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -1072,7 +1212,7 @@ func TestAPIKeyAuthIPRestrictionUsesConfiguredTrustedProxy(t *testing.T) {
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 	router := gin.New()
 	require.NoError(t, router.SetTrustedProxies([]string{"9.9.9.9"}))
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 	router.GET("/t", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -1123,7 +1263,7 @@ func TestAPIKeyAuthIPRestrictionUsesForwardedClientIPInDenialWhenTrusted(t *test
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 	router := gin.New()
 	require.NoError(t, router.SetTrustedProxies([]string{"9.9.9.9"}))
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg, nil)))
 	router.GET("/t", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -1565,7 +1705,7 @@ func TestAPIKeyAuthQuotaErrorKeepsLegacyFormatOutsideResponses(t *testing.T) {
 
 func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) *gin.Engine {
 	router := gin.New()
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg, nil)))
 	ok := func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	}

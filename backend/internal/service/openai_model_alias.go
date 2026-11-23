@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 )
 
 func lastOpenAIModelSegment(model string) string {
@@ -141,6 +142,9 @@ func appendUsageBillingModelCandidate(candidates []string, seen map[string]struc
 	}
 
 	add(trimmed)
+	for _, candidate := range modelmodifier.BillingNames(trimmed) {
+		add(candidate)
+	}
 	if canonical := canonicalizeOpenAIModelAliasSpelling(trimmed); canonical != "" {
 		add(canonical)
 	}

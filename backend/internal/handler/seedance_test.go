@@ -83,7 +83,7 @@ func TestSeedanceHandlerLifecycleAndOwnership(t *testing.T) {
 	subject, _ := middleware.GetAuthSubjectFromContext(c)
 	result := &service.OpenAIForwardResult{Usage: service.OpenAIUsage{OutputTokens: 12345}, ResponseID: "seedance:task-ark"}
 	for i := range 20 {
-		billed := prepareSeedanceCompletionBilling(context.Background(), h, key, subject, result.ResponseID, result)
+		billed := prepareSeedanceCompletionBilling(context.Background(), h, key, subject, 1, nil, result.ResponseID, result)
 		if i == 0 {
 			require.NotNil(t, billed)
 			require.Equal(t, "doubao-seedance", billed.BillingModel)

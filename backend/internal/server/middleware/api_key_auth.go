@@ -12,6 +12,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/generation"
+	pluginTask "github.com/Wei-Shaw/sub2api/newapi-engine/task"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -23,8 +25,8 @@ const maxAPIKeyAuthorizationHeaderBytes = service.MaxAPIKeyCredentialBytes + 128
 const statusClientClosedRequest = 499
 
 // NewAPIKeyAuthMiddleware 创建 API Key 认证中间件
-func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) APIKeyAuthMiddleware {
-	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, cfg))
+func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config, generations *service.GenerationService) APIKeyAuthMiddleware {
+	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, cfg, generations))
 }
 
 // apiKeyAuthWithSubscription API Key认证中间件（支持订阅验证）
@@ -36,7 +38,7 @@ func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionS
 // /v1/usage、/v1/sub2api/billing 端点与异步生图任务查询只需鉴权，不需要计费执行。
 // usage 允许过期/配额耗尽的 Key 查询自身用量，billing 用于读取当前 Key 的倍率配置，
 // 异步生图查询允许已耗尽额度的 Key 拉取自身任务结果。
-func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
+func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config, generations *service.GenerationService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// ── 1. 提取 API Key ──────────────────────────────────────────
 		if rejectInvalidAuthAbuse(c, apiKeyService) {
@@ -177,7 +179,21 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// Async image task polling only reads data that already belongs to the
 		// authenticated key and must remain available after the completed
 		// generation consumes the key's remaining balance.
-		skipBilling := c.Request.URL.Path == "/v1/usage" || billingInfoRequest || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path)
+		skipBilling := c.Request.URL.Path == "/v1/usage" || billingInfoRequest || isAsyncImageTaskRead(c.Request.Method, c.Request.URL.Path) || isGenerationVideoRead(c.Request.Method, c.Request.URL.Path) || isGenerationFileRead(c.Request.Method, c.Request.URL.Path) || isGenerationTaskLifecycle(c.Request.Method, c.Request.URL.Path, c.FullPath()) || isNativeTaskAliasLookup(c)
+		// An accepted video reservation remains replayable after it consumes the
+		// remaining balance or quota. Only an existing identity may skip billing;
+		// the handler must still compare the complete normalized request body.
+		if generations != nil && (isGenerationVideoCreate(c.Request.Method, c.Request.URL.Path) || c.Request.Method == http.MethodPost && c.FullPath() == service.GenerationTaskSubmitRoute) {
+			idempotency := c.GetHeader("Idempotency-Key")
+			if idempotency != "" && len(idempotency) <= 200 && strings.TrimSpace(idempotency) == idempotency {
+				existing, lookupErr := generations.FindIdempotent(ctx, apiKey.UserID, apiKey.ID, idempotency)
+				if lookupErr != nil {
+					AbortWithError(c, 503, "VIDEO_TASK_UNAVAILABLE", "Video task service is unavailable")
+					return
+				}
+				skipBilling = existing != nil
+			}
+		}
 
 		// ── 4. SimpleMode → early return ─────────────────────────────
 
@@ -339,6 +355,87 @@ func isOpenAICompatibleAPIKeyRequest(c *gin.Context) bool {
 		}
 	}
 	return false
+}
+
+func isGenerationFileRead(method, path string) bool {
+	return (method == http.MethodGet || method == http.MethodDelete) && strings.HasPrefix(path, "/v1/video-files/") && len(strings.TrimPrefix(path, "/v1/video-files/")) == 46 && !strings.Contains(strings.TrimPrefix(path, "/v1/video-files/"), "/")
+}
+
+func isGenerationTaskLifecycle(method, path, route string) bool {
+	if method == http.MethodGet && route == "/v1/tasks/:key/native/*subpath" {
+		return true
+	}
+	if method == http.MethodDelete && (route == "/v1/videos/:request_id" || route == "/videos/:request_id") {
+		return generation.IsPublicTaskID(strings.TrimPrefix(strings.TrimPrefix(path, "/v1"), "/videos/"))
+	}
+	tail, ok := strings.CutPrefix(path, "/v1/tasks/")
+	if !ok {
+		return false
+	}
+	id, op, _ := strings.Cut(tail, "/")
+	if !generation.IsPublicTaskID(id) {
+		return false
+	}
+	if method == http.MethodPost {
+		return op == "cancel" && route == "/v1/tasks/:key/cancel"
+	}
+	if method == http.MethodDelete {
+		return tail == id && route == "/v1/tasks/:key" || op == "result" && route == "/v1/tasks/:key/result"
+	}
+	if method == http.MethodGet && (tail == id || op == "artifacts") {
+		return true
+	}
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	artifact, ok := strings.CutPrefix(op, "artifacts/")
+	if !ok {
+		return false
+	}
+	key, suffix, _ := strings.Cut(artifact, "/")
+	return suffix == "content" && pluginTask.ValidArtifactKey(key)
+}
+
+const nativeTaskAliasLookupKey = "native_task_alias_lookup"
+
+// MarkNativeTaskAliasLookup is set only by the internal alias dispatcher.
+// It waives balance checks, never authentication, ACLs or result ownership.
+func MarkNativeTaskAliasLookup(c *gin.Context) {
+	if c.Request.Method == http.MethodGet {
+		c.Set(nativeTaskAliasLookupKey, true)
+	}
+}
+
+func isNativeTaskAliasLookup(c *gin.Context) bool {
+	return c.Request.Method == http.MethodGet && c.GetBool(nativeTaskAliasLookupKey)
+}
+
+func isGenerationVideoRead(method, path string) bool {
+	if method != http.MethodGet && method != http.MethodHead {
+		return false
+	}
+	path = strings.TrimPrefix(path, "/v1")
+	if path == "/videos" || strings.HasPrefix(path, "/videos/video_") {
+		return true
+	}
+	for _, prefix := range []string{"/api/v3", "/v3", "", "/videos/generations", "/videos/edits", "/videos/extensions"} {
+		if strings.HasPrefix(prefix, "/videos/") {
+			if strings.HasPrefix(path, prefix+"/video_") {
+				return true
+			}
+		} else if strings.HasPrefix(path, prefix+"/contents/generations/tasks/video_") {
+			return true
+		}
+	}
+	return false
+}
+
+func isGenerationVideoCreate(method, path string) bool {
+	if method != http.MethodPost {
+		return false
+	}
+	_, ok := service.GenerationVideoCreateProtocol(path)
+	return ok
 }
 
 func isAsyncImageTaskRead(method, path string) bool {

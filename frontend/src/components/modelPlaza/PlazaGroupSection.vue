@@ -54,8 +54,8 @@
     <!-- 模型价格表:整行(含 hover 底色/分区底色)顶到卡片边缘,左右留白由表格首列/末列的 padding 提供 -->
     <div>
       <PlazaModelPricingTable
-        v-if="group.models.length > 0"
-        :models="group.models"
+        v-if="standardModels.length > 0"
+        :models="standardModels"
         :platform="group.platform"
         :rate-multiplier="group.rate_multiplier"
         :user-rate-multiplier="group.user_rate_multiplier ?? null"
@@ -66,7 +66,16 @@
         :peak-window="peakWindow"
         :peak-rate-multiplier="group.peak_rate_multiplier"
       />
-      <p v-else class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
+      <div v-for="model in generationModels" :key="model.name" class="space-y-2 border-t border-gray-100 px-5 py-4 dark:border-dark-700">
+        <h3 class="text-sm font-medium">{{ model.name }}</h3>
+        <div v-for="(price, index) in model.generation_pricing" :key="index" class="flex flex-wrap justify-between gap-2 text-xs text-gray-600 dark:text-dark-300">
+          <span>{{ price.resolution || 'OpenAI Videos' }} · {{ t(`modelPlaza.catalog.units.${price.unit}`) }}</span>
+          <span v-if="price.unit === 'upstream_cost'">{{ t('modelPlaza.catalog.dynamicPrice') }}</span>
+          <span v-else-if="price.unit === 'expression'">{{ t('modelPlaza.catalog.expressionPrice') }}</span>
+          <span v-else class="font-mono">${{ formatPrice(price.unit_price) }}<template v-if="Number(price.service_fee)"> + ${{ formatPrice(price.service_fee) }} {{ t('modelPlaza.catalog.serviceFee') }}</template><template v-if="Number(price.minimum)"> · {{ t('modelPlaza.catalog.minimum') }} ${{ formatPrice(price.minimum) }}</template></span>
+        </div>
+      </div>
+      <p v-if="!group.models.length" class="px-5 py-4 text-center text-sm text-gray-400 dark:text-dark-500">
         {{ t('modelPlaza.detail.noModels') }}
       </p>
     </div>
@@ -91,6 +100,9 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const generationModels = computed(() => props.group.models.filter(model => model.generation_pricing?.length))
+const standardModels = computed(() => props.group.models.filter(model => !model.generation_pricing?.length))
+function formatPrice(value: string) { const rate = props.group.video_rate_independent ? props.group.video_rate_multiplier : props.group.user_rate_multiplier ?? props.group.rate_multiplier; return (Number(value) * rate).toLocaleString(undefined, { maximumFractionDigits: 8 }) }
 
 /** 高峰窗口描述(含倍率与服务器时区标注);分组未启用高峰为空串。 */
 const peakWindow = computed(() => {

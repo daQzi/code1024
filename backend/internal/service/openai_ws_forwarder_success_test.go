@@ -16,6 +16,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/relaymetrics"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -548,6 +549,7 @@ func TestOpenAIGatewayService_Forward_WSv2_RewriteModelAndToolCallsOnCompletedEv
 	require.NotNil(t, result)
 	require.Equal(t, "resp_model_tool_1", result.RequestID)
 	require.Equal(t, "response.completed", result.UpstreamTerminalEvent)
+	require.Equal(t, relaymetrics.Success, result.PerformanceOutcome)
 	require.True(t, result.SucceededForScheduling())
 	require.Equal(t, "custom-original-model", gjson.GetBytes(rec.Body.Bytes(), "model").String(), "响应模型应回写为原始请求模型")
 	require.Equal(t, "edit", gjson.GetBytes(rec.Body.Bytes(), "tool_calls.0.function.name").String(), "工具名称应被修正为 OpenCode 规范")
@@ -598,6 +600,7 @@ func TestOpenAIGatewayService_Forward_WSv2_ResponseFailedIsNotSchedulingSuccess(
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, "response.failed", result.UpstreamTerminalEvent)
+	require.Equal(t, relaymetrics.Failure, result.PerformanceOutcome)
 	require.False(t, result.SucceededForScheduling())
 	require.True(t, svc.isOpenAIAccountModelRuntimeBlocked(account, "gpt-5.5"))
 }

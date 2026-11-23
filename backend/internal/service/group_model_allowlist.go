@@ -9,6 +9,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 )
 
 // GroupModelAllowlist 是 service 层的分组模型白名单（与 domain.GroupModelAllowlist
@@ -38,6 +39,9 @@ func supplementUnmappedOpenAIModels(accounts []Account, models []string) []strin
 	}
 	for i := range accounts {
 		account := &accounts[i]
+		if account.HasNewAPIPlugin() {
+			continue
+		}
 		unrestrictedPassthrough := account.IsOpenAIPassthroughEnabled() && !account.IsOpenAIPassthroughModelFilterEnabled()
 		if account.Platform == PlatformOpenAI && (unrestrictedPassthrough || len(account.GetModelMapping()) == 0) {
 			return dedupeAndSortModelIDs(slices.Concat(models, openai.DefaultModelIDs()))
@@ -154,6 +158,7 @@ func groupModelAllowlistCandidates(model string) []string {
 	}
 
 	add(model)
+	add(modelmodifier.Base(model))
 	add(strings.TrimPrefix(model, "models/"))
 	add(claude.NormalizeModelID(strings.TrimSuffix(model, "-thinking")))
 	add(NormalizeOpenAICompatRequestedModel(model))

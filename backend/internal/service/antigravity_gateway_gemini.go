@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -41,7 +42,9 @@ func WithForwardGeminiSession(groupID int64, sessionHash string) ForwardGeminiOp
 	}
 }
 
-func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte, isStickySession bool, options ...ForwardGeminiOption) (*ForwardResult, error) {
+func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Context, account *Account, originalModel string, action string, stream bool, body []byte, isStickySession bool, options ...ForwardGeminiOption) (forwarded *ForwardResult, retErr error) {
+	report := beginNativeProtocolReport(ctx, account, originalModel)
+	defer func() { report.nativeResult(forwarded) }()
 	beginUpstreamResponseModelObservation(c)
 	startTime := time.Now()
 	forwardOpts := forwardGeminiOptions{}
@@ -72,6 +75,9 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	case "generateContent", "streamGenerateContent":
 		// ok
 	case "countTokens":
+		if err := guardUnsupportedNativeProtocolRequest(ctx, c, account); err != nil {
+			return nil, err
+		}
 		// 直接返回空值，不透传上游
 		c.JSON(http.StatusOK, map[string]any{"totalTokens": 0})
 		return &ForwardResult{
@@ -88,18 +94,50 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 
 	// 裸模型名（gemini-3.8-flash）按 thinkingConfig 解析到 -low/-medium/-high 变体；
 	// 裸名有显式映射时保持原行为。
-	mappedModel := s.getMappedModelForThinkingLevel(account, originalModel, geminiThinkingLevelFromBody(body))
-	if mappedModel != "" && mappedModel != originalModel {
-		logger.LegacyPrintf("service.antigravity_gateway", "%s mapped Gemini model %s to %s", prefix, originalModel, mappedModel)
+	clientModCtx, clientModBody, clientModSpec, clientModApplied, clientModErr := resolveNativeModelModifier(ctx, body, originalModel, originalModel, "gemini")
+	if clientModErr != nil {
+		writeNativeModelModifierError(c, "gemini")
+		return nil, clientModErr
 	}
+	if clientModApplied {
+		ctx, body = clientModCtx, clientModBody
+	}
+	mappedModel := s.getMappedModelForThinkingLevel(account, clientModSpec.Base, geminiThinkingLevelFromBody(body))
 	if mappedModel == "" {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
 		return nil, s.writeGoogleError(c, http.StatusForbidden, fmt.Sprintf("model %s not in whitelist", originalModel))
+	}
+	modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, body, originalModel, mappedModel, "gemini")
+	if modErr != nil {
+		writeNativeModelModifierError(c, "gemini")
+		return nil, modErr
+	}
+	if modApplied || clientModApplied {
+		ctx, body = modCtx, modBody
+		mappedModel = modSpec.Base
+		defer func() {
+			reconcileNativeForwardModifierResult(ctx, forwarded, modSpec, originalModel, body, "gemini")
+		}()
+	}
+	if mappedModel != "" && mappedModel != originalModel {
+		logger.LegacyPrintf("service.antigravity_gateway", "%s mapped Gemini model %s to %s", prefix, originalModel, mappedModel)
 	}
 	if geminiImageGenerationDenied(c, body, originalModel, mappedModel) {
 		return nil, s.writeGoogleError(c, http.StatusBadRequest, ImageGenerationPermissionMessage())
 	}
 	forwardedModel := mappedModel
+	ctx, requestBody, finishRequest, requestErr := beginNativeProtocolRequest(ctx, c, account, body, mappedModel, "gemini")
+	if requestErr != nil {
+		return nil, requestErr
+	}
+	body = requestBody
+	defer finishRequest(&retErr)
+	defer func() { recordNativeRequestReasoning(ctx, forwarded, body, "gemini") }()
+	ctx, finishReply, replyErr := beginNativeProtocolReply(ctx, c, account, mappedModel)
+	if replyErr != nil {
+		return nil, replyErr
+	}
+	defer finishReply(&retErr)
 
 	// 获取 access_token
 	if s.tokenProvider == nil {
@@ -176,6 +214,10 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		sessionHash:     forwardOpts.sessionHash,
 	})
 	if err != nil {
+		var processingFailure *RequestPluginFailure
+		if errors.As(err, &processingFailure) {
+			return nil, err
+		}
 		// 检查是否是账号切换信号，转换为 UpstreamFailoverError 让 Handler 切换账号
 		if switchErr, ok := IsAntigravityAccountSwitchError(err); ok {
 			return nil, &UpstreamFailoverError{
@@ -214,11 +256,19 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 				if err == nil {
 					fallbackReq, err := antigravity.NewAPIRequest(ctx, upstreamAction, accessToken, fallbackWrapped)
 					if err == nil {
+						err = processNativeGeminiHTTPRequest(ctx, account, fallbackReq, fallbackModel)
+					}
+					var processingFailure *RequestPluginFailure
+					if errors.As(err, &processingFailure) {
+						return nil, err
+					}
+					if err == nil {
 						fallbackResp, err := s.httpUpstream.Do(fallbackReq, proxyURL, account.ID, account.Concurrency)
 						if err == nil && fallbackResp.StatusCode < 400 {
 							_ = resp.Body.Close()
 							resp = fallbackResp
 							forwardedModel = fallbackModel
+							setNativeReplyUpstreamModel(ctx, fallbackModel)
 						} else if fallbackResp != nil {
 							_ = fallbackResp.Body.Close()
 						}
@@ -307,6 +357,10 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 						}
 					}
 				} else {
+					var processingFailure *RequestPluginFailure
+					if errors.As(retryErr, &processingFailure) {
+						return nil, retryErr
+					}
 					if switchErr, ok := IsAntigravityAccountSwitchError(retryErr); ok {
 						appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 							ProxyID:            opsUpstreamProxyID(account),

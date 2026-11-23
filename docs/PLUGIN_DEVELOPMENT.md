@@ -1,5 +1,18 @@
 # Sub2API 插件开发教程
 
+视频上游接入、账号配置、定价和可复制的 JS Task 模板见[视频协议插件开发规范](customization/VIDEO_PLUGINS.md)。同协议上游复用插件并新建账号，不同协议开发新脚本。
+
+## 选择插件类型
+
+- **New API 兼容 JS 插件（Task / Provider / Transform）**：视频等任务、上游协议适配和请求处理使用单文件 `plugin.js`，通过插件中心管理。原版插件兼容范围以 [`HOST_COMPATIBILITY.md`](../backend/internal/newapi/HOST_COMPATIBILITY.md) 为准。本项目以固定 New API 基线的原版源码无需改写即可上传和执行适用功能为目标，当前尚未完整达成。
+- **Sub 原生 `.s2plugin` 插件**：下文描述独立进程、gRPC、签名包和 UI Bridge；当前宿主接受的能力是 `openai.oauth.outbound_transport.v1`。这是长期保留的另一种运行时，不要求全部重写为 JS，也不能把 JS 脚本改名或打包成 `.s2plugin` 来安装。
+
+按最新方向，两套系统分别维护：New API JS 插件和 Task 引擎独立提取，原生 Sub 插件保持原有协议与运行时，不再并入统一控制层。见[独立引擎与宿主适配设计](customization/NEWAPI_ENGINE_DECOUPLING.md)。本文目前以原生教程为主；**独立引擎的插件脚手架、离线校验/回放与开发规范已提供，见 [newapi-engine/PLUGIN_DEVELOPMENT.md](../newapi-engine/PLUGIN_DEVELOPMENT.md)；视频、Provider 和请求处理分别见其专项规范。完整宿主兼容、其余 adapter 与独立发布仍以剩余清单为准**，不要求为了新模块重建旧 native SDK。
+
+当前先完成通用系统和配套文档。官转二、官转五等渠道专项随后按公开契约作为社区插件整理交付；已有安装版本和在途任务保持原绑定。
+
+## 原生 OAuth Transport 开发
+
 本文面向希望为 Sub2API 开发、打包和发布插件的团队。插件是独立进程和静态 UI 组成的 `.s2plugin` 包，宿主通过稳定的 gRPC 协议调用它。本文以当前宿主已经定义的 `openai.oauth.outbound_transport.v1` 能力作为协议示例，说明开发者需要准备什么、哪些职责属于插件、哪些职责仍由 Sub2API 负责。
 
 本文不是一个可直接安装的完整插件，也不代表 Sub2API 已经发布对应的官方插件包。当前文档主要描述公开协议、宿主边界和开发流程。后续是否发布可安装包、支持哪些 Provider，以及如何提供示例仓库，都需要另行公告。

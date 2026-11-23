@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 )
 
 // Forward 转发 Claude 协议请求（Claude → Gemini 转换）
@@ -27,11 +29,37 @@ import (
 //	      └─ retryDelay <  7s → 等待后重试 1 次
 //	          ├─ 成功 → 正常返回
 //	          └─ 失败 → 设置模型限流 + 清除粘性绑定 → 切换账号
-func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte, isStickySession bool) (*ForwardResult, error) {
+func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte, isStickySession bool) (forwarded *ForwardResult, retErr error) {
+	report := beginNativeProtocolReport(ctx, account, gjson.GetBytes(body, "model").String())
+	defer func() { report.nativeResult(forwarded) }()
 	beginUpstreamResponseModelObservation(c)
 	// 上游透传账号直接转发，不走 OAuth token 刷新
 	if account.Type == AccountTypeUpstream {
-		return s.ForwardUpstream(ctx, c, account, body)
+		clientModel := gjson.GetBytes(body, "model").String()
+		model := clientModel
+		modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, body, clientModel, clientModel, "claude")
+		if modErr != nil {
+			writeNativeModelModifierError(c, "claude")
+			return nil, modErr
+		}
+		if modApplied {
+			ctx, body, model = modCtx, modBody, modSpec.Base
+			defer func() {
+				reconcileNativeForwardModifierResult(ctx, forwarded, modSpec, clientModel, body, "claude")
+			}()
+		}
+		child, requestBody, finishRequest, requestErr := beginNativeProtocolRequest(ctx, c, account, body, model, "claude")
+		if requestErr != nil {
+			return nil, requestErr
+		}
+		defer finishRequest(&retErr)
+		defer func() { recordNativeRequestReasoning(child, forwarded, requestBody, "claude") }()
+		child, finishReply, replyErr := beginNativeProtocolReply(child, c, account, model)
+		if replyErr != nil {
+			return nil, replyErr
+		}
+		defer finishReply(&retErr)
+		return s.ForwardUpstream(child, c, account, requestBody)
 	}
 
 	startTime := time.Now()
@@ -49,14 +77,40 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	}
 
 	originalModel := claudeReq.Model
+	clientModCtx, clientModBody, clientModSpec, clientModApplied, clientModErr := resolveNativeModelModifier(ctx, body, originalModel, originalModel, "claude")
+	if clientModErr != nil {
+		writeNativeModelModifierError(c, "claude")
+		return nil, clientModErr
+	}
+	if clientModApplied {
+		ctx, body = clientModCtx, clientModBody
+		if err := json.Unmarshal(body, &claudeReq); err != nil {
+			return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", "Invalid request body")
+		}
+	}
 	mappedModel := s.getMappedModelForThinkingLevel(
 		account,
-		claudeReq.Model,
+		clientModSpec.Base,
 		geminiThinkingLevelFromClaudeThinking(claudeReq.Thinking),
 	)
 	if mappedModel == "" {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalFeatureGate)
 		return nil, s.writeClaudeError(c, http.StatusForbidden, "permission_error", fmt.Sprintf("model %s not in whitelist", claudeReq.Model))
+	}
+	modCtx, modBody, modSpec, modApplied, modErr := resolveNativeModelModifier(ctx, body, originalModel, mappedModel, "claude")
+	if modErr != nil {
+		writeNativeModelModifierError(c, "claude")
+		return nil, modErr
+	}
+	if modApplied || clientModApplied {
+		ctx, body = modCtx, modBody
+		if err := json.Unmarshal(body, &claudeReq); err != nil {
+			return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", "Invalid request body")
+		}
+		mappedModel = modSpec.Base
+		defer func() {
+			reconcileNativeForwardModifierResult(ctx, forwarded, modSpec, originalModel, body, "claude")
+		}()
 	}
 	// 应用 thinking 模式自动后缀：如果 thinking 开启且目标是 claude-sonnet-4-5，自动改为 thinking 版本
 	thinkingEnabled := claudeReq.Thinking != nil && (claudeReq.Thinking.Type == "enabled" || claudeReq.Thinking.Type == "adaptive")
@@ -65,6 +119,21 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", ImageGenerationPermissionMessage())
 	}
 	billingModel := mappedModel
+	ctx, requestBody, finishRequest, requestErr := beginNativeProtocolRequest(ctx, c, account, body, mappedModel, "claude")
+	if requestErr != nil {
+		return nil, requestErr
+	}
+	body = requestBody
+	defer finishRequest(&retErr)
+	if err := json.Unmarshal(body, &claudeReq); err != nil {
+		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", "Invalid request body")
+	}
+	defer func() { recordNativeRequestReasoning(ctx, forwarded, body, "claude") }()
+	ctx, finishReply, replyErr := beginNativeProtocolReply(ctx, c, account, mappedModel)
+	if replyErr != nil {
+		return nil, replyErr
+	}
+	defer finishReply(&retErr)
 
 	// 获取 access_token
 	if s.tokenProvider == nil {
@@ -125,6 +194,10 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		sessionHash:     "",              // Forward 方法没有 sessionHash，由上层处理粘性会话清除
 	})
 	if err != nil {
+		var processingFailure *RequestPluginFailure
+		if errors.As(err, &processingFailure) {
+			return nil, err
+		}
 		// 检查是否是账号切换信号，转换为 UpstreamFailoverError 让 Handler 切换账号
 		if switchErr, ok := IsAntigravityAccountSwitchError(err); ok {
 			return nil, &UpstreamFailoverError{
@@ -211,6 +284,10 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 					sessionHash:     "", // Forward 方法没有 sessionHash，由上层处理粘性会话清除
 				})
 				if retryErr != nil {
+					var processingFailure *RequestPluginFailure
+					if errors.As(retryErr, &processingFailure) {
+						return nil, retryErr
+					}
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 						ProxyID:            opsUpstreamProxyID(account),
 						ProxyName:          opsUpstreamProxyName(account),
@@ -355,6 +432,10 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 								}
 							}
 						} else {
+							var processingFailure *RequestPluginFailure
+							if errors.As(retryErr, &processingFailure) {
+								return nil, retryErr
+							}
 							logger.LegacyPrintf("service.antigravity_gateway", "Antigravity account %d: budget rectifier retry failed: %v", account.ID, retryErr)
 						}
 					}

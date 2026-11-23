@@ -369,6 +369,9 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 		return s.sendErrorAndEnd(c, "Account not found")
 	}
 	bindAccountTestPlatform(c, account)
+	if account.HasNewAPIPlugin() {
+		return s.sendErrorAndEnd(c, "This account uses a protocol plugin. Test it through the plugin's declared API with a scoped API key; the native platform connection test is not supported.")
+	}
 
 	// Synthetic UI load-test accounts exercise the real SSE parsing and modal
 	// interactions, but intentionally do not send their placeholder credentials

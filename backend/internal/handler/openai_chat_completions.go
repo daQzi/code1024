@@ -21,6 +21,7 @@ import (
 // ChatCompletions handles OpenAI Chat Completions API requests.
 // POST /v1/chat/completions
 func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
+	c.Request = c.Request.WithContext(service.WithNewAPIProviderRouting(c.Request.Context(), "/v1/chat/completions"))
 	streamStarted := false
 	defer h.recoverResponsesPanic(c, &streamStarted)
 
@@ -261,6 +262,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			}()
 			return h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody, promptCacheKey, "")
 		}()
+		setOpenAIForwardPerformance(c, result, err)
 		var cyberBlockBodyChat []byte
 		if service.GetOpsCyberPolicy(c) != nil {
 			cyberBlockBodyChat = body
@@ -347,6 +349,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 						h.gatewayService.ReportOpenAIAccountScheduleResult(account, openAIAccountScheduleModel(c, account, reqModel, false, nil), false, nil, err)
 					}
 					if !failoverErr.ShouldRetryNextAccount() {
+						submitChatUsage(result)
 						h.handleFailoverExhausted(c, failoverErr, streamStarted)
 						return
 					}

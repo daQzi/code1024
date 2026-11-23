@@ -148,6 +148,48 @@ const baseImageRow = {
 const tokenFields = { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 }
 
 describe('admin UsageTable tooltip', () => {
+  it.each([true, false])('opens captured tool prices for account-cost visibility %s', async (showAccountBilling) => {
+    const row = {
+      ...baseImageRow,
+      provider_tool_billing: {
+        schema_version: 1,
+        rate_multiplier: 2,
+        total_usd: 0.0075,
+        actual_usd: 0.015,
+        items: [
+          { name: 'file_search', count: 3, price_per_1k: 2.5, cost_usd: 0.0075 },
+          { name: 'free_tool', count: 2, price_per_1k: 0, cost_usd: 0 },
+          { name: 'unused_tool', count: 0, cost_usd: 0 },
+        ],
+      },
+    }
+    const wrapper = mount(UsageTable, {
+      props: { data: [row, { ...baseImageRow, request_id: 'historical' }, { ...row, request_id: 'future-schema', provider_tool_billing: { ...row.provider_tool_billing, schema_version: 2 } }], loading: false, columns: [], showAccountBilling },
+      global: { stubs: {
+        DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true,
+        BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /><button data-testid="close-tools" @click="$emit(\'close\')">Close</button></div>' },
+      } },
+    })
+    try {
+      expect(wrapper.findAll('[data-testid="provider-tool-billing-open"]')).toHaveLength(1)
+      expect(wrapper.find('[data-testid="provider-tool-billing-details"]').exists()).toBe(false)
+      await wrapper.get('[data-testid="provider-tool-billing-open"]').trigger('click')
+      const detail = wrapper.get('[data-testid="provider-tool-billing-details"]')
+      const items = detail.findAll('[data-testid="provider-tool-billing-item"]')
+      expect(items).toHaveLength(3)
+      expect(items[0].text()).toContain('$2.50000000')
+      expect(items[1].text()).toContain('$0.00000000')
+      expect(items[2].text()).toContain('—')
+      expect(detail.text()).toContain('$0.01500000')
+      expect(detail.text()).toContain('×2')
+      expect(detail.text()).toContain(row.request_id)
+      await wrapper.get('[data-testid="close-tools"]').trigger('click')
+      expect(wrapper.find('[data-testid="provider-tool-billing-details"]').exists()).toBe(false)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('shows the two OpenAI cache-write buckets without Anthropic lifetime labels', async () => {
     const row = { ...baseImageRow, image_count: 0, billing_mode: 'token', cache_creation_tokens: 2399, cache_creation_30m_tokens: 9, cache_creation_12h_tokens: 2390 }
     const wrapper = mount(UsageTable, {

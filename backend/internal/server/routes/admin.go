@@ -3,6 +3,7 @@ package routes
 
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -35,6 +36,14 @@ func RegisterAdminRoutes(
 	{
 		// 部署与运营合规确认
 		registerAdminComplianceRoutes(admin, h)
+
+		// 仪表盘
+		taskLogs := admin.Group("/task-logs")
+		taskLogs.Use(panelRateLimiter.Heavy())
+		taskLogs.GET("", h.TaskLog.AdminList)
+		taskLogs.GET("/:task_id", h.TaskLog.AdminGet)
+		taskLogs.GET("/:task_id/content", h.TaskLog.AdminContent)
+		taskLogs.PUT("/:task_id/native-maintenance", gin.HandlerFunc(stepUpAuth), h.TaskLog.AdminMaintainNative)
 
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
@@ -769,6 +778,43 @@ func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Hand
 }
 
 func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+	processing := admin.Group("/request-processing")
+	processing.Use(middleware.RequestBodyLimit(2<<20, pkghttputil.NewBodyMemoryBudget(64<<20)))
+	processing.GET("", h.RequestPlugins.List)
+	processing.GET("/runs", h.RequestPlugins.Runs)
+	processing.GET("/model-modifiers", h.RequestPlugins.ModelModifiers)
+	processing.PUT("/model-modifiers", gin.HandlerFunc(stepUpAuth), h.RequestPlugins.SaveModelModifiers)
+	processing.POST("", gin.HandlerFunc(stepUpAuth), h.RequestPlugins.Save)
+	processing.POST("/dry-run", gin.HandlerFunc(stepUpAuth), h.RequestPlugins.DryRun)
+	processing.POST("/:id/config", gin.HandlerFunc(stepUpAuth), h.RequestPlugins.Config)
+	registry := admin.Group("/plugin-registry")
+	registry.Use(middleware.RequestBodyLimit(2<<20, pkghttputil.NewBodyMemoryBudget(64<<20)))
+	registry.GET("", h.PluginRegistry.AdminList)
+	registry.GET("/:id", h.PluginRegistry.AdminGet)
+	registry.POST("/:id/transition", gin.HandlerFunc(stepUpAuth), h.PluginRegistry.AdminTransition)
+	registry.POST("/:id/install", gin.HandlerFunc(stepUpAuth), h.PluginRegistry.Install)
+	js := admin.Group("/newapi-plugins")
+	js.Use(middleware.RequestBodyLimit(2<<20, pkghttputil.NewBodyMemoryBudget(64<<20)))
+	js.GET("", h.Admin.NewAPIPlugin.ListNewAPI)
+	js.GET("/provider-tool-prices", h.Admin.NewAPIPlugin.ProviderToolPrices)
+	js.PUT("/provider-tool-prices", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.SaveProviderToolPrices)
+	js.GET("/marketplace/sources", h.Admin.NewAPIPlugin.MarketplaceSources)
+	js.PUT("/marketplace/sources", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.SaveMarketplaceSources)
+	js.GET("/tasks/review", h.Admin.NewAPIPlugin.GenerationReview)
+	js.PUT("/tasks/:task_id/reconcile", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.ReconcileGeneration)
+	js.GET("/:key/versions", h.Admin.NewAPIPlugin.NewAPIVersions)
+	js.GET("/versions/:id/source", h.Admin.NewAPIPlugin.NewAPISource)
+	js.GET("/versions/:id/info", h.Admin.NewAPIPlugin.NewAPIVersionInfo)
+	js.GET("/factories/:key/source", h.Admin.NewAPIPlugin.NewAPIFactorySource)
+	js.POST("/accounts/:id/balance", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.QueryNewAPIPluginBalance)
+	js.POST("/accounts/:id/models", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.QueryNewAPIPluginModels)
+	js.GET("/credential-cleanup", h.Admin.NewAPIPlugin.CredentialRevocations)
+	js.POST("/credential-cleanup/:id/retry", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.CredentialRevocations)
+	js.GET("/accounts/:id/credential", h.Admin.NewAPIPlugin.PluginCredential)
+	js.POST("/accounts/:id/credential", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.PluginCredential)
+	js.POST("/:key/restore", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.RestoreFactory)
+	js.POST("", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.InstallNewAPI)
+	js.PUT("/:id/activation", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.ActivateNewAPI)
 	plugins := admin.Group("/plugins")
 	{
 		plugins.GET("", h.Admin.Plugin.List)

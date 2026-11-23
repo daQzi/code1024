@@ -100,6 +100,8 @@ func (a *userPlatformQuotaServiceAdapter) BatchSnapshotUsage(ctx context.Context
 	repoSnaps := make([]UserPlatformQuotaSnapshot, len(snapshots))
 	for i, s := range snapshots {
 		repoSnaps[i] = UserPlatformQuotaSnapshot{
+			QuotaID:            s.QuotaID,
+			GenerationCursor:   s.GenerationCursor,
 			UserID:             s.UserID,
 			Platform:           s.Platform,
 			DailyUsageUSD:      s.DailyUsageUSD,
@@ -196,6 +198,8 @@ func (a *genericUserPlatformQuotaAdapter) BatchSnapshotUsage(ctx context.Context
 	repoSnaps := make([]UserPlatformQuotaSnapshot, len(snapshots))
 	for i, s := range snapshots {
 		repoSnaps[i] = UserPlatformQuotaSnapshot{
+			QuotaID:            s.QuotaID,
+			GenerationCursor:   s.GenerationCursor,
 			UserID:             s.UserID,
 			Platform:           s.Platform,
 			DailyUsageUSD:      s.DailyUsageUSD,
@@ -216,6 +220,8 @@ func (a *genericUserPlatformQuotaAdapter) BatchSnapshotUsage(ctx context.Context
 // toServiceRecord 将 repository.UserPlatformQuotaRecord 转换为 service.UserPlatformQuotaRecord。
 func toServiceRecord(rec *UserPlatformQuotaRecord) *service.UserPlatformQuotaRecord {
 	return &service.UserPlatformQuotaRecord{
+		QuotaID:            rec.QuotaID,
+		GenerationCursor:   rec.GenerationCursor,
 		UserID:             rec.UserID,
 		Platform:           rec.Platform,
 		DailyLimitUSD:      rec.DailyLimitUSD,

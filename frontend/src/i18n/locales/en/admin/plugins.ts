@@ -1,7 +1,71 @@
 export default {
   plugins: {
+    nativeDescription: 'Manage native Sub .s2plugin extensions independently from New API protocol plugins.',
+    cleanup: {
+      title: 'Credential cleanup', hint: 'Retired grants are revoked using the original connection. Shows the latest 50 records. Changed proxies or disabled plugins require attention; upstream identities still in use are protected.',
+      empty: 'No credential cleanup records.', failed: 'Cleanup operation failed. Refresh and try again.', retry: 'Requeue', queued: 'Queued for a background retry.', attempts: '{count} attempts', account: 'Former account #{id}', version: 'Plugin version #{id}',
+      statuses: { pending: 'Pending', completed: 'Completed', protected: 'Identity in use; protected', attention: 'Needs attention' }
+    },
+    credential: {
+      upstreamBalance: 'Upstream balance (maintenance observation)',
+      autoDisable: 'Allow the plugin to pause this account', autoDisableHint: 'Off by default. When enabled, maintenance can temporarily block calls and restore them when upstream quota recovers.',
+      saveFirst: 'This plugin obtains credentials through upstream login. Save the account, then reopen settings to authorize it.', keyOptional: 'API key (optional for a login plugin)', operationFailed: 'The credential operation did not finish. Refresh status and check the login step, plugin configuration and connection.',
+      title: 'Plugin login and credential maintenance', hint: 'Save the account and plugin settings first, then authorize or maintain credentials here. Keys, refresh tokens and plugin sessions are encrypted on the server.',
+      login: 'Sign in / authorize again', renew: 'Refresh credential', maintain: 'Run maintenance', revoke: 'Revoke credential', openAuthorization: 'Open upstream authorization', callbackURL: 'Callback URL after authorization', expires: 'Expires', pollHint: 'Wait at least {seconds} seconds between polls', checkLogin: 'Check login result', changed: 'Account binding changed. Reopen account settings.', maintenanceFailed: 'The last credential maintenance did not finish. Refresh its status or authorize again.',
+      callbackTitle: 'Plugin authorization callback', callbackHint: 'Copy the full URL below, return to the original account authorization form, paste and submit it. It remains only in this page until you close it.', callbackEmpty: 'No callback parameters are available. Start authorization again in the original account form.',
+      statuses: { uninitialized: 'Not initialized', static: 'Using static API key', login_required: 'Login required', logging_in: 'Waiting for login', active: 'Credential available', auto_disabled: 'Temporarily disabled by the plugin; waiting for maintenance', revoke_pending: 'Locally disabled; retrying upstream revocation', revoked: 'Credential revoked' }
+    },
+    center: {
+      cleanup: 'Credential cleanup',
+      title: 'Plugin center', description: 'Manage upstream adapters, task drivers and request processing. Accounts retain connections, groups and pricing.',
+      installed: 'Installed', market: 'Marketplace', developer: 'Developer submissions', review: 'Submission review', nativeManager: 'Manage native extensions', back: 'Back to plugin center',
+      search: 'Search names, plugin keys or models', kind: 'Capability', source: 'Source', table: 'List', cards: 'Cards',
+      kinds: { all: 'All capabilities', task: 'Task driver', provider: 'Upstream adapter', transform: 'Request processing', native: 'Native extension' },
+      sources: { all: 'All sources', system: 'Built in', uploaded: 'Uploaded', community: 'Site community', external: 'External marketplace', native: 'Native package' },
+      allowOverride: 'Allow this upload to override a built-in plugin key; historical versions and in-flight tasks remain available',
+      factoryHint: 'System versions are registered with the service and disabled by default. Restore preserves enabled state. Change pinned account versions separately in account settings.',
+      empty: 'No matching plugins. Adjust filters or upload source.', unsupported: 'Host integration unavailable', details: 'Details and versions',
+      author: 'Author', models: 'Declared models', compatibility: 'Host compatibility', runnable: 'Available execution paths',
+      restore: 'Restore built-in version', active: 'Active default', accounts: 'Configure upstream account', saved: 'Plugin settings updated.',
+      attribution: 'Protocol runtime derived from the open-source project'
+    },
+    source: {
+      title: 'View source and compare versions', hint: 'Inspect the selected pinned version or compare it with history for the same plugin. Upgrade accounts separately in account settings.',
+      compare: 'Compare against', raw: 'Full selected source (read only)', diff: 'Source changes', unchanged: 'No source changes.',
+      limit: 'The line diff limit is 64K characters and 1500 lines per source. Use the full source box to inspect or copy it.',
+      loadFailed: 'Source retrieval or digest verification failed. Refresh version information and retry.'
+    },
+    js: {
+      serviceFee: 'Service fee per task (USD)', minimumCharge: 'Minimum charge (USD)', maximumHold: 'Maximum base charge (USD, optional)',
+      upstreamKind: 'Upstream service', vendorUpstream: 'Vendor API', newAPIUpstream: 'New API gateway',
+      review: {
+        title: 'Video tasks requiring review', hint: 'Shows the oldest 100 tasks. Confirm the upstream outcome before resuming polling, refunding or settling.',
+        empty: 'No video tasks require review.', identities: 'User #{user} · Account #{account}', held: 'Held ${amount}', open: 'Review task',
+        action: 'Resolution', resume: 'Confirm upstream task ID and resume polling', refund: 'Close task and refund in full', settle: 'Settle confirmed amount',
+        upstreamId: 'Confirmed upstream task ID', amount: 'Final charge (USD, within the hold)', reason: 'Review evidence (at least 4 characters)',
+        safety: 'Resuming polling never submits generation again. Refunds and settlements run in a background transaction and retain an audit record. Confirm the upstream outcome before refunding.',
+        confirm: 'Confirm resolution', saved: 'Resolution recorded. Background processing will resume polling or settle funds.'
+      },
+      pricingTitle: 'Video pricing', addPrice: 'Add price', pricingHint: 'Leave empty to use group video prices. Cost-plus supports unit prices or final upstream bills. Final-bill mode requires a maximum USD hold before group multiplier; excess bills require review and unused funds are refunded.',
+      expressionPrice: 'Task multi-dimensional expression', expressionBody: 'Sale-price expression (USD result)', expressionHint: 'Use New API Task u("field"), tier("name", amount), conditions and scalar math, up to 4096 bytes. Supports hour/minute/weekday/month/day("zone"); the admission time and zone offsets are frozen. Sunday is 0; empty or invalid zones use UTC. Only plugin-declared usage facts are allowed. A positive maximum hold is required. Missing final numeric usage or excess charges require review. Request probes and relay token variables are not supported yet.', invalidExpressionPrice: 'Enter a Task price expression containing 1–4096 bytes.',
+      priceModel: 'Model (* matches all)', priceMode: 'Pricing mode', fixedPrice: 'Fixed unit price', costPlus: 'Upstream cost × markup', priceUnit: 'Billing unit', salePrice: 'Sale price (USD / unit)', sourcePrice: 'Upstream price (source currency / unit)', sourceCurrency: 'Source currency', exchangeRate: 'USD per source currency unit', markup: 'Markup multiplier (e.g. 1.2)', invalidPrice: 'Enter valid prices and unique model names.', units: { request: 'Per task', second: 'Per second', token: 'Per token', credit: 'Per credit', upstream_cost: 'Upstream final bill' },
+      title: 'New API protocol plugins',
+      description: 'Install an upstream protocol plugin, then select it in account management. OpenAI Videos tasks, supported Chat / Responses providers, and separately configured JSON ingress processing are available. Check version compatibility for the exact scope.',
+      builtin: 'Bundled plugin', choose: 'Choose a plugin', installBuiltin: 'Install bundled version', upload: 'Upload plugin.js',
+      empty: 'No JavaScript plugins installed', versions: 'Version history', useVersion: 'Activate this version', modelCount: '{count} declared models',
+      versionNote: 'Version history is retained. Changing the default does not upgrade pinned account bindings; select the version when editing an account. Actual support depends on host services and integration tests.',
+      installed: 'Saved v{version}. Activate it from version history.', tooLarge: 'Source must not exceed 1 MiB',
+      accountTitle: 'Upstream protocol plugin', native: 'Use the platform built-in protocol',
+      accountHint: 'Install and enable a plugin first. This account owns the upstream URL, key, groups and concurrency.',
+      genericVideoHint: 'Generic video plugins require an explicit public-to-upstream model mapping for each model, including identical names. Do not use * as a concrete model. Only these models are exposed; video pricing below or group prices apply.',
+      modelsTitle: 'Upstream Models', modelsHint: 'Queries the saved plugin model discovery route. Apply mapping, capability and pricing changes separately.', modelsQuery: 'Query upstream models', modelsCount: 'Upstream returned {count} models', modelsEmpty: 'The upstream returned an empty model list.', modelsFailed: 'Model query failed. Please try again.',
+      providerHint: 'Provider supports OpenAI Chat / Responses text forwarding, preparation, signing and JSON / SSE / NDJSON conversion, plus save-time key checks, cached token exchange and one renewal after credential rejection. Configure concrete model mappings; existing group prices and multipliers apply. For the built-in OpenAI relay, use the upstream root URL without /v1. Credential checking, exchange, login, refresh, revocation and maintenance hooks have bounded network access. Supports up to 32 follow-ups and explicit plugin stream-to-JSON output. Pinned RelayKit supports Chat to Responses/Anthropic/Gemini, Responses to Chat/Gemini, and +plugin composition; an Anthropic target requires an explicit output-token limit. Saved accounts support login, encrypted credentials, cross-instance refresh claims and timer maintenance. Task OAuth, files and WS are not yet available.',
+      pinned: 'Pinned plugin version #{id}', configSaved: 'Configuration is encrypted. Leave it unchanged to retain saved values.',
+      balanceTitle: 'Upstream Balance', balanceHint: 'Queries the saved account and plugin configuration. Local credit and unsaved edits stay unchanged.', balanceQuery: 'Query upstream balance', balanceUnlimited: 'Unlimited', balanceUnknown: 'No amount reported', balanceFetched: 'Fetched at', balanceResets: 'Resets at', balanceChanged: 'The account plugin changed. Refresh before querying again.', balanceFailed: 'Balance query failed. Please try again.',
+      replaceConfig: 'Replace plugin configuration', invalidJSON: '{name} must contain valid JSON', loadFailed: 'Could not load plugins. Refresh and try again.'
+    },
     title: 'Plugin Management',
-    description: 'Install and manage isolated OAuth outbound transport plugins. API Key flows are unchanged.',
+    description: 'Manage upstream protocols, request processing and native transport plugins, install system or community versions, and inspect host compatibility.',
     upload: 'Install plugin',
     uploadHint: 'Only .s2plugin packages are accepted; trusted publisher signatures are required by default.',
     runtimeNotice: 'Plugin installation, enable/disable, and configuration are handled dynamically by the Sub2API host and normally do not require a host restart. Restart only when the host version or host configuration changes according to your deployment process.',
@@ -28,6 +92,7 @@ export default {
     untested: 'Untested version',
     incompatible: 'Incompatible',
     enabled: 'Enabled',
+    instanceControlled: 'Controlled by processing instances',
     disabled: 'Disabled',
     error: 'Error',
     starting: 'Starting',

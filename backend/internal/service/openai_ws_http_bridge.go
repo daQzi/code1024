@@ -15,6 +15,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/relaymetrics"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
@@ -539,6 +540,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		if err := applyMappedGPT55LiteCompatibility(upstreamReq, account, requestBody); err != nil {
 			return nil, err
 		}
+		applyWSPluginExtraHeaders(ctx, upstreamReq)
 		return upstreamReq, nil
 	}
 	if account.Platform == PlatformGrok {
@@ -663,6 +665,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	firstEventType := ""
 	lastEventType := ""
 	upstreamTerminalEvent := ""
+	performanceOutcome := relaymetrics.Unknown
 	sawDone := false
 	wroteDownstream := false
 	pendingClientMessages := make([][]byte, 0, 4)
@@ -701,6 +704,8 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			Stream:                        reqStream,
 			OpenAIWSMode:                  true,
 			UpstreamTerminalEvent:         upstreamTerminalEvent,
+			PerformanceOutcome:            performanceOutcome,
+			ClientDisconnect:              clientDisconnected,
 			ResponseHeaders:               cloneHeader(resp.Header),
 			Duration:                      time.Since(turnStart),
 			FirstTokenMs:                  firstTokenMs,
@@ -742,6 +747,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			failureAccountSideEffectsApplied = s.handleOpenAIWSFailureAccountSideEffects(ctx, account, mappedModel, resp.Header, bareErrorPayload)
 		}
 		upstreamTerminalEvent = "response.failed"
+		performanceOutcome = relaymetrics.Terminal(bareErrorPayload)
 		if clientDisconnected {
 			return nil
 		}
@@ -977,6 +983,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			return resultWithUsage(), upstreamEventErr
 		}
 		if isOpenAIWSTerminalEvent(eventType) && !bareErrorPending {
+			performanceOutcome = relaymetrics.Terminal(upstreamMessage)
 			if eventType == "response.failed" {
 				upstreamTerminalEvent = "response.failed"
 			} else {
@@ -1016,6 +1023,9 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	}
 	if err := scanner.Err(); err != nil {
 		streamErr := fmt.Errorf("read upstream http bridge stream: %w", err)
+		if abort, ok := ctx.Value(nativeReplyAbortKey{}).(nativeReplyAbort); ok && abort.ctx != nil && abort.ctx.Err() != nil {
+			return resultWithUsage(), streamErr
+		}
 		if turn == 1 && !clientDisconnected && !wroteDownstream {
 			return nil, s.handleOpenAIUpstreamTransportError(ctx, c, account, streamErr, true)
 		}

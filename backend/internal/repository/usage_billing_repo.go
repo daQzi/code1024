@@ -28,6 +28,12 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	}
 
 	cmd.Normalize()
+	if cmd.NativeVideoLog != nil {
+		log := cmd.NativeVideoLog
+		if log.RequestID != cmd.RequestID || log.UserID != cmd.UserID || log.APIKeyID != cmd.APIKeyID || log.AccountID != cmd.AccountID || log.GroupID == nil {
+			return nil, errors.New("native video billing log identity mismatch")
+		}
+	}
 	if cmd.RequestID == "" {
 		return nil, service.ErrUsageBillingRequestIDRequired
 	}
@@ -42,17 +48,28 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 		}
 	}()
 
-	applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
-	if err != nil {
-		return nil, err
+	result := &service.UsageBillingApplyResult{}
+	if !cmd.NativeVideoLogOnly {
+		applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
+		if err != nil {
+			return nil, err
+		}
+		result.Applied = applied
+		if !applied && cmd.NativeVideoLog == nil {
+			return result, nil
+		}
+		if applied {
+			if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
+				return nil, err
+			}
+		}
+	} else if cmd.NativeVideoLog == nil || cmd.BalanceCost != 0 || cmd.SubscriptionCost != 0 || cmd.APIKeyQuotaCost != 0 || cmd.APIKeyRateLimitCost != 0 || cmd.AccountQuotaCost != 0 {
+		return nil, errors.New("invalid log-only native video command")
 	}
-	if !applied {
-		return &service.UsageBillingApplyResult{Applied: false}, nil
-	}
-
-	result := &service.UsageBillingApplyResult{Applied: true}
-	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
-		return nil, err
+	if cmd.NativeVideoLog != nil {
+		if err := persistNativeVideoUsageLog(ctx, tx, cmd.NativeVideoLog); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {

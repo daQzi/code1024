@@ -6,17 +6,88 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
+
+type plazaAccountCatalogStub struct {
+	accounts []Account
+	err      error
+}
+
+func (r plazaAccountCatalogStub) ListActive(context.Context) ([]Account, error) {
+	return r.accounts, r.err
+}
+
+func TestListPlazaGroups_UsesAccountSupportAndGroupAllowlist(t *testing.T) {
+	channels := []Channel{plazaPricedChannel(1, "shared prices", []int64{10, 20, 30}, PlatformOpenAI, "gpt-5", "unsupported", "blocked")}
+	groups := []Group{
+		{ID: 10, Platform: PlatformOpenAI, ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"gpt-5", "unsupported"}}},
+		{ID: 20, Platform: PlatformOpenAI},
+		{ID: 30, Platform: PlatformOpenAI},
+	}
+	svc := newPlazaService(channels, groups, nil)
+	cooldown := time.Now().Add(time.Hour)
+	svc.accountRepo = plazaAccountCatalogStub{accounts: []Account{
+		{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, GroupIDs: []int64{10}, RateLimitResetAt: &cooldown,
+			Credentials: map[string]any{"model_mapping": map[string]any{"gpt-5": "gpt-5", "blocked": "blocked"}}},
+		{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: false, GroupIDs: []int64{20}},
+		{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, GroupIDs: []int64{30}, Credentials: map[string]any{NewAPIPluginRevisionKey: 1}},
+	}}
+	out, err := svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1, "disabled and plugin-only accounts must not advertise native pricing models")
+	require.Equal(t, int64(10), out[0].ID)
+	require.Len(t, out[0].Models, 1)
+	require.Equal(t, "gpt-5", out[0].Models[0].Name, "temporary cooldown must not erase configured support")
+
+	sentinel := errors.New("accounts unavailable")
+	svc.accountRepo = plazaAccountCatalogStub{err: sentinel}
+	_, err = svc.ListGroups(context.Background())
+	require.ErrorIs(t, err, sentinel, "account lookup errors cannot expose the unfiltered price catalog")
+}
+
+func TestListPlazaGroups_ChannelAliasPrecedesAccountMapping(t *testing.T) {
+	channel := plazaPricedChannel(1, "alias", []int64{10}, PlatformOpenAI, "public-video", "other-video")
+	channel.ModelMapping = map[string]map[string]string{PlatformOpenAI: {"public-*": "vendor-video"}}
+	svc := newPlazaService([]Channel{channel}, []Group{{ID: 10, Platform: PlatformOpenAI}}, nil)
+	svc.accountRepo = plazaAccountCatalogStub{accounts: []Account{{
+		Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, GroupIDs: []int64{10},
+		Credentials: map[string]any{"model_mapping": map[string]any{"vendor-video": "actual-video"}},
+	}}}
+	groups, err := svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Len(t, groups[0].Models, 1)
+	require.Equal(t, "public-video", groups[0].Models[0].Name)
+}
+
+func TestListPlazaGroups_ProviderSupportsOnlyConfiguredModels(t *testing.T) {
+	provider, account, _ := providerFixture(t, providerFixtureSource)
+	account.GroupIDs = []int64{10}
+	svc := newPlazaService([]Channel{plazaPricedChannel(1, "provider", []int64{10}, PlatformOpenAI, "public-text", "unsupported")}, []Group{{ID: 10, Platform: PlatformOpenAI}}, nil)
+	svc.accountRepo = plazaAccountCatalogStub{accounts: []Account{*account}}
+	svc.plugins = provider.repo
+	groups, err := svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Len(t, groups[0].Models, 1)
+	require.Equal(t, "public-text", groups[0].Models[0].Name)
+	require.ElementsMatch(t,[]string{"openai_chat","openai_responses"},groups[0].Models[0].Protocols)
+	provider.repo.(*requestPluginFixtureRepo).versions[1].Enabled = false
+	groups, err = svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, groups, "disabled Provider versions cannot advertise callable models")
+}
 
 // newPlazaService 构造 ListGroups 测试用的 ModelPlazaService（不接计费服务：展示定价原样透传）。
 func newPlazaService(channels []Channel, groups []Group, pricing *PricingService) *ModelPlazaService {
 	repo := &mockChannelRepository{
 		listAllFn: func(ctx context.Context) ([]Channel, error) { return channels, nil },
 	}
-	return NewModelPlazaService(repo, &stubGroupRepoForAvailable{activeGroups: groups}, pricing, nil, nil)
+	return NewModelPlazaService(repo, &stubGroupRepoForAvailable{activeGroups: groups}, pricing, nil, nil, nil)
 }
 
 func plazaPricedChannel(id int64, name string, groupIDs []int64, platform string, models ...string) Channel {
@@ -403,7 +474,7 @@ func TestListPlazaGroups_RepoErrorsPropagate(t *testing.T) {
 	repo := &mockChannelRepository{
 		listAllFn: func(ctx context.Context) ([]Channel, error) { return nil, sentinel },
 	}
-	svc := NewModelPlazaService(repo, &stubGroupRepoForAvailable{}, nil, nil, nil)
+	svc := NewModelPlazaService(repo, &stubGroupRepoForAvailable{}, nil, nil, nil, nil)
 	out, err := svc.ListGroups(context.Background())
 	require.Nil(t, out)
 	require.ErrorIs(t, err, sentinel)
@@ -411,7 +482,7 @@ func TestListPlazaGroups_RepoErrorsPropagate(t *testing.T) {
 	svc2 := NewModelPlazaService(
 		&mockChannelRepository{listAllFn: func(ctx context.Context) ([]Channel, error) { return nil, nil }},
 		&stubGroupRepoForAvailable{listActiveErr: sentinel},
-		nil, nil, nil,
+		nil, nil, nil, nil,
 	)
 	out2, err2 := svc2.ListGroups(context.Background())
 	require.Nil(t, out2)
@@ -428,7 +499,7 @@ func newPlazaServiceWithBilling(channels []Channel, groups []Group, groupPlatfor
 	}
 	cs := NewChannelService(repo, nil, nil, nil, nil)
 	bs := NewBillingService(&config.Config{}, catalog)
-	return NewModelPlazaService(repo, &stubGroupRepoForAvailable{activeGroups: groups}, catalog, bs, NewModelPricingResolver(cs, bs))
+	return NewModelPlazaService(repo, &stubGroupRepoForAvailable{activeGroups: groups}, catalog, bs, NewModelPricingResolver(cs, bs), nil)
 }
 
 func plazaModelsByName(models []PlazaModel) map[string]PlazaModel {

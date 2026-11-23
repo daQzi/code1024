@@ -83,3 +83,8 @@ deploy/redis_data/
 .claude/
 issues/
 CLAUDE.md
+
+# Preserve embedded AGPL component notices.
+!backend/internal/newapi/NOTICE.md
+!newapi-engine/NOTICE.md
+!newapi-engine/README.md

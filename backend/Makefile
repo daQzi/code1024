@@ -1,4 +1,4 @@
-.PHONY: build generate test test-unit test-integration test-e2e
+.PHONY: build generate test test-engine test-unit test-integration test-e2e
 
 VERSION ?= $(shell ./scripts/resolve-version.sh)
 LDFLAGS ?= -s -w -X main.Version=$(VERSION)
@@ -10,11 +10,14 @@ generate:
 	go generate ./ent
 	go generate ./cmd/server
 
-test:
+test: test-engine
 	go test ./...
 	golangci-lint run ./...
 
-test-unit:
+test-engine:
+	cd ../newapi-engine && GOWORK=off go test ./...
+
+test-unit: test-engine
 	go test -tags=unit ./...
 
 test-integration:

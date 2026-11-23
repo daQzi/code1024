@@ -1551,11 +1551,11 @@
           :plan="currentOpenCodeOrCNMode()"
         />
         <div>
-          <label class="input-label">{{ t('admin.accounts.apiKeyRequired') }}</label>
+          <label class="input-label">{{ t(newAPIPluginField?.requiresLogin ? 'admin.plugins.credential.keyOptional' : 'admin.accounts.apiKeyRequired') }}</label>
           <input
             v-model="apiKeyValue"
             type="password"
-            required
+            :required="!newAPIPluginField?.requiresLogin"
             class="input font-mono"
             :placeholder="apiKeyValuePlaceholder"
           />
@@ -3232,6 +3232,8 @@
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
+      <NewAPIPluginField v-if="form.type === 'apikey'" :key="form.platform + String(show)" ref="newAPIPluginField" />
+
       <UpstreamRequestIdHeaderField
         v-model="upstreamRequestIdHeader"
         :platform="form.platform"
@@ -4176,6 +4178,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
+import NewAPIPluginField from '@/components/account/NewAPIPluginField.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
 import OpenAIImageSizeTiersField from '@/components/account/OpenAIImageSizeTiersField.vue'
 import {
@@ -4262,6 +4265,7 @@ interface OAuthFlowExposed {
   reset: () => void
 }
 
+const newAPIPluginField = ref<InstanceType<typeof NewAPIPluginField>>()
 const { t } = useI18n()
 const browserTimeZone = getBrowserTimeZone()
 
@@ -5589,6 +5593,9 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
 const submitCreateAccount = async (payload: CreateAccountRequest) => {
   submitting.value = true
   try {
+    if (payload.type === 'apikey' && newAPIPluginField.value) {
+      payload = { ...payload, credentials: newAPIPluginField.value.apply(payload.credentials) }
+    }
     const account = await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
     const modelMapping = payload.credentials.model_mapping
     const hasConcreteMappedTarget = payload.type === 'apikey' &&
@@ -6142,7 +6149,7 @@ const handleSubmit = async () => {
   }
 
   // For apikey type, create directly
-  if (!apiKeyValue.value.trim()) {
+  if (!apiKeyValue.value.trim() && !newAPIPluginField.value?.requiresLogin) {
     appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
     return
   }

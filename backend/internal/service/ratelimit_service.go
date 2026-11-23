@@ -979,7 +979,7 @@ func (s *RateLimitService) GeminiCooldown(ctx context.Context, account *Account)
 // handleAuthError 处理认证类错误(401/403)，停止账号调度
 func (s *RateLimitService) handleAuthError(ctx context.Context, account *Account, errorMsg string) {
 	s.notifyAccountSchedulingBlocked(account, time.Time{}, "auth_error")
-	if err := s.accountRepo.SetError(ctx, account.ID, errorMsg); err != nil {
+	if err := s.setUpstreamAccountError(ctx, account, errorMsg, "auth_error"); err != nil {
 		slog.Warn("account_set_error_failed", "account_id", account.ID, "error", err)
 		return
 	}
@@ -1235,7 +1235,7 @@ func (s *RateLimitService) handleAntigravity403(ctx context.Context, account *Ac
 func (s *RateLimitService) handleCustomErrorCode(ctx context.Context, account *Account, statusCode int, errorMsg string) {
 	msg := "Custom error code " + strconv.Itoa(statusCode) + ": " + errorMsg
 	s.notifyAccountSchedulingBlocked(account, time.Time{}, "custom_error_code")
-	if err := s.accountRepo.SetError(ctx, account.ID, msg); err != nil {
+	if err := s.setUpstreamAccountError(ctx, account, msg, "custom_error_code"); err != nil {
 		slog.Warn("account_set_error_failed", "account_id", account.ID, "status_code", statusCode, "error", err)
 		return
 	}
@@ -3086,7 +3086,7 @@ func (s *RateLimitService) triggerStreamTimeoutError(ctx context.Context, accoun
 	errorMsg := "Stream data interval timeout (repeated failures) for model: " + model
 
 	s.notifyAccountSchedulingBlocked(account, time.Time{}, "stream_timeout_error")
-	if err := s.accountRepo.SetError(ctx, account.ID, errorMsg); err != nil {
+	if err := s.setUpstreamAccountError(ctx, account, errorMsg, "stream_timeout_error"); err != nil {
 		slog.Warn("stream_timeout_set_error_failed", "account_id", account.ID, "error", err)
 		return false
 	}

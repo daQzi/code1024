@@ -2,6 +2,7 @@ package routes
 
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -79,6 +80,17 @@ func RegisterUserRoutes(
 			}
 		}
 
+		registry := authenticated.Group("/plugin-registry")
+		registry.Use(panelRateLimiter.Heavy())
+		registry.Use(middleware.RequestBodyLimit(2<<20, pkghttputil.NewBodyMemoryBudget(64<<20)))
+		registry.GET("", h.PluginRegistry.Mine)
+		registry.GET("/market", h.PluginRegistry.Market)
+		registry.GET("/templates", h.PluginRegistry.Templates)
+		registry.GET("/:id", h.PluginRegistry.Get)
+		registry.POST("", h.PluginRegistry.Save)
+		registry.POST("/dry-run", h.PluginRegistry.DryRun)
+		registry.POST("/:id/transition", h.PluginRegistry.Transition)
+
 		// API Key管理
 		keys := authenticated.Group("/keys")
 		{
@@ -103,6 +115,13 @@ func RegisterUserRoutes(
 		}
 
 		// 使用记录（聚合统计属重查询，叠加更严格的按用户限流）
+		taskLogs := authenticated.Group("/task-logs")
+		taskLogs.Use(panelRateLimiter.Heavy())
+		taskLogs.GET("", h.TaskLog.List)
+		taskLogs.GET("/:task_id", h.TaskLog.Get)
+		taskLogs.GET("/:task_id/content", h.TaskLog.Content)
+
+		// 使用记录
 		usage := authenticated.Group("/usage")
 		usage.Use(panelRateLimiter.Heavy())
 		{

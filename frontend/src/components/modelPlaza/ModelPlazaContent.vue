@@ -47,10 +47,18 @@
         @update:rate="selectedRate = $event"
         @update:search="searchQuery = $event"
       />
+      <div class="flex flex-wrap items-end gap-3">
+        <label><span class="input-label">{{ t('modelPlaza.catalog.kind') }}</span><select v-model="selectedKind" class="input"><option value="all">{{ t('modelPlaza.filters.all') }}</option><option v-for="kind in kinds" :key="kind" :value="kind">{{ t(`modelPlaza.catalog.modes.${kind}`) }}</option></select></label>
+        <label><span class="input-label">{{ t('modelPlaza.catalog.protocol') }}</span><select v-model="selectedProtocol" class="input"><option value="all">{{ t('modelPlaza.filters.all') }}</option><option v-for="protocol in protocols" :key="protocol" :value="protocol">{{ protocol }}</option></select></label>
+        <p role="status" class="pb-2 text-xs text-gray-500">{{ t('modelPlaza.catalog.modelCount', { count: modelCount }) }}</p>
+        <div class="ml-auto flex gap-1 rounded-lg border border-gray-200 p-1 dark:border-dark-700" :aria-label="t('modelPlaza.catalog.view')">
+          <button v-for="option in ['cards', 'table'] as const" :key="option" type="button" class="rounded-md px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500" :class="view === option ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-500'" :aria-pressed="view === option" @click="view = option">{{ t(`modelPlaza.catalog.${option}`) }}</button>
+        </div>
+      </div>
 
       <!-- 分组分节的模型清单(默认按生效倍率升序) -->
       <div v-if="filteredGroups.length > 0" class="space-y-5">
-        <PlazaGroupSection v-for="g in filteredGroups" :key="g.id" :group="g" />
+        <PlazaModelCatalog :groups="filteredGroups" :view="view" :group-id="selectedGroupId === 'all' ? undefined : selectedGroupId" />
       </div>
       <div
         v-else
@@ -64,13 +72,14 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
 import PlazaFilterBar from './PlazaFilterBar.vue'
-import PlazaGroupSection from './PlazaGroupSection.vue'
-import type { ModelPlazaGroup, ModelPlazaResponse } from '@/api/modelPlaza'
+import PlazaModelCatalog from './PlazaModelCatalog.vue'
+import type { ModelPlazaGroup, ModelPlazaResponse, PlazaModel } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
@@ -82,13 +91,30 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 const selectedPlatform = ref<string>('all')
 const selectedGroupId = ref<number | 'all'>('all')
+watch([() => props.response?.groups, () => route.query.group_id], ([groups, raw]) => {
+  if (!groups) return
+  const requested = Number(raw)
+  selectedGroupId.value = raw === 'all' ? 'all' : groups.some(group => group.id === requested) ? requested : groups[0]?.id ?? 'all'
+}, { immediate: true })
+watch(selectedGroupId, (id) => {
+  if (String(id) !== route.query.group_id) void router.replace({ query: { ...route.query, group_id: String(id) } })
+})
 const selectedRate = ref<number | 'all'>('all')
 const searchQuery = ref('')
+const selectedKind = ref('all')
+const selectedProtocol = ref('all')
+const view = ref<'cards' | 'table'>('cards')
+function modelKind(model: PlazaModel) { return model.protocols?.includes('openai_video') ? 'video' : model.pricing?.billing_mode ?? 'token' }
+const kinds = computed(() => [...new Set((props.response?.groups ?? []).flatMap(group => group.models.map(modelKind)))].sort())
+const protocols = computed(() => [...new Set((props.response?.groups ?? []).flatMap(group => group.models.flatMap(model => model.protocols ?? [])))].sort())
+const modelCount = computed(() => new Set(filteredGroups.value.flatMap(group => group.models.map(model => model.id ?? JSON.stringify([model.platform, model.name])))).size)
 
 const searchActive = computed(() => searchQuery.value.trim() !== '')
 
@@ -141,9 +167,9 @@ const filteredGroups = computed(() => {
   }
   // 模型名搜索:分组内只留命中的模型,整组无命中则隐藏该分组。
   const q = searchQuery.value.trim().toLowerCase()
-  if (q) {
+  if (q || selectedKind.value !== 'all' || selectedProtocol.value !== 'all') {
     groups = groups
-      .map((g) => ({ ...g, models: g.models.filter((m) => m.name.toLowerCase().includes(q)) }))
+      .map((g) => ({ ...g, models: g.models.filter((m) => m.name.toLowerCase().includes(q) && (selectedKind.value === 'all' || modelKind(m) === selectedKind.value) && (selectedProtocol.value === 'all' || m.protocols?.includes(selectedProtocol.value))) }))
       .filter((g) => g.models.length > 0)
   }
   // 专属倍率会改变生效值,不能只依赖后端按默认倍率的排序。

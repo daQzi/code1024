@@ -20,6 +20,18 @@ func (s *OpenAIGatewayService) FetchOpenAIModelsList(ctx context.Context, accoun
 	if s == nil || account == nil {
 		return nil, infraerrors.New(http.StatusInternalServerError, "OPENAI_MODELS_ACCOUNT_REQUIRED", "OpenAI account is required")
 	}
+	if account.HasNewAPIPlugin() {
+		declared := append(account.NewAPIVideoModels(), account.NewAPIProviderModels()...)
+		entries := make([]map[string]any, 0, len(declared))
+		for _, model := range declared {
+			entries = append(entries, map[string]any{"id": model, "object": "model", "created": 0, "owned_by": "plugin"})
+		}
+		body, err := json.Marshal(map[string]any{"object": "list", "data": entries})
+		if err != nil {
+			return nil, err
+		}
+		return &OpenAIModelsResponse{Body: body, ETag: codexModelsManifestBodyETag(body)}, nil
+	}
 	credentialAccount, err := resolveCredentialAccount(ctx, s.accountRepo, account)
 	if err != nil {
 		return nil, fmt.Errorf("resolve model list credentials: %w", err)

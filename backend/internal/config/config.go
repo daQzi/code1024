@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/sysutil"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 	"github.com/spf13/viper"
 	"golang.org/x/net/http/httpguts"
 )
@@ -110,6 +111,7 @@ type Config struct {
 	BatchImage              BatchImageConfig              `mapstructure:"batch_image"`
 	ImageStorage            ImageStorageConfig            `mapstructure:"image_storage"`
 	Plugins                 PluginConfig                  `mapstructure:"plugins"`
+	NewAPIEngine            NewAPIEngineConfig            `mapstructure:"newapi_engine"`
 
 	// Enforce only API-key spending windows in simple mode.
 	SimpleModeKeyRateLimitEnabled bool `mapstructure:"simple_mode_key_rate_limit_enabled" yaml:"simple_mode_key_rate_limit_enabled"`
@@ -177,6 +179,13 @@ type PluginConfig struct {
 	MaxUploadBytes       int64             `mapstructure:"max_upload_bytes"`
 	MaxUncompressedBytes int64             `mapstructure:"max_uncompressed_bytes"`
 	StartTimeoutSeconds  int               `mapstructure:"start_timeout_seconds"`
+}
+
+// NewAPIEngineConfig 控制独立的 New API JS 插件、请求处理与持久任务引擎模块。
+// 设为 false 时主站跳过 JS 运行时、凭据维护与任务执行器装配，原生 Sub2API
+// 账号、协议转发、原生视频维护与原生 .s2plugin 运行时继续照常工作。
+type NewAPIEngineConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 type LogConfig struct {
@@ -1049,6 +1058,9 @@ const (
 
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
+	// Complete real model IDs that must retain @key:value segments. Entries
+	// prefixed with re: use bounded, startup-compiled Go regular expressions.
+	ModelModifierExemptions []string `mapstructure:"model_modifier_exemptions"`
 	// MinOutputTokens is the minimum max_output_tokens used when
 	// converting Chat Completions or Anthropic requests to Responses.
 	MinOutputTokens int `mapstructure:"min_output_tokens"`
@@ -2131,6 +2143,7 @@ func configureConfigSource(setConfigFile, addConfigPath func(string)) {
 func setDefaults() {
 	viper.SetDefault("run_mode", RunModeStandard)
 	viper.SetDefault("gateway.min_output_tokens", 128)
+	viper.SetDefault("gateway.model_modifier_exemptions", []string{})
 	viper.SetDefault("simple_mode.auto_create_default_groups", true)
 	viper.SetDefault("simple_mode_key_rate_limit_enabled", false)
 
@@ -2454,6 +2467,9 @@ func setDefaults() {
 	viper.SetDefault("plugins.max_upload_bytes", int64(128*1024*1024))
 	viper.SetDefault("plugins.max_uncompressed_bytes", int64(256*1024*1024))
 	viper.SetDefault("plugins.start_timeout_seconds", 15)
+
+	// 独立 New API 插件与任务引擎模块，默认启用；停用后不影响原生 Sub2API 与 .s2plugin。
+	viper.SetDefault("newapi_engine.enabled", true)
 
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
@@ -2814,6 +2830,9 @@ func setEnvReachableDefaults() {
 }
 
 func (c *Config) Validate() error {
+	if _, err := modelmodifier.CompilePolicy(c.Gateway.ModelModifierExemptions); err != nil {
+		return fmt.Errorf("gateway.model_modifier_exemptions: %w", err)
+	}
 	if c.Gateway.MinOutputTokens < 16 {
 		return fmt.Errorf("gateway.min_output_tokens must be at least 16")
 	}

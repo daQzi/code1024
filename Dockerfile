@@ -72,6 +72,7 @@ WORKDIR /app/backend
 
 # Copy go mod files first (better caching)
 COPY backend/go.mod backend/go.sum ./
+COPY newapi-engine/go.mod newapi-engine/go.sum /app/newapi-engine/
 # Cache mount keeps the module cache across builds so a transient CDN blip on
 # retry resumes instead of re-fetching every zip from scratch.
 RUN --mount=type=cache,id=sub2api-gomod,target=/go/pkg/mod \
@@ -79,6 +80,7 @@ RUN --mount=type=cache,id=sub2api-gomod,target=/go/pkg/mod \
 
 # Copy backend source first
 COPY backend/ ./
+COPY newapi-engine/ /app/newapi-engine/
 
 # Copy frontend dist from previous stage (must be after backend copy to avoid being overwritten)
 COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
@@ -141,6 +143,9 @@ WORKDIR /app
 # Copy binary/resources with ownership to avoid extra full-layer chown copy
 COPY --from=backend-builder --chown=sub2api:sub2api /app/sub2api /app/sub2api
 COPY --from=backend-builder --chown=sub2api:sub2api /app/backend/resources /app/resources
+
+# Preserve the license and source notice for the embedded plugin runtime.
+COPY backend/internal/newapi/LICENSE backend/internal/newapi/NOTICE.md /app/licenses/newapi/
 
 # Create data directory
 RUN mkdir -p /app/data && chown sub2api:sub2api /app/data

@@ -1125,6 +1125,19 @@ func (s *APIKeyService) GetUserGroupVisibility(ctx context.Context, userID int64
 	return allowed, user.RestrictPublicGroups, nil
 }
 
+// ModelPlazaSessionRole revalidates a short-lived performance subscription
+// against current user state. Group visibility is resolved separately per tick.
+func (s *APIKeyService) ModelPlazaSessionRole(ctx context.Context, userID, tokenVersion int64) (string, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if user == nil || !user.IsActive() || user.TokenVersion != tokenVersion {
+		return "", infraerrors.Unauthorized("SESSION_CHANGED", "Session is no longer valid")
+	}
+	return user.Role, nil
+}
+
 // GetUserGroupRates 获取用户的专属分组倍率配置
 // 返回 map[groupID]rateMultiplier
 func (s *APIKeyService) GetUserGroupRates(ctx context.Context, userID int64) (map[int64]float64, error) {

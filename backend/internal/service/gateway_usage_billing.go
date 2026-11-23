@@ -12,6 +12,7 @@ import (
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/shopspring/decimal"
 )
 
 func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
@@ -74,6 +75,7 @@ type usageLogBestEffortWriter interface {
 
 // postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
+	NativeVideoBilling    *NativeVideoBillingSnapshot
 	Cost                  *CostBreakdown
 	User                  *User
 	APIKey                *APIKey
@@ -290,6 +292,9 @@ func resolveUsageBillingPayloadFingerprint(ctx context.Context, requestPayloadHa
 func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsageBillingParams) *UsageBillingCommand {
 	if p == nil || p.Cost == nil || p.APIKey == nil || p.User == nil || p.Account == nil {
 		return nil
+	}
+	if p.NativeVideoBilling != nil {
+		return p.NativeVideoBilling.command(usageLog, p.Cost, p.RequestPayloadHash)
 	}
 
 	cmd := &UsageBillingCommand{
@@ -589,14 +594,14 @@ func detachStreamUpstreamContext(ctx context.Context, stream bool) (context.Cont
 	if !stream {
 		return ctx, func() {}
 	}
-	return pkghttputil.DetachUpstreamContext(ctx), func() {}
+	return withNativeReplyUpstreamAbort(pkghttputil.DetachUpstreamContext(ctx)), func() {}
 }
 
 func detachUpstreamContext(ctx context.Context, drainTimeout ...time.Duration) (context.Context, context.CancelFunc) {
 	if ctx == nil {
 		return context.Background(), func() {}
 	}
-	return pkghttputil.DetachUpstreamContext(ctx, drainTimeout...), func() {}
+	return withNativeReplyUpstreamAbort(pkghttputil.DetachUpstreamContext(ctx, drainTimeout...)), func() {}
 }
 
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
@@ -775,6 +780,10 @@ func logResponseModelBillingApplied(component string, account *Account, requestI
 // recordUsageCore 是 RecordUsage 的核心实现。
 func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsageCoreInput) error {
 	result := input.Result
+	if result == nil {
+		return errors.New("usage result is nil")
+	}
+	defer result.pluginReportBilling.complete(decimal.Zero, false)
 	apiKey := input.APIKey
 	user := input.User
 	account := input.Account
@@ -864,6 +873,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
 		logger.LegacyPrintf("service.gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
 		s.deferredService.ScheduleLastUsedUpdate(account.ID)
+		result.pluginReportBilling.complete(decimal.Zero, true)
 		return nil
 	}
 
@@ -878,7 +888,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		}
 	}
 	requestID := usageLog.RequestID
-	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
+	applied, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                       cost,
 		User:                       user,
 		APIKey:                     apiKey,
@@ -898,6 +908,13 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		return billingErr
 	}
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+	if result.pluginReportBilling != nil && applied && s.usageBillingRepo != nil {
+		amount := decimal.NewFromFloat(usageLog.ActualCost).Round(UsageBillingMonetaryScale)
+		if simpleModeKeyRateLimitOnly {
+			amount = decimal.Zero
+		}
+		result.pluginReportBilling.complete(amount, true)
+	}
 
 	return nil
 }

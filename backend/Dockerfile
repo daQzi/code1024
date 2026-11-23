@@ -1,18 +1,21 @@
 FROM golang:1.27.4-alpine
 
-WORKDIR /app
+# Build from the repository root: docker build -f backend/Dockerfile .
+WORKDIR /app/backend
 
 # 安装必要的工具
 RUN apk add --no-cache git
 
 # 复制go.mod和go.sum
-COPY go.mod go.sum ./
+COPY backend/go.mod backend/go.sum ./
+COPY newapi-engine/go.mod newapi-engine/go.sum /app/newapi-engine/
 
 # 下载依赖
 RUN go mod download
 
 # 复制源代码
-COPY . .
+COPY backend/ .
+COPY newapi-engine/ /app/newapi-engine/
 
 # 构建应用
 RUN VERSION_VALUE="$(./scripts/resolve-version.sh)" && \

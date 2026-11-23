@@ -26,6 +26,8 @@ func TestScopedAdminKeyManagementRoutesRequireStepUp(t *testing.T) {
 		{"POST", "/api/v1/admin/settings/admin-api-keys/key-1/rotate"},
 		{"DELETE", "/api/v1/admin/settings/admin-api-keys/key-1"},
 		{"DELETE", "/api/v1/admin/settings/admin-api-keys/key-1/record"},
+		{"PUT", "/api/v1/admin/task-logs/native_video_fixture/native-maintenance"},
+		{"PUT", "/api/v1/admin/request-processing/model-modifiers"},
 	} {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest(test.method, test.path, nil))

@@ -161,6 +161,16 @@ func TestOpenAIGatewayHandlerSubmitMandatoryUsageRecordTask_DroppedTaskSyncFallb
 }
 
 func TestOpenAIGatewayHandlerSubmitOpenAIUsageRecordTask_ImageResultUsesMandatoryFallback(t *testing.T) {
+	testOpenAIUsageMandatoryFallback(t, &service.OpenAIForwardResult{ImageCount: 1})
+}
+
+func TestOpenAIGatewayHandlerSubmitOpenAIUsageRecordTask_NativeVideoUsesMandatoryFallback(t *testing.T) {
+	// Ark completion has output tokens and no image/video count.
+	testOpenAIUsageMandatoryFallback(t, &service.OpenAIForwardResult{NativeVideoBilling: &service.NativeVideoBillingSnapshot{}, Usage: service.OpenAIUsage{OutputTokens: 12345}})
+}
+
+func testOpenAIUsageMandatoryFallback(t *testing.T, result *service.OpenAIForwardResult) {
+	t.Helper()
 	pool := service.NewUsageRecordWorkerPoolWithOptions(service.UsageRecordWorkerPoolOptions{
 		WorkerCount:           1,
 		QueueSize:             1,
@@ -182,12 +192,12 @@ func TestOpenAIGatewayHandlerSubmitOpenAIUsageRecordTask_ImageResultUsesMandator
 	pool.Submit(func(ctx context.Context) {})
 
 	var called atomic.Bool
-	h.submitOpenAIUsageRecordTask(context.Background(), &service.OpenAIForwardResult{ImageCount: 1}, func(ctx context.Context) {
+	h.submitOpenAIUsageRecordTask(context.Background(), result, func(ctx context.Context) {
 		called.Store(true)
 	})
 	close(release)
 
-	require.True(t, called.Load(), "image usage task must be mandatory when async submit is dropped")
+	require.True(t, called.Load(), "financial usage task must be mandatory when async submit is dropped")
 }
 
 func TestOpenAIGatewayHandlerSubmitOpenAIUsageRecordTask_SearchCountUsesMandatoryFallback(t *testing.T) {

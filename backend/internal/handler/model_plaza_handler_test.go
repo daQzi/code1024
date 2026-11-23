@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -272,18 +273,74 @@ func (plazaVarySettingRepo) GetMultiple(context.Context, []string) (map[string]s
 	return map[string]string{service.SettingKeyModelPlazaEnabled: "true"}, nil
 }
 
-type plazaVaryChannelRepo struct{ service.ChannelRepository }
+type plazaVaryChannelRepo struct {
+	service.ChannelRepository
+	channels []service.Channel
+}
 
-func (plazaVaryChannelRepo) ListAll(context.Context) ([]service.Channel, error) { return nil, nil }
+func (r plazaVaryChannelRepo) ListAll(context.Context) ([]service.Channel, error) {
+	return r.channels, nil
+}
 
-type plazaVaryGroupRepo struct{ service.GroupRepository }
+type plazaVaryGroupRepo struct {
+	service.GroupRepository
+	groups []service.Group
+}
 
-func (plazaVaryGroupRepo) ListActive(context.Context) ([]service.Group, error) { return nil, nil }
+func (r plazaVaryGroupRepo) ListActive(context.Context) ([]service.Group, error) {
+	return r.groups, nil
+}
+
+type plazaScopeMetricsStub struct {
+	service.ModelPlazaMetricsRepository
+	groups []int64
+}
+
+func (r *plazaScopeMetricsStub) ReadModelSummaries(_ context.Context, scopes []service.PlazaMetricsScope, _, _ time.Time) (map[string]service.PlazaMetricsPoint, error) {
+	for _, scope := range scopes {
+		r.groups = append(r.groups, scope.GroupIDs...)
+	}
+	return map[string]service.PlazaMetricsPoint{}, nil
+}
+
+func TestModelPlazaHandler_SelectedGroupRestrictsCatalogAndMetrics(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	metrics := &plazaScopeMetricsStub{}
+	svc := service.ProvideModelPlazaService(
+		plazaVaryChannelRepo{channels: []service.Channel{{Status: service.StatusActive, GroupIDs: []int64{1, 2, 3}, ModelMapping: map[string]map[string]string{"openai": {"model": "model"}}}}},
+		plazaVaryGroupRepo{groups: []service.Group{{ID: 1, Platform: "openai"}, {ID: 2, Platform: "openai", IsExclusive: true}, {ID: 3, Platform: "openai"}}},
+		nil, nil, nil, metrics, nil, nil, nil,
+	)
+	h := NewModelPlazaHandler(svc, nil, service.NewSettingService(plazaVarySettingRepo{}, &config.Config{}))
+	r := gin.New()
+	r.GET("/model-plaza", h.Get)
+	r.GET("/model-plaza/performance", h.GetPerformanceSummaries)
+	for _, tc := range []struct {
+		query string
+		code  int
+	}{{"?group_id=3", 200}, {"?group_id=2", 404}, {"?group_id=99", 404}, {"?group_id=-1", 400}, {"?group_id=bad", 400}} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/model-plaza"+tc.query, nil))
+		require.Equal(t, tc.code, w.Code, w.Body.String())
+		if tc.code == 200 {
+			var body struct {
+				Data modelPlazaResponse `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			require.Len(t, body.Data.Groups, 1)
+			require.Equal(t, int64(3), body.Data.Groups[0].ID)
+		}
+	}
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/model-plaza/performance?group_id=3&ids="+plazaModelID("openai", "model"), nil))
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, []int64{3}, metrics.groups)
+}
 
 func TestModelPlazaHandler_VaryKeepsCORSOrigin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := NewModelPlazaHandler(
-		service.NewModelPlazaService(plazaVaryChannelRepo{}, plazaVaryGroupRepo{}, nil, nil, nil),
+		service.NewModelPlazaService(plazaVaryChannelRepo{}, plazaVaryGroupRepo{}, nil, nil, nil, nil),
 		nil,
 		service.NewSettingService(plazaVarySettingRepo{}, &config.Config{}),
 	)

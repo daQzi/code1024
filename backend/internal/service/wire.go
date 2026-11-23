@@ -186,6 +186,86 @@ func ProvidePluginManager(repo PluginRepository, encryptor SecretEncryptor, cfg 
 	return manager
 }
 
+func ProvideNewAPIPluginService(repo NewAPIPluginRepository, encryptor SecretEncryptor, gateway *OpenAIGatewayService, proxyRepo ProxyRepository, tasks GenerationTaskRepository, settings SettingRepository, notifications *NotificationEmailService) (*NewAPIPluginService, error) {
+	svc, err := NewNewAPIPluginService(repo, encryptor)
+	if err != nil {
+		return nil, err
+	}
+	svc.gateway = gateway
+	svc.proxyRepo = proxyRepo
+	svc.marketSettings = settings
+	if notifications != nil {
+		svc.credentialNotifier = &pluginCredentialNotifier{settings: settings, sender: notifications, limiter: newSlidingWindowLimiter(0, time.Hour)}
+	}
+	svc.files, _ = tasks.(GenerationFileRepository)
+	svc.preparations, _ = tasks.(GenerationPreparationRepository)
+	gateway.newAPIPlugins = svc
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := svc.RegisterFactoryVersions(ctx); err != nil {
+		svc.Stop()
+		return nil, err
+	}
+	if settings != nil {
+		if _, err := svc.ModelModifierSettings(ctx); err != nil {
+			svc.Stop()
+			return nil, err
+		}
+		if _, err := svc.ProviderToolPrices(ctx); err != nil {
+			svc.Stop()
+			return nil, err
+		}
+	}
+	svc.startCredentialMaintenance()
+	return svc, nil
+}
+
+func ProvideAdminService(
+	cfg *config.Config,
+	userRepo UserRepository,
+	groupRepo AdminGroupRepository,
+	accountRepo AdminAccountRepository,
+	proxyRepo ProxyRepository,
+	apiKeyRepo APIKeyRepository,
+	redeemCodeRepo RedeemCodeRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	userRPMCache UserRPMCache,
+	billingCacheService *BillingCacheService,
+	proxyProber ProxyExitInfoProber,
+	proxyLatencyCache ProxyLatencyCache,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	entClient *dbent.Client,
+	settingService *SettingService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	userSubRepo UserSubscriptionRepository,
+	privacyClientFactory PrivacyClientFactory,
+	runtimeBlocker AccountRuntimeBlocker,
+	affiliateService *AffiliateService,
+	compositeRouteRepo CompositeModelRouteRepository,
+	compositeResolver *CompositeRouteResolver,
+	channelCacheInvalidator ChannelCacheInvalidator,
+
+	newAPIPlugins *NewAPIPluginService,
+) AdminService {
+	svc := NewAdminService(cfg, userRepo, groupRepo, accountRepo, proxyRepo, apiKeyRepo, redeemCodeRepo, userGroupRateRepo, userRPMCache, billingCacheService, proxyProber, proxyLatencyCache, authCacheInvalidator, entClient, settingService, defaultSubAssigner, userSubRepo, privacyClientFactory, runtimeBlocker, affiliateService, compositeRouteRepo, compositeResolver, channelCacheInvalidator).(*adminServiceImpl)
+	svc.newAPIPlugins = newAPIPlugins
+	return svc
+}
+
+func ProvideModelPlazaService(channelRepo ChannelRepository, groupRepo GroupRepository, pricing *PricingService, billing *BillingService, resolver *ModelPricingResolver, metrics ModelPlazaMetricsRepository, plugins NewAPIPluginRepository, accounts AccountRepository, gateway *OpenAIGatewayService) *ModelPlazaService {
+	svc := NewModelPlazaService(channelRepo, groupRepo, pricing, billing, resolver, accounts)
+	svc.generationCatalog, _ = plugins.(GenerationCatalogRepository)
+	svc.plugins = plugins
+	svc.metrics = metrics
+	if writer, ok := metrics.(RelayPerformanceRepository); ok {
+		svc.performanceRecorder = NewRelayPerformanceRecorder(writer)
+		if gateway != nil {
+			gateway.performanceRecorder = svc.performanceRecorder
+		}
+	}
+	return svc
+}
+
 // ProvideOpenAIQuotaService wires the OpenAI quota query/reset service.
 // It depends on the OpenAI token provider for refreshed access tokens and the
 // privacy client factory for the impersonated upstream HTTP client.
@@ -881,7 +961,7 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	ProvideBillingCacheService,
 	NewAnnouncementService,
-	NewAdminService,
+	ProvideAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
 	ProvideImageStorageSettingService,
@@ -891,6 +971,7 @@ var ProviderSet = wire.NewSet(
 	NewBatchImageDownloadService,
 	ProvideBatchImageCleanupService,
 	ProvideBatchImageWorkerRuntime,
+	NewNativeVideoWorkers,
 	wire.Bind(new(AccountRuntimeBlocker), new(*OpenAIGatewayService)),
 	NewOAuthService,
 	ProvideClaudeResetCreditService,
@@ -979,7 +1060,7 @@ var ProviderSet = wire.NewSet(
 	NewChannelService,
 	wire.Bind(new(ChannelCacheInvalidator), new(*ChannelService)),
 	NewModelPricingResolver,
-	NewModelPlazaService,
+	ProvideModelPlazaService,
 	NewContentModerationService,
 	NewAffiliateService,
 	ProvidePaymentConfigService,

@@ -25,6 +25,9 @@ const (
 	EndpointResponsesInputTokens = "/v1/responses/input_tokens"
 	EndpointImagesGenerations    = "/v1/images/generations"
 	EndpointImagesEdits          = "/v1/images/edits"
+	EndpointVoiceTTS             = "/v1/tts"
+	EndpointVoiceSTT             = "/v1/stt"
+	EndpointRealtime             = "/v1/realtime"
 	EndpointImageTasks           = "/v1/images/tasks"
 	EndpointVideosGenerations    = "/v1/videos/generations"
 	EndpointVideosEdits          = "/v1/videos/edits"
@@ -91,6 +94,12 @@ func NormalizeInboundEndpoint(path string) string {
 		return EndpointResponsesInputTokens
 	case strings.Contains(path, EndpointEmbeddings):
 		return EndpointEmbeddings
+	case strings.HasSuffix(path, "/tts"):
+		return EndpointVoiceTTS
+	case strings.HasSuffix(path, "/stt"):
+		return EndpointVoiceSTT
+	case strings.HasSuffix(path, "/realtime"):
+		return EndpointRealtime
 	case strings.Contains(path, EndpointAlphaSearch) || isBareOrSubpathOf(strings.TrimRight(path, "/"), "/alpha/search") || isBareOrSubpathOf(strings.TrimRight(path, "/"), "/backend-api/codex/alpha/search"):
 		return EndpointAlphaSearch
 	case strings.Contains(path, EndpointChatCompletions):

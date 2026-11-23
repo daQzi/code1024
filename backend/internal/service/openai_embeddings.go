@@ -23,8 +23,23 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 	account *Account,
 	body []byte,
 	defaultMappedModel string,
-) (*OpenAIForwardResult, error) {
+) (result *OpenAIForwardResult, retErr error) {
+	if account.HasNewAPIPlugin() {
+		return s.forwardNewAPIProvider(ctx, c, account, body, newAPIProviderEmbeddings, defaultMappedModel)
+	}
+	report := beginRelayReportAttempt(ctx, account, resolveOpenAIForwardModel(account, gjson.GetBytes(body, "model").String(), defaultMappedModel), false)
+	defer func() { report.result(result) }()
+	return s.forwardNativeWithRequestPlugins(ctx, c, account, body, newAPIProviderEmbeddings, defaultMappedModel, func(ctx context.Context, body []byte) (*OpenAIForwardResult, error) {
+		// The pinned New API baseline only checks generated text at reply.
+		// Embedding vectors remain byte-for-byte outside that stage.
+		return s.forwardEmbeddings(ctx, c, account, body, defaultMappedModel)
+	})
+}
+
+func (s *OpenAIGatewayService) forwardEmbeddings(ctx context.Context, c *gin.Context, account *Account, body []byte, defaultMappedModel string) (*OpenAIForwardResult, error) {
 	startTime := time.Now()
+	beginUpstreamResponseModelObservation(c)
+	ClearActualOpenAIUpstreamEndpoint(c)
 
 	originalModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
 	if originalModel == "" {
@@ -62,6 +77,12 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 		return nil, fmt.Errorf("invalid base_url: %w", err)
 	}
 	targetURL := buildOpenAIEmbeddingsURL(validatedURL)
+	SetActualOpenAIUpstreamEndpoint(c, newAPIProviderEmbeddings)
+	processed, err := s.nativeRequestPluginOutbound(ctx, account, newAPIProviderEmbeddings, upstreamBody)
+	if err != nil {
+		return nil, err
+	}
+	upstreamBody = processed.Body
 
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 	upstreamReq, err := http.NewRequestWithContext(upstreamCtx, http.MethodPost, targetURL, bytes.NewReader(upstreamBody))
@@ -87,6 +108,7 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效）
 	account.ApplyHeaderOverrides(upstreamReq.Header)
+	applyNativeRequestPluginHeaders(upstreamReq, processed.Headers)
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
@@ -164,14 +186,15 @@ func (s *OpenAIGatewayService) ForwardEmbeddings(
 	writeOpenAIEmbeddingsUpstreamResponse(c, resp, respBody, s.responseHeaderFilter)
 
 	return &OpenAIForwardResult{
-		RequestID:       firstNonEmptyString(resp.Header.Get("x-request-id"), resp.Header.Get("request-id")),
-		UpstreamHeaders: resp.Header,
-		Usage:           extractOpenAIEmbeddingsUsage(respBody),
-		Model:           originalModel,
-		BillingModel:    billingModel,
-		UpstreamModel:   upstreamModel,
-		Stream:          false,
-		Duration:        time.Since(startTime),
+		RequestID:          firstNonEmptyString(resp.Header.Get("x-request-id"), resp.Header.Get("request-id")),
+		UpstreamHeaders:    resp.Header,
+		Usage:              extractOpenAIEmbeddingsUsage(respBody),
+		Model:              originalModel,
+		BillingModel:       billingModel,
+		UpstreamModel:      upstreamModel,
+		Stream:             false,
+		Duration:           time.Since(startTime),
+		PerformanceOutcome: embeddingsPerformance(respBody),
 	}, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 )
 
@@ -31,7 +33,7 @@ var supportedGrokVoiceHTTPEndpoints = map[string]struct{}{
 // the custom-voices CRUD/audio subresources).
 // The response is intentionally passed through because TTS returns audio bytes
 // while STT returns JSON and xAI may add format-specific headers.
-func (s *OpenAIGatewayService) ForwardGrokVoice(ctx context.Context, c *gin.Context, account *Account, endpoint string, body []byte, contentType string) (*OpenAIForwardResult, error) {
+func (s *OpenAIGatewayService) ForwardGrokVoice(ctx context.Context, c *gin.Context, account *Account, endpoint string, body []byte, contentType string) (result *OpenAIForwardResult, retErr error) {
 	if s == nil || account == nil {
 		return nil, fmt.Errorf("grok voice service/account is required")
 	}
@@ -56,6 +58,14 @@ func (s *OpenAIGatewayService) ForwardGrokVoice(ctx context.Context, c *gin.Cont
 		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "?#\\") {
 			return nil, fmt.Errorf("invalid grok voice endpoint path")
 		}
+	}
+	if baseEndpoint == "tts" || baseEndpoint == "stt" {
+		report := beginRelayReportAttempt(ctx, account, baseEndpoint, false)
+		defer func() {
+			if result != nil && result.AudioUsage != nil {
+				report.result(result)
+			}
+		}()
 	}
 	token, _, err := s.getRequestCredential(ctx, c, account)
 	if err != nil {
@@ -111,12 +121,13 @@ func (s *OpenAIGatewayService) ForwardGrokVoice(ctx context.Context, c *gin.Cont
 	upstreamID := firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id"))
 	return &OpenAIForwardResult{
 		// Forced durable money-event id so usage_billing_dedup cannot collapse under a reused client id.
-		RequestID:       StableGrokAudioBillingRequestID(upstreamID),
-		UpstreamHeaders: resp.Header,
-		Model:           baseEndpoint,
-		UpstreamModel:   baseEndpoint,
-		Duration:        time.Since(started),
-		AudioUsage:      audioUsage,
+		RequestID:          StableGrokAudioBillingRequestID(upstreamID),
+		UpstreamHeaders:    resp.Header,
+		Model:              baseEndpoint,
+		UpstreamModel:      baseEndpoint,
+		Duration:           time.Since(started),
+		AudioUsage:         audioUsage,
+		PerformanceOutcome: voiceHTTPPerformance(baseEndpoint, resp.Header.Get("Content-Type"), data),
 	}, nil
 }
 
@@ -138,7 +149,10 @@ func (s *OpenAIGatewayService) ProxyGrokRealtime(ctx context.Context, c *gin.Con
 	return s.ProxyGrokRealtimeConn(ctx, c, client, upstream)
 }
 
-type GrokRealtimeUpstream struct{ conn openAIWSClientConn }
+type GrokRealtimeUpstream struct {
+	conn  openAIWSClientConn
+	model string
+}
 
 // GrokRealtimeDialError preserves an HTTP status returned before WebSocket
 // upgrade so handlers can apply the normal Grok account policy.
@@ -149,6 +163,14 @@ type GrokRealtimeDialError struct {
 
 func (e *GrokRealtimeDialError) Error() string { return e.Err.Error() }
 func (e *GrokRealtimeDialError) Unwrap() error { return e.Err }
+
+type grokRealtimeRelayError struct {
+	cause      error
+	downstream bool
+}
+
+func (e *grokRealtimeRelayError) Error() string { return e.cause.Error() }
+func (e *grokRealtimeRelayError) Unwrap() error { return e.cause }
 
 func (u *GrokRealtimeUpstream) Close() error {
 	if u == nil || u.conn == nil {
@@ -186,7 +208,7 @@ func (s *OpenAIGatewayService) OpenGrokRealtime(ctx context.Context, account *Ac
 	if err != nil {
 		return nil, &GrokRealtimeDialError{StatusCode: status, Err: err}
 	}
-	return &GrokRealtimeUpstream{conn: conn}, nil
+	return &GrokRealtimeUpstream{conn: conn, model: firstNonEmpty(model, "grok-voice-latest")}, nil
 }
 
 // HandleGrokRealtimeUpstreamError applies the shared Grok account policy to a
@@ -203,6 +225,10 @@ func (s *OpenAIGatewayService) ProxyGrokRealtimeConn(ctx context.Context, c *gin
 		return false, fmt.Errorf("realtime connection is required")
 	}
 	conn := upstream.conn
+	var performance *mediaWSPerformance
+	if key := getAPIKeyFromContext(c); key != nil && key.GroupID != nil {
+		performance = s.newMediaWSPerformance(uuid.NewString(), *key.GroupID, PlatformGrok, upstream.model)
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -214,15 +240,18 @@ func (s *OpenAIGatewayService) ProxyGrokRealtimeConn(ctx context.Context, c *gin
 		for {
 			msg, readErr := conn.ReadMessage(ctx)
 			if readErr != nil {
-				errCh <- readErr
+				errCh <- &grokRealtimeRelayError{cause: readErr}
 				return
 			}
 			if grokRealtimeEventHasAudio(msg) {
 				audioObserved.Store(true)
 			}
 			if writeErr := client.Write(ctx, coderws.MessageText, msg); writeErr != nil {
-				errCh <- writeErr
+				errCh <- &grokRealtimeRelayError{cause: writeErr, downstream: true}
 				return
+			}
+			if ctx.Err() == nil {
+				performance.observe(msg, time.Now())
 			}
 		}
 	}()
@@ -232,7 +261,7 @@ func (s *OpenAIGatewayService) ProxyGrokRealtimeConn(ctx context.Context, c *gin
 		for {
 			kind, msg, readErr := client.Read(ctx)
 			if readErr != nil {
-				errCh <- readErr
+				errCh <- &grokRealtimeRelayError{cause: readErr, downstream: true}
 				return
 			}
 			if kind != coderws.MessageText && kind != coderws.MessageBinary {
@@ -243,17 +272,22 @@ func (s *OpenAIGatewayService) ProxyGrokRealtimeConn(ctx context.Context, c *gin
 			}
 			var raw json.RawMessage
 			if unmarshalErr := json.Unmarshal(msg, &raw); unmarshalErr != nil {
-				errCh <- fmt.Errorf("invalid realtime event: %w", unmarshalErr)
+				errCh <- &grokRealtimeRelayError{cause: fmt.Errorf("invalid realtime event: %w", unmarshalErr), downstream: true}
 				return
 			}
 			if writeErr := conn.WriteJSON(ctx, raw); writeErr != nil {
-				errCh <- writeErr
+				errCh <- &grokRealtimeRelayError{cause: writeErr}
 				return
 			}
 		}
 	}()
 
-	return awaitGrokRealtimeAudioObserved(errCh, &audioObserved)
+	observed, relayErr := awaitGrokRealtimeAudioObserved(errCh, &audioObserved)
+	var source *grokRealtimeRelayError
+	if ctx.Err() == nil && errors.As(relayErr, &source) && !source.downstream {
+		performance.failActive(time.Now())
+	}
+	return observed, relayErr
 }
 
 // ProbeGrokRealtime performs the upstream WebSocket handshake without sending

@@ -105,6 +105,9 @@ func validateUsageBillingBatch(cmds []*service.UsageBillingCommand) (int64, erro
 		if cmd == nil {
 			return 0, errUsageBillingBatchNilCommand
 		}
+		if cmd.NativeVideoLog != nil || cmd.NativeVideoLogOnly {
+			return 0, errors.New("native video settlement requires its own log transaction")
+		}
 		cmd.Normalize()
 		if cmd.RequestID == "" {
 			return 0, service.ErrUsageBillingRequestIDRequired

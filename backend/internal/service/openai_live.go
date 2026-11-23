@@ -213,6 +213,7 @@ func (s *OpenAIGatewayService) CreateLiveCall(
 			model = "gpt-live"
 		}
 		record := &LiveCallRecord{
+			PublicModel:           identity.PublicModel,
 			CallID:                created.CallID,
 			CallHash:              hashLiveCallID(created.CallID),
 			AccountID:             account.ID,
@@ -523,6 +524,7 @@ func (s *OpenAIGatewayService) ProxyLiveSideband(
 
 	proxyCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	performance := s.newMediaWSPerformance(record.CallHash, record.GroupID, PlatformOpenAI, record.PublicModel)
 	errCh := make(chan error, 2)
 	go func() {
 		for {
@@ -549,6 +551,9 @@ func (s *OpenAIGatewayService) ProxyLiveSideband(
 				return
 			}
 			if messageType == coderws.MessageText {
+				if proxyCtx.Err() == nil {
+					performance.observe(payload, time.Now())
+				}
 				eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
 				if eventType == "session.closed" || eventType == "session.ended" {
 					errCh <- ErrLiveCallNotFound
@@ -682,6 +687,7 @@ func (s *OpenAIGatewayService) observeLiveCall(record *LiveCallRecord) {
 func (s *OpenAIGatewayService) runLiveObserverConnection(record *LiveCallRecord, upstream liveFrameConn) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	performance := s.newMediaWSPerformance(record.CallHash, record.GroupID, PlatformOpenAI, record.PublicModel)
 	frameCh := make(chan []byte, 1)
 	errCh := make(chan error, 1)
 	go func() {
@@ -713,6 +719,7 @@ func (s *OpenAIGatewayService) runLiveObserverConnection(record *LiveCallRecord,
 	for {
 		select {
 		case payload := <-frameCh:
+			performance.observe(payload, time.Now())
 			eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
 			if eventType == "session.closed" || eventType == "session.ended" {
 				return ErrLiveCallNotFound

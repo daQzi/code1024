@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
 )
 
 // antigravityRetryLoopParams 重试循环的参数
@@ -44,6 +45,16 @@ type antigravityRetryLoopParams struct {
 // antigravityRetryLoopResult 重试循环的结果
 type antigravityRetryLoopResult struct {
 	resp *http.Response
+}
+
+// Each physical attempt starts with the original host-built envelope. Policy
+// only sees its inner Gemini body; OAuth, project and model remain host-owned.
+func (p antigravityRetryLoopParams) newRequest(baseURL string) (*http.Request, error) {
+	req, err := antigravity.NewAPIRequestWithURL(p.ctx, baseURL, p.action, p.accessToken, p.body)
+	if err == nil {
+		err = processNativeGeminiHTTPRequest(p.ctx, p.account, req, gjson.GetBytes(p.body, "model").String())
+	}
+	return req, err
 }
 
 // resolveAntigravityForwardBaseURL 解析转发用 base URL。
@@ -209,8 +220,12 @@ func (s *AntigravityGatewayService) handleSmartRetry(p antigravityRetryLoopParam
 			}
 
 			// 智能重试：创建新请求
-			retryReq, err := antigravity.NewAPIRequestWithURL(p.ctx, baseURL, p.action, p.accessToken, p.body)
+			retryReq, err := p.newRequest(baseURL)
 			if err != nil {
+				var processingFailure *RequestPluginFailure
+				if errors.As(err, &processingFailure) {
+					return &smartRetryResult{action: smartRetryActionBreakWithResp, err: err}
+				}
 				logger.LegacyPrintf("service.antigravity_gateway", "%s status=smart_retry_request_build_failed error=%v", p.prefix, err)
 				p.handleError(p.ctx, p.prefix, p.account, resp.StatusCode, resp.Header, respBody, p.requestedModel, p.groupID, p.sessionHash, p.isStickySession)
 				return &smartRetryResult{
@@ -392,8 +407,15 @@ func (s *AntigravityGatewayService) handleSingleAccountRetryInPlace(
 		totalWaited += waitDuration
 
 		// 创建新请求
-		retryReq, err := antigravity.NewAPIRequestWithURL(p.ctx, baseURL, p.action, p.accessToken, p.body)
+		retryReq, err := p.newRequest(baseURL)
 		if err != nil {
+			var processingFailure *RequestPluginFailure
+			if errors.As(err, &processingFailure) {
+				if lastRetryResp != nil {
+					_ = lastRetryResp.Body.Close()
+				}
+				return &smartRetryResult{action: smartRetryActionBreakWithResp, err: err}
+			}
 			logger.LegacyPrintf("service.antigravity_gateway", "%s single_account_503_retry: request_build_failed error=%v", p.prefix, err)
 			break
 		}
@@ -531,7 +553,7 @@ urlFallbackLoop:
 			default:
 			}
 
-			upstreamReq, err := antigravity.NewAPIRequestWithURL(p.ctx, baseURL, p.action, p.accessToken, p.body)
+			upstreamReq, err := p.newRequest(baseURL)
 			if err != nil {
 				return nil, err
 			}

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -9,6 +10,57 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+func TestSchedulerMetadataPreservesPluginRoutingIsolation(t *testing.T) {
+	account := service.Account{ID: 29, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true,
+		Credentials: map[string]any{service.NewAPIPluginRevisionKey: 7, "newapi_plugin_video_models": []string{"sora-2"}, "newapi_plugin_config_encrypted": "private-config"}}
+	_, payload, err := marshalSchedulerCacheAccount(account)
+	require.NoError(t, err)
+	var projected service.Account
+	require.NoError(t, json.Unmarshal([]byte(payload), &projected))
+	require.EqualValues(t, 7, projected.NewAPIPluginVersionID())
+	require.NotContains(t, projected.Credentials, "newapi_plugin_config_encrypted")
+	account.Credentials["newapi_plugin_native_videos"] = map[string][]string{service.GenerationProtocolXAI: {}}
+	_, payload, err = marshalSchedulerCacheAccount(account)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(payload), &projected))
+	require.True(t, projected.IsSchedulableForModelWithContext(service.WithNativeVideoPluginRouting(context.Background(), service.GenerationProtocolXAI), "sora-2"))
+	require.False(t, projected.IsSchedulableForModelWithContext(service.WithNativeVideoPluginRouting(context.Background(), service.GenerationProtocolArk), "sora-2"))
+	require.True(t, projected.IsSchedulableForModelWithContext(service.WithNewAPIPluginRouting(context.Background()), "sora-2"))
+	require.True(t, projected.SupportsOpenAIEndpointCapability("plugin_task"))
+	require.False(t, projected.IsSchedulableForModel("sora-2"))
+	require.False(t, projected.SupportsOpenAIEndpointCapability(service.OpenAIEndpointCapabilityChatCompletions))
+	account.Credentials["newapi_plugin_provider"] = map[string]any{"models": []string{"text"}, "routes": []map[string]any{{"incoming_path": "/v1/chat/completions", "upstream_path": "/vendor/chat", "models": []string{"text"}, "converter": "none"}}}
+	_, payload, err = marshalSchedulerCacheAccount(account)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(payload), &projected))
+	require.True(t, projected.SupportsOpenAIEndpointCapability(service.OpenAIEndpointCapabilityChatCompletions))
+	require.True(t, projected.IsSchedulableForModelWithContext(service.WithNewAPIProviderRouting(context.Background(), "/v1/chat/completions"), "text"))
+	require.False(t, projected.IsSchedulableForModel("text"))
+	require.False(t, projected.IsSchedulableForModelWithContext(service.WithNewAPIProviderRouting(context.Background(), "/v1/responses"), "text"))
+	require.NotContains(t, projected.Credentials, "newapi_plugin_config_encrypted")
+	suno := service.Account{ID: 30, Platform: service.PlatformOpenAI, Type: service.AccountTypeAPIKey, Status: service.StatusActive, Schedulable: true,
+		Credentials: map[string]any{service.NewAPIPluginRevisionKey: 8, "newapi_plugin_suno_models": []string{"suno_music", "suno_lyrics"}, "newapi_plugin_config_encrypted": "private-suno-config"}}
+	_, payload, err = marshalSchedulerCacheAccount(suno)
+	require.NoError(t, err)
+	var projectedSuno service.Account
+	require.NoError(t, json.Unmarshal([]byte(payload), &projectedSuno))
+	require.True(t, projectedSuno.SupportsOpenAIEndpointCapability(service.OpenAIEndpointCapability("plugin_suno_task")))
+	require.False(t, projectedSuno.SupportsOpenAIEndpointCapability(service.OpenAIEndpointCapability("plugin_task")))
+	require.True(t, projectedSuno.IsSchedulableForModelWithContext(service.WithNativeVideoPluginRouting(context.Background(), service.GenerationProtocolSunoTask), "suno_music"))
+	require.False(t, projectedSuno.IsSchedulableForModelWithContext(service.WithNewAPIPluginRouting(context.Background()), "suno_music"))
+	require.NotContains(t, projectedSuno.Credentials, "newapi_plugin_config_encrypted")
+	credentials := map[string]any{
+		"newapi_plugin_key":                 "example-task",
+		"newapi_plugin_generic_task_models": []string{"text", "image"},
+		"newapi_plugin_responses_task":      map[string]any{"models": []string{"text"}, "supports": []string{"sync"}},
+		"newapi_plugin_image_task":          []string{"image"},
+		"newapi_plugin_native_routes":       map[string]any{"key": "example-task"},
+	}
+	for name, value := range credentials {
+		require.Equal(t, value, filterSchedulerCredentials(credentials)[name], name)
+	}
+}
 
 func TestFilterSchedulerCredentialsKeepsSubscriptionPlanType(t *testing.T) {
 	filtered := filterSchedulerCredentials(map[string]any{

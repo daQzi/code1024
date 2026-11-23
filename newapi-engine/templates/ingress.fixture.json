@@ -1,0 +1,31 @@
+{
+  "unixNow": 1805587200,
+  "cases": [
+    {
+      "name": "continues without changing routing or billing",
+      "hook": "ingress",
+      "args": [
+        {
+          "stage": "ingress",
+          "format": "openai_chat",
+          "model": "example-text",
+          "config": {}
+        },
+        {
+          "body": {
+            "model": "example-text",
+            "messages": [
+              {
+                "role": "user",
+                "content": "Hello"
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "action": "continue"
+      }
+    }
+  ]
+}

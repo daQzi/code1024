@@ -15,6 +15,12 @@ func resolveOpenAIForwardModel(account *Account, requestedModel, messagesDispatc
 	}
 
 	mappedModel, matched := account.ResolveMappedModel(requestedModel)
+	if account.HasNewAPIPlugin() && len(account.newAPIProviderBinding().Routes) > 0 && !matched {
+		providerModel := account.mappedNewAPIProviderModel(requestedModel)
+		if providerModel != requestedModel {
+			mappedModel, matched = providerModel, true
+		}
+	}
 	if !matched && messagesDispatchMappedModel != "" {
 		return messagesDispatchMappedModel
 	}

@@ -17,6 +17,10 @@ var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerpri
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
+	// NativeVideoLog is written in the same transaction as the original ledger.
+	// It is host-owned, excluded from the billing fingerprint and never batched.
+	NativeVideoLog     *UsageLog `json:"-"`
+	NativeVideoLogOnly bool      `json:"-"`
 	RequestID          string
 	APIKeyID           int64
 	RequestFingerprint string

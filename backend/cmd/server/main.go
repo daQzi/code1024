@@ -22,6 +22,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/setup"
 	"github.com/Wei-Shaw/sub2api/internal/web"
+	plugincli "github.com/Wei-Shaw/sub2api/newapi-engine/cli"
+	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 
 	"github.com/gin-gonic/gin"
 )
@@ -53,6 +55,11 @@ func init() {
 // initLogger configures the default slog handler based on gin.Mode().
 // In non-release mode, Debug level logs are enabled.
 func main() {
+	// Plugin tooling and isolated workers must not initialize the application,
+	// load deployment secrets or require database/setup configuration.
+	if len(os.Args) > 1 && os.Args[1] == "plugin" {
+		os.Exit(plugincli.Run(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
 	logger.InitBootstrap()
 	defer logger.Sync()
 
@@ -135,6 +142,9 @@ func runMainServer() {
 	cfg, err := config.LoadForBootstrap()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
+	}
+	if err := modelmodifier.Configure(cfg.Gateway.ModelModifierExemptions); err != nil {
+		log.Fatalf("Failed to configure model modifiers: %v", err)
 	}
 	if err := logger.Init(logger.OptionsFromConfig(cfg.Log)); err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
