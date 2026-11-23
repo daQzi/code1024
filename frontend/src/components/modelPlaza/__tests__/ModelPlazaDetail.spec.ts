@@ -62,4 +62,33 @@ describe('model overview and declared protocols', () => {
     expect(wrapper.find('pre').text()).not.toContain('/v1/chat/completions')
     wrapper.unmount()
   })
+
+  it('copies base url and api code snippets on click', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true
+    })
+    const item = group(1)
+    item.models[0]!.protocols = ['openai_chat']
+    const router = await routerAt('?tab=api')
+    const wrapper = mount(ModelPlazaDetail, {
+      props: { response: { description: '', groups: [item] }, loading: false },
+      global: { plugins: [router] }
+    })
+
+    const copyButtons = wrapper.findAll('button').filter(button => button.text() === 'common.copy')
+    expect(copyButtons).toHaveLength(2)
+
+    await copyButtons[0]!.trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/v1`)
+    expect(copyButtons[0]!.text()).toBe('common.copied')
+
+    await copyButtons[1]!.trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenLastCalledWith(expect.stringContaining('/v1/chat/completions'))
+    expect(copyButtons[1]!.text()).toBe('common.copied')
+    wrapper.unmount()
+  })
 })

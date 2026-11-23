@@ -66,6 +66,8 @@
   --ui-accent-contrast: #ffffff;
   /* 渐变弧光（logo / 高亮条 / 进度） */
   --ui-arc: linear-gradient(118deg, #5eead4 0%, #22d3ee 42%, #818cf8 100%);
+  /* 主按钮在浅色主题下采用深青蓝渐变，确保白字满足 WCAG AA 对比度 */
+  --ui-btn-primary-bg: linear-gradient(118deg, #0f766e 0%, #0e7490 52%, #0369a1 100%);
 
   /* ---------------------------------------------------------------- 语义色 */
   --ui-success: #059669;
@@ -197,6 +199,7 @@ html[data-theme='dark'] {
   --ui-accent-soft: rgb(45 212 191 / 0.16);
   --ui-accent-ring: rgb(45 212 191 / 0.42);
   --ui-accent-contrast: #04211d;
+  --ui-btn-primary-bg: var(--ui-arc);
 
   --ui-success: #34d399;
   --ui-success-soft: rgb(52 211 153 / 0.16);

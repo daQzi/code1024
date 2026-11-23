@@ -16,6 +16,7 @@
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
+  contain: strict;
   background:
     radial-gradient(120% 80% at 12% 0%, var(--ui-canvas-tint-1) 0%, transparent 46%),
     radial-gradient(110% 70% at 92% 8%, var(--ui-canvas-tint-2) 0%, transparent 44%),
@@ -27,7 +28,7 @@
 .shell-bg__blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(62px);
+  filter: blur(48px);
   opacity: var(--ui-blob-opacity, 0.74);
   will-change: transform;
 }
@@ -125,6 +126,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shell-bg__blob {
+    animation: none;
+  }
+}
+
+@media (max-width: 767px) {
   .shell-bg__blob {
     animation: none;
   }

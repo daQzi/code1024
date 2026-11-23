@@ -5,10 +5,11 @@
     <ModelPlazaContent v-else :response="data" :loading="loading" :error="loadFailed" embedded />
   </AppLayout>
 
-  <!-- 独立形态:自带导航条(logo/站名 + 登录/回后台) -->
-  <div v-else class="min-h-screen bg-gray-50 dark:bg-dark-950">
+  <!-- 独立形态:自带导航条(logo/站名 + 语言/主题 + 登录/回后台) -->
+  <div v-else class="public-glass min-h-screen">
+    <PublicBackdrop />
     <PlazaNavBar />
-    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <main class="relative mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <ModelPlazaDetail v-if="modelId" :response="data" :loading="loading" :error="loadFailed" />
       <ModelPlazaContent v-else :response="data" :loading="loading" :error="loadFailed" />
     </main>
@@ -19,12 +20,14 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import PublicBackdrop from '@/components/public/PublicBackdrop.vue'
 import PlazaNavBar from '@/components/modelPlaza/PlazaNavBar.vue'
 import ModelPlazaContent from '@/components/modelPlaza/ModelPlazaContent.vue'
 import ModelPlazaDetail from '@/components/modelPlaza/ModelPlazaDetail.vue'
 import { getModelPlaza, getModelPlazaModel, type ModelPlazaResponse } from '@/api/modelPlaza'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import '@/styles/public-glass.css'
 
 const route = useRoute()
 const appStore = useAppStore()

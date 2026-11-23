@@ -145,6 +145,7 @@ export function useShellNav() {
     const workspace: ShellNavItem[] = [
       { path: '/dashboard', label: t('nav.dashboard'), icon: 'grid' },
       { path: '/usage', label: t('nav.usage'), icon: 'chartBar', hideInSimpleMode: true },
+      { path: '/task-logs', label: t('taskLogs.title'), icon: 'clipboard' },
     ]
 
     const resources: ShellNavItem[] = [
@@ -169,6 +170,7 @@ export function useShellNav() {
         icon: 'bolt',
         featureFlag: flagChannelMonitor,
       },
+      { path: '/plugin-developer', label: t('pluginRegistry.title'), icon: 'terminal' },
       { path: '/settings/mcp', label: t('mcp.title'), icon: 'mcp', featureFlag: flagMCP },
     ]
 
@@ -220,6 +222,8 @@ export function useShellNav() {
     const items = finalize([
       { path: '/keys', label: t('nav.apiKeys'), icon: 'key' },
       { path: '/usage', label: t('nav.usage'), icon: 'chartBar', hideInSimpleMode: true },
+      { path: '/task-logs', label: t('taskLogs.title'), icon: 'clipboard' },
+      { path: '/plugin-developer', label: t('pluginRegistry.title'), icon: 'terminal' },
       {
         path: '/available-channels',
         label: t('nav.availableChannels'),
@@ -268,6 +272,7 @@ export function useShellNav() {
         featureFlag: flagOpsMonitoring,
       },
       { path: '/admin/usage', label: t('nav.usage'), icon: 'trendingUp' },
+      { path: '/admin/task-logs', label: t('taskLogs.title'), icon: 'clipboard' },
     ]
 
     const people: ShellNavItem[] = [
@@ -310,7 +315,13 @@ export function useShellNav() {
         path: '/admin/plugins',
         label: t('nav.plugins'),
         icon: 'cube',
+        expandOnly: true,
         featureFlag: flagPluginManagement,
+        children: [
+          { path: '/admin/plugins', label: t('admin.plugins.center.title'), icon: 'cube' },
+          { path: '/admin/request-processing', label: t('requestPlugins.title'), icon: 'filter' },
+          { path: '/admin/native-plugins', label: t('nav.nativePlugins'), icon: 'cpu' },
+        ],
       },
     ]
 
@@ -404,6 +415,7 @@ export function useShellNav() {
       { path: '/admin/announcements', label: t('nav.announcements'), icon: 'bell' },
       { path: '/admin/proxies', label: t('nav.proxies'), icon: 'cloud' },
       { path: '/admin/usage', label: t('nav.usage'), icon: 'trendingUp' },
+      { path: '/admin/task-logs', label: t('taskLogs.title'), icon: 'clipboard' },
       { path: '/keys', label: t('nav.apiKeys'), icon: 'key' },
       { path: '/settings/mcp', label: t('mcp.title'), icon: 'mcp', featureFlag: flagMCP },
       { path: '/admin/settings', label: t('nav.settings'), icon: 'cog' },
@@ -440,7 +452,7 @@ export function useShellNav() {
 
   function isGroupActive(item: ShellNavItem): boolean {
     if (!item.children) return false
-    return item.children.some((child) => route.path === child.path)
+    return item.children.some((child) => isActive(child.path))
   }
 
   function isGroupExpanded(item: ShellNavItem): boolean {
@@ -454,6 +466,12 @@ export function useShellNav() {
   }
 
   function handleGroupClick(item: ShellNavItem) {
+    if (appStore.sidebarCollapsed && !appStore.mobileOpen) {
+      appStore.toggleSidebar()
+      groupExpandOverrides.value.set(item.path, true)
+      if (!item.expandOnly && route.path !== item.path) void router.push(item.path)
+      return
+    }
     if (item.expandOnly) {
       toggleGroup(item)
       return

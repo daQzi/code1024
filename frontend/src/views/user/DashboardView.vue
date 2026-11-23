@@ -1,7 +1,40 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <div v-if="loading" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
+      <div v-if="loading" role="status" aria-busy="true" class="space-y-6">
+        <div class="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))]">
+          <div v-for="cardIndex in 4" :key="`user-stat-skeleton-${cardIndex}`" class="card p-4">
+            <div class="flex items-center gap-3">
+              <UiSkeleton :width="36" :height="36" radius="var(--ui-r-md)" />
+              <div class="flex-1 space-y-2">
+                <UiSkeleton width="55%" :height="12" />
+                <UiSkeleton width="75%" :height="22" />
+                <UiSkeleton width="45%" :height="12" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card space-y-4 p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <UiSkeleton width="180px" :height="18" />
+            <div class="flex items-center gap-2">
+              <UiSkeleton width="120px" :height="32" radius="var(--ui-r-md)" />
+              <UiSkeleton width="88px" :height="32" radius="var(--ui-r-md)" />
+            </div>
+          </div>
+          <UiSkeleton width="100%" :height="220" radius="var(--ui-r-md)" />
+        </div>
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div class="card space-y-3 p-5 lg:col-span-2">
+            <UiSkeleton width="160px" :height="18" />
+            <UiSkeleton v-for="rowIndex in 4" :key="`user-row-skeleton-${rowIndex}`" width="100%" :height="40" radius="var(--ui-r-md)" />
+          </div>
+          <div class="card space-y-3 p-5 lg:col-span-1">
+            <UiSkeleton width="120px" :height="18" />
+            <UiSkeleton v-for="actionIndex in 3" :key="`user-action-skeleton-${actionIndex}`" width="100%" :height="44" radius="var(--ui-r-md)" />
+          </div>
+        </div>
+      </div>
       <template v-else-if="stats">
         <UserDashboardStats :stats="stats" :balance="user?.balance || 0" :is-simple="authStore.isSimpleMode" :platform-quotas="platformQuotas" />
         <UserDashboardCharts v-model:startDate="startDate" v-model:endDate="endDate" v-model:granularity="granularity" :loading="loadingCharts" :trend="trendData" :models="modelStats" @dateRangeChange="loadCharts" @granularityChange="loadCharts" @refresh="refreshAll" />
@@ -16,7 +49,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'; import { useAuthStore } from '@/stores/auth'; import { usageAPI, type UserDashboardStats as UserStatsType } from '@/api/usage'
-import AppLayout from '@/components/layout/AppLayout.vue'; import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import AppLayout from '@/components/layout/AppLayout.vue'; import UiSkeleton from '@/ui/UiSkeleton.vue'
 import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'; import UserDashboardCharts from '@/components/user/dashboard/UserDashboardCharts.vue'
 import UserDashboardRecentUsage from '@/components/user/dashboard/UserDashboardRecentUsage.vue'; import UserDashboardQuickActions from '@/components/user/dashboard/UserDashboardQuickActions.vue'
 import type { UsageLog, TrendDataPoint, ModelStat, PlatformQuotaItem } from '@/types'

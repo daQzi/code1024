@@ -1,9 +1,9 @@
 <template>
   <AppLayout>
-    <PluginCenter :client="client" :t="translate" :locale="locale" :dialog-component="BaseDialog" editable :run-mutation="runMutation" :is-cancelled="isStepUpCancelled">
+    <PluginCenter :client="client" :t="translate" :locale="locale" :dialog-component="BaseDialog" editable :show-header="false" :run-mutation="runMutation" :is-cancelled="isStepUpCancelled">
       <template #header-actions>
-        <RouterLink to="/admin/request-processing" class="btn btn-secondary">{{ t('requestPlugins.title') }}</RouterLink>
-        <RouterLink to="/admin/native-plugins" class="btn btn-secondary">{{ t('admin.plugins.center.nativeManager') }}</RouterLink>
+        <RouterLink to="/admin/request-processing" class="btn btn-secondary btn-sm">{{ t('requestPlugins.title') }}</RouterLink>
+        <RouterLink to="/admin/native-plugins" class="btn btn-secondary btn-sm">{{ t('admin.plugins.center.nativeManager') }}</RouterLink>
       </template>
       <template #cleanup><PluginCredentialCleanupPanel /></template>
       <template #registry="{ mode }"><PluginRegistryPanel :key="mode" :mode="mode" /></template>

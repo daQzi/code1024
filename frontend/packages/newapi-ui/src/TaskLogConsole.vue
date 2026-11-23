@@ -5,43 +5,79 @@
           <button v-for="option in tabs" :key="option" type="button" class="btn btn-sm" :class="tab === option ? 'btn-primary' : 'btn-secondary'" :aria-pressed="tab === option" @click="tab = option">{{ t(`taskLogs.tabs.${option}`) }}</button>
         </div>
         <div class="flex items-center gap-3 text-sm">
-          <label class="flex items-center gap-2 text-gray-500"><input v-model="autoRefresh" type="checkbox" class="rounded" />{{ t('taskLogs.autoRefresh') }}</label>
+          <label class="flex items-center gap-2 text-gray-500 dark:text-dark-400"><input v-model="autoRefresh" type="checkbox" class="rounded" />{{ t('taskLogs.autoRefresh') }}</label>
           <button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="load()">{{ t('common.refresh') }}</button>
         </div>
       </div>
       <slot v-if="admin && tab === 'review'" name="review" />
       <template v-else>
-        <form class="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4" @submit.prevent="applyFilters">
-          <label><span class="input-label">{{ t('taskLogs.taskId') }}</span><input v-model.trim="filters.task_id" class="input" maxlength="512" :placeholder="t('taskLogs.taskIdHint')" /></label>
-          <label><span class="input-label">{{ t('taskLogs.model') }}</span><input v-model.trim="filters.model" class="input" maxlength="256" /></label>
-          <label><span class="input-label">{{ t('taskLogs.plugin') }}</span><input v-model.trim="filters.plugin" class="input" maxlength="256" /></label>
-          <label><span class="input-label">{{ t('common.status') }}</span><select v-model="filters.status" class="input"><option value="">{{ t('common.all') }}</option><option v-for="status in statuses" :key="status" :value="status">{{ statusLabel(status) }}</option></select></label>
-          <label><span class="input-label">{{ t('taskLogs.billing') }}</span><select v-model="filters.billing_status" class="input"><option value="">{{ t('common.all') }}</option><option v-for="status in billingStatuses" :key="status" :value="status">{{ billingLabel(status) }}</option></select></label>
-          <label><span class="input-label">{{ t('taskLogs.start') }}</span><input v-model="start" type="datetime-local" class="input" /></label>
-          <label><span class="input-label">{{ t('taskLogs.end') }}</span><input v-model="end" type="datetime-local" class="input" /></label>
-          <div class="flex flex-wrap items-end gap-2"><label class="flex w-full items-center gap-2 text-sm text-gray-500"><input v-model="filters.review" type="checkbox" class="rounded" />{{ t('taskLogs.reviewOnly') }}</label><button type="submit" class="btn btn-primary" :disabled="loading">{{ t('common.search') }}</button><button type="button" class="btn btn-secondary" @click="reset">{{ t('common.reset') }}</button></div>
+        <form class="card space-y-3 p-4" @submit.prevent="applyFilters">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label><span class="input-label">{{ t('taskLogs.taskId') }}</span><input v-model.trim="filters.task_id" class="input" maxlength="512" :placeholder="t('taskLogs.taskIdHint')" /></label>
+            <label><span class="input-label">{{ t('taskLogs.model') }}</span><input v-model.trim="filters.model" class="input" maxlength="256" /></label>
+            <label><span class="input-label">{{ t('common.status') }}</span><select v-model="filters.status" class="input"><option value="">{{ t('common.all') }}</option><option v-for="status in statuses" :key="status" :value="status">{{ statusLabel(status) }}</option></select></label>
+            <div class="flex flex-wrap items-end gap-2">
+              <label class="flex w-full items-center gap-2 text-sm text-gray-500 dark:text-dark-400"><input v-model="filters.review" type="checkbox" class="rounded" />{{ t('taskLogs.reviewOnly') }}</label>
+              <button type="submit" class="btn btn-primary btn-sm" :disabled="loading">{{ t('common.search') }}</button>
+              <button type="button" class="btn btn-secondary btn-sm" @click="reset">{{ t('common.reset') }}</button>
+              <button type="button" class="btn btn-ghost btn-sm" :aria-expanded="showAdvancedFilters" @click="showAdvancedFilters = !showAdvancedFilters">
+                {{ t('common.filter') }}<span v-if="advancedFilterCount > 0" class="badge badge-primary ml-1">{{ advancedFilterCount }}</span>
+              </button>
+            </div>
+          </div>
+          <div v-show="showAdvancedFilters" class="grid gap-3 border-t border-gray-100 pt-3 dark:border-dark-700 sm:grid-cols-2 lg:grid-cols-4">
+            <label><span class="input-label">{{ t('taskLogs.plugin') }}</span><input v-model.trim="filters.plugin" class="input" maxlength="256" /></label>
+            <label><span class="input-label">{{ t('taskLogs.billing') }}</span><select v-model="filters.billing_status" class="input"><option value="">{{ t('common.all') }}</option><option v-for="status in billingStatuses" :key="status" :value="status">{{ billingLabel(status) }}</option></select></label>
+            <label><span class="input-label">{{ t('taskLogs.start') }}</span><input v-model="start" type="datetime-local" class="input" /></label>
+            <label><span class="input-label">{{ t('taskLogs.end') }}</span><input v-model="end" type="datetime-local" class="input" /></label>
+          </div>
         </form>
         <p class="text-xs leading-5 text-gray-500 dark:text-dark-400">{{ t('taskLogs.coverage') }}</p>
-        <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+        <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
         <div class="card overflow-hidden" :aria-busy="loading">
           <div class="overflow-x-auto">
             <table class="w-full text-left text-sm">
-              <thead class="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 dark:border-dark-700 dark:bg-dark-900"><tr>
+              <thead class="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-400"><tr>
                 <th class="px-4 py-3">{{ t('taskLogs.created') }}</th><th class="px-4 py-3">{{ t('taskLogs.model') }} / {{ t('taskLogs.taskId') }}</th><th class="px-4 py-3">{{ t('taskLogs.plugin') }}</th><th class="px-4 py-3">{{ t('taskLogs.group') }}</th><th v-if="admin" class="px-4 py-3">{{ t('taskLogs.userAccount') }}</th><th class="px-4 py-3">{{ t('common.status') }}</th><th class="px-4 py-3">{{ t('taskLogs.duration') }}</th><th class="px-4 py-3">{{ t('taskLogs.billing') }}</th><th class="px-4 py-3">{{ t('common.actions') }}</th>
               </tr></thead>
               <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
-                <tr v-for="task in data?.items ?? []" :key="task.id" class="align-top">
-                  <td class="whitespace-nowrap px-4 py-4 text-xs text-gray-500">{{ formatDate(task.created_at) }}</td>
-                  <td class="max-w-64 px-4 py-4"><p class="break-words font-medium text-gray-900 dark:text-white">{{ task.model }}</p><code class="mt-1 block break-all text-xs text-gray-500">{{ task.id }}</code></td>
-                  <td class="px-4 py-4 text-xs"><p>{{ task.plugin_key }}</p><span class="text-gray-500">{{ task.source === 'native' ? t('taskLogs.nativeSource') : `v${task.plugin_version}` }}</span></td>
+                <tr v-for="task in data?.items ?? []" :key="task.id" class="align-top transition-colors hover:bg-gray-50/70 dark:hover:bg-dark-800/40">
+                  <td class="whitespace-nowrap px-4 py-4 text-xs text-gray-500 dark:text-dark-400">{{ formatDate(task.created_at) }}</td>
+                  <td class="max-w-64 px-4 py-4">
+                    <p class="break-words font-medium text-gray-900 dark:text-white">{{ task.model }}</p>
+                    <div class="mt-1 flex items-start gap-1.5">
+                      <code class="block break-all text-xs text-gray-500 dark:text-dark-400">{{ task.id }}</code>
+                      <button
+                        type="button"
+                        class="shrink-0 rounded p-0.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-700 dark:hover:text-gray-200"
+                        :title="copiedTaskId === task.id ? t('common.copied') : t('common.copy')"
+                        :aria-label="copiedTaskId === task.id ? t('common.copied') : t('common.copy')"
+                        @click="copyTaskId(task.id)"
+                      >
+                        <svg v-if="copiedTaskId === task.id" class="h-3.5 w-3.5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                        <svg v-else class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                      </button>
+                    </div>
+                  </td>
+                  <td class="px-4 py-4 text-xs"><p>{{ task.plugin_key }}</p><span class="text-gray-500 dark:text-dark-400">{{ task.source === 'native' ? t('taskLogs.nativeSource') : `v${task.plugin_version}` }}</span></td>
                   <td class="px-4 py-4 text-xs">{{ task.group_name || `#${task.group_id}` }}</td>
                   <td v-if="admin" class="px-4 py-4 text-xs">#{{ task.user_id }} / #{{ task.account_id }}</td>
-                  <td class="min-w-36 px-4 py-4 text-xs"><span :class="statusClass(task.status)">{{ statusLabel(task.status) }}</span><p class="mt-1 text-gray-500">{{ deliveryLabel(task.delivery_status) }}</p><p v-if="active(task)" class="mt-1 text-gray-500">{{ task.progress > 0 ? `${task.progress}%` : t('taskLogs.waitingProgress') }}</p><p v-if="task.monitor_status" class="mt-1" :class="task.monitor_status === 'review' ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500'">{{ t(`taskLogs.monitorStatuses.${task.monitor_status}`) }}</p></td>
+                  <td class="min-w-36 px-4 py-4 text-xs">
+                    <span class="badge" :class="statusClass(task.status)">{{ statusLabel(task.status) }}</span>
+                    <p class="mt-1.5 text-gray-500 dark:text-dark-400">{{ deliveryLabel(task.delivery_status) }}</p>
+                    <div v-if="active(task)" class="mt-1.5 space-y-1">
+                      <p class="tabular-nums text-gray-500 dark:text-dark-400">{{ task.progress > 0 ? `${task.progress}%` : t('taskLogs.waitingProgress') }}</p>
+                      <div v-if="task.progress > 0" class="h-1.5 w-24 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-700">
+                        <div class="h-full rounded-full bg-primary-500 transition-all duration-300" :style="{ width: `${Math.min(100, Math.max(0, task.progress))}%` }" />
+                      </div>
+                    </div>
+                    <p v-if="task.monitor_status" class="mt-1" :class="task.monitor_status === 'review' ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-dark-400'">{{ t(`taskLogs.monitorStatuses.${task.monitor_status}`) }}</p>
+                  </td>
                   <td class="whitespace-nowrap px-4 py-4 text-xs tabular-nums">{{ duration(task) }}</td>
-                  <td class="whitespace-nowrap px-4 py-4 text-xs"><p>{{ billingLabel(task.billing_status) }}</p><span class="tabular-nums text-gray-500">{{ task.source === 'native' && task.actual_amount == null ? '—' : `$${task.actual_amount ?? task.hold_amount}` }}</span></td>
+                  <td class="whitespace-nowrap px-4 py-4 text-xs"><p>{{ billingLabel(task.billing_status) }}</p><span class="tabular-nums text-gray-500 dark:text-dark-400">{{ task.source === 'native' && task.actual_amount == null ? '—' : `$${task.actual_amount ?? task.hold_amount}` }}</span></td>
                   <td class="px-4 py-4"><button type="button" class="btn btn-secondary btn-sm" @click="openDetail(task.id)">{{ t('taskLogs.details') }}</button></td>
                 </tr>
-                <tr v-if="!data?.items.length"><td :colspan="admin ? 9 : 8" class="px-4 py-12 text-center text-gray-500">{{ loading ? t('common.loading') : t('taskLogs.empty') }}</td></tr>
+                <tr v-if="!data?.items.length"><td :colspan="admin ? 9 : 8" class="px-4 py-12 text-center text-gray-500 dark:text-dark-400">{{ loading ? t('common.loading') : t('taskLogs.empty') }}</td></tr>
               </tbody>
             </table>
           </div>
@@ -50,24 +86,31 @@
       </template>
     </div>
     <component :is="dialogComponent" :show="!!detailId" :title="t('taskLogs.details')" width="wide" @close="closeDetail">
-      <p v-if="detailError" role="alert" class="text-sm text-red-600">{{ detailError }}</p>
-      <p v-if="detailLoading && !detail" role="status" class="text-sm text-gray-500">{{ t('common.loading') }}</p>
+      <p v-if="detailError" role="alert" class="rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">{{ detailError }}</p>
+      <p v-if="detailLoading && !detail" role="status" class="text-sm text-gray-500 dark:text-dark-400">{{ t('common.loading') }}</p>
       <div v-if="detail" class="space-y-6">
-        <header class="space-y-2"><h4 class="text-base font-semibold">{{ detail.model }}</h4><code class="block break-all text-xs text-gray-500">{{ detail.id }}</code><p :class="statusClass(detail.status)" class="text-sm">{{ statusLabel(detail.status) }} · {{ duration(detail) }}</p></header>
+        <header class="space-y-2">
+          <h4 class="text-base font-semibold text-gray-900 dark:text-white">{{ detail.model }}</h4>
+          <div class="flex items-center gap-2">
+            <code class="block break-all rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-700 dark:bg-dark-800 dark:text-dark-300">{{ detail.id }}</code>
+            <button type="button" class="btn btn-ghost btn-sm" @click="copyTaskId(detail.id)">{{ copiedTaskId === detail.id ? t('common.copied') : t('common.copy') }}</button>
+          </div>
+          <div class="flex items-center gap-2"><span class="badge" :class="statusClass(detail.status)">{{ statusLabel(detail.status) }}</span><span class="text-xs tabular-nums text-gray-500 dark:text-dark-400">{{ duration(detail) }}</span></div>
+        </header>
         <dl class="grid gap-4 text-sm sm:grid-cols-2">
-          <div><dt class="text-gray-500">{{ t('taskLogs.plugin') }}</dt><dd class="mt-1">{{ detail.plugin_key }} · {{ detail.source === 'native' ? t('taskLogs.nativeSource') : `v${detail.plugin_version}` }}</dd></div>
-          <div><dt class="text-gray-500">{{ t('taskLogs.group') }}</dt><dd class="mt-1">{{ detail.group_name }}</dd></div>
-          <div><dt class="text-gray-500">{{ t('taskLogs.protocol') }}</dt><dd class="mt-1">{{ detail.protocol }} / {{ detail.action }}</dd></div>
-          <div><dt class="text-gray-500">{{ t('taskLogs.created') }}</dt><dd class="mt-1">{{ formatDate(detail.created_at) }}</dd></div>
-          <div><dt class="text-gray-500">{{ t('taskLogs.held') }}</dt><dd class="mt-1 tabular-nums">{{ detail.source === 'native' ? '—' : `$${detail.hold_amount}` }}</dd></div>
-          <div><dt class="text-gray-500">{{ t('taskLogs.settled') }}</dt><dd class="mt-1 tabular-nums">{{ detail.actual_amount == null ? '—' : `$${detail.actual_amount}` }} · {{ billingLabel(detail.billing_status) }}</dd></div>
-          <div v-if="admin && detail.upstream_id" class="sm:col-span-2"><dt class="text-gray-500">{{ t('taskLogs.upstreamId') }}</dt><dd class="mt-1 break-all">{{ detail.upstream_id }}</dd></div>
-          <div v-if="detail.fields.prompt" class="sm:col-span-2"><dt class="text-gray-500">{{ t('taskLogs.prompt') }}</dt><dd class="mt-1 whitespace-pre-wrap break-words">{{ detail.fields.prompt }}</dd></div>
-          <div v-if="detail.fields.seconds || detail.fields.size"><dt class="text-gray-500">{{ t('taskLogs.parameters') }}</dt><dd class="mt-1">{{ detail.fields.seconds || '—' }} s / {{ detail.fields.size || '—' }}</dd></div>
-          <div v-if="detail.error_code || detail.error_message" class="sm:col-span-2"><dt class="text-gray-500">{{ t(detail.status === 'succeeded' && detail.billing_status === 'review' ? 'taskLogs.billingIssue' : 'taskLogs.failure') }}</dt><dd class="mt-1 break-words text-red-600 dark:text-red-400">{{ detail.error_code }} {{ detail.error_message }}</dd></div>
-          <div v-if="detail.monitor_status" class="sm:col-span-2"><dt class="text-gray-500">{{ t('taskLogs.monitoring') }}</dt><dd class="mt-1" :class="detail.monitor_status === 'review' ? 'text-amber-700 dark:text-amber-400' : ''">{{ t(`taskLogs.monitorStatuses.${detail.monitor_status}`) }}<span v-if="detail.monitor_status === 'review'"> · {{ monitorError(detail.monitor_error_code) }}</span></dd></div>
+          <div><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.plugin') }}</dt><dd class="mt-1">{{ detail.plugin_key }} · {{ detail.source === 'native' ? t('taskLogs.nativeSource') : `v${detail.plugin_version}` }}</dd></div>
+          <div><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.group') }}</dt><dd class="mt-1">{{ detail.group_name }}</dd></div>
+          <div><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.protocol') }}</dt><dd class="mt-1">{{ detail.protocol }} / {{ detail.action }}</dd></div>
+          <div><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.created') }}</dt><dd class="mt-1">{{ formatDate(detail.created_at) }}</dd></div>
+          <div><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.held') }}</dt><dd class="mt-1 tabular-nums">{{ detail.source === 'native' ? '—' : `$${detail.hold_amount}` }}</dd></div>
+          <div><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.settled') }}</dt><dd class="mt-1 tabular-nums">{{ detail.actual_amount == null ? '—' : `$${detail.actual_amount}` }} · {{ billingLabel(detail.billing_status) }}</dd></div>
+          <div v-if="admin && detail.upstream_id" class="sm:col-span-2"><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.upstreamId') }}</dt><dd class="mt-1 break-all font-mono text-xs">{{ detail.upstream_id }}</dd></div>
+          <div v-if="detail.fields.prompt" class="sm:col-span-2"><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.prompt') }}</dt><dd class="mt-1 whitespace-pre-wrap break-words">{{ detail.fields.prompt }}</dd></div>
+          <div v-if="detail.fields.seconds || detail.fields.size"><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.parameters') }}</dt><dd class="mt-1">{{ detail.fields.seconds || '—' }} s / {{ detail.fields.size || '—' }}</dd></div>
+          <div v-if="detail.error_code || detail.error_message" class="sm:col-span-2"><dt class="text-gray-500 dark:text-dark-400">{{ t(detail.status === 'succeeded' && detail.billing_status === 'review' ? 'taskLogs.billingIssue' : 'taskLogs.failure') }}</dt><dd class="mt-1 break-words text-red-600 dark:text-red-400">{{ detail.error_code }} {{ detail.error_message }}</dd></div>
+          <div v-if="detail.monitor_status" class="sm:col-span-2"><dt class="text-gray-500 dark:text-dark-400">{{ t('taskLogs.monitoring') }}</dt><dd class="mt-1" :class="detail.monitor_status === 'review' ? 'text-amber-700 dark:text-amber-400' : ''">{{ t(`taskLogs.monitorStatuses.${detail.monitor_status}`) }}<span v-if="detail.monitor_status === 'review'"> · {{ monitorError(detail.monitor_error_code) }}</span></dd></div>
         </dl>
-        <p v-if="detail.source === 'native'" class="text-xs leading-5 text-gray-500">{{ t('taskLogs.nativeHint') }}</p>
+        <p v-if="detail.source === 'native'" class="text-xs leading-5 text-gray-500 dark:text-dark-400">{{ t('taskLogs.nativeHint') }}</p>
         <form v-if="canMaintainNative && detail.native_actions?.length" class="space-y-3 rounded-lg border border-amber-200 p-4 dark:border-amber-900" data-native-maintenance @submit.prevent="maintainNative">
           <p class="text-sm">{{ t('taskLogs.maintenance.hint') }}</p>
           <label><span class="input-label">{{ t('taskLogs.maintenance.action') }}</span><select v-model="nativeAction" class="input" :disabled="maintaining"><option v-for="action in detail.native_actions" :key="action" :value="action">{{ t(`taskLogs.maintenance.${action}`) }}</option></select></label>
@@ -124,6 +167,10 @@ const downloading = ref(false)
 const maintaining = ref(false)
 const nativeAction = ref<NativeTaskAction>('resume_poll')
 const nativeReason = ref('')
+const showAdvancedFilters = ref(false)
+const copiedTaskId = ref('')
+let copiedTimer: ReturnType<typeof setTimeout> | undefined
+const advancedFilterCount = computed(() => [filters.plugin, filters.billing_status, start.value, end.value].filter(Boolean).length)
 let listController: AbortController | undefined
 let detailController: AbortController | undefined
 let downloadController: AbortController | undefined
@@ -140,7 +187,20 @@ function monitorError(code?: string) {
   const key = code?.replace(/^native_monitor_/, '')
   return key && known.includes(key) ? t(`taskLogs.monitorErrors.${key}`) : t('taskLogs.monitorErrors.upstream_error')
 }
-function statusClass(value: string) { return value === 'succeeded' ? 'text-emerald-700 dark:text-emerald-400' : value === 'failed' || value === 'submission_uncertain' ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-dark-200' }
+function statusClass(value: string) {
+  if (value === 'succeeded') return 'badge-success'
+  if (value === 'failed' || value === 'submission_uncertain') return 'badge-danger'
+  if (value === 'running' || value === 'submitting') return 'badge-primary'
+  return 'badge-gray'
+}
+async function copyTaskId(id: string) {
+  try {
+    await navigator.clipboard.writeText(id)
+    copiedTaskId.value = id
+    clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => { if (copiedTaskId.value === id) copiedTaskId.value = '' }, 1800)
+  } catch { /* Task ID remains selectable when clipboard access is unavailable. */ }
+}
 function formatDate(value: string) { return new Date(value).toLocaleString(props.locale) }
 function duration(task: TaskLog) {
   const seconds = Math.max(0, ((task.finished_at ? Date.parse(task.finished_at) : now.value) - Date.parse(task.created_at)) / 1000)
@@ -239,5 +299,5 @@ onMounted(() => {
     if (detail.value && (active(detail.value) || detail.value.billing_status !== 'settled')) void openDetail(detail.value.id, true)
   }, 5000)
 })
-onBeforeUnmount(() => { document.removeEventListener('visibilitychange', visibilityChanged); clearInterval(timer); listController?.abort(); detailController?.abort(); downloadController?.abort(); maintenanceController?.abort(); props.cancelMutation?.() })
+onBeforeUnmount(() => { document.removeEventListener('visibilitychange', visibilityChanged); clearInterval(timer); clearTimeout(copiedTimer); listController?.abort(); detailController?.abort(); downloadController?.abort(); maintenanceController?.abort(); props.cancelMutation?.() })
 </script>

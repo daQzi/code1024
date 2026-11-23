@@ -6234,14 +6234,17 @@
           </div>
 
           <!-- Web Search Test Dialog -->
-          <div
-            v-if="wsTestDialogOpen"
-            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-            @click.self="wsTestDialogOpen = false"
-          >
+          <Teleport to="body">
             <div
-              class="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-dark-800"
+              v-if="wsTestDialogOpen"
+              role="dialog"
+              aria-modal="true"
+              class="modal-overlay fixed inset-0 z-[80] flex items-center justify-center p-4"
+              @click.self="wsTestDialogOpen = false"
             >
+              <div
+                class="modal-content mx-4 w-full max-w-lg rounded-2xl p-6 shadow-xl"
+              >
               <h3
                 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white"
               >
@@ -6313,8 +6316,9 @@
                   {{ t("common.close") }}
                 </button>
               </div>
+              </div>
             </div>
-          </div>
+          </Teleport>
 
         <!-- Usage Records Settings -->
         <div class="card">
@@ -7732,12 +7736,15 @@
         </div>
 
         <!-- Affiliate add/edit modal -->
-        <div
-          v-if="affiliateModal.open"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          @click.self="closeAffiliateModal"
-        >
-          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-dark-900">
+        <Teleport to="body">
+          <div
+            v-if="affiliateModal.open"
+            role="dialog"
+            aria-modal="true"
+            class="modal-overlay fixed inset-0 z-[80] flex items-center justify-center p-4"
+            @click.self="closeAffiliateModal"
+          >
+            <div class="modal-content w-full max-w-md rounded-2xl p-6 shadow-xl">
             <h3 class="mb-4 text-lg font-semibold">
               {{ affiliateModal.mode === 'add' ? t('admin.settings.features.affiliate.modal.addTitle') : t('admin.settings.features.affiliate.modal.editTitle') }}
             </h3>
@@ -7853,16 +7860,20 @@
                 </button>
               </div>
             </div>
+            </div>
           </div>
-        </div>
+        </Teleport>
 
         <!-- Affiliate batch rate modal -->
-        <div
-          v-if="affiliateBatchModal.open"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          @click.self="affiliateBatchModal.open = false"
-        >
-          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-dark-900">
+        <Teleport to="body">
+          <div
+            v-if="affiliateBatchModal.open"
+            role="dialog"
+            aria-modal="true"
+            class="modal-overlay fixed inset-0 z-[80] flex items-center justify-center p-4"
+            @click.self="affiliateBatchModal.open = false"
+          >
+            <div class="modal-content w-full max-w-md rounded-2xl p-6 shadow-xl">
             <h3 class="mb-4 text-lg font-semibold">
               {{ t('admin.settings.features.affiliate.batchModal.title', { count: affiliateState.selected.length }) }}
             </h3>
@@ -7897,8 +7908,9 @@
                 {{ affiliateBatchModal.saving ? t('common.saving') : t('common.save') }}
               </button>
             </div>
+            </div>
           </div>
-        </div>
+        </Teleport>
 
         </div><!-- /Tab: Features -->
 

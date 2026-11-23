@@ -69,10 +69,12 @@
               type="button"
               class="rail__item"
               :class="{
-                'is-active': isGroupActive(item) && !isGroupExpanded(item),
+                'is-active':
+                  isGroupActive(item) && (!isGroupExpanded(item) || (collapsed && !mobileOpen)),
                 'is-parent': true,
               }"
               :title="collapsed && !mobileOpen ? item.label : undefined"
+              :aria-expanded="!collapsed || mobileOpen ? isGroupExpanded(item) : false"
               @click="handleGroupClick(item)"
             >
               <span class="rail__icon">
@@ -102,7 +104,7 @@
                 :key="child.path"
                 :to="child.path"
                 class="rail__child"
-                :class="{ 'is-active': route.path === child.path }"
+                :class="{ 'is-active': isActive(child.path) }"
                 @click="handleMenuItemClick(child.path)"
               >
                 <span class="rail__child-dot" />
@@ -181,7 +183,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from '@/stores'
@@ -192,7 +193,6 @@ import { sanitizeUrl } from '@/utils/url'
 import { useShellNav } from './useShellNav'
 
 const { t } = useI18n()
-const route = useRoute()
 const appStore = useAppStore()
 
 const {

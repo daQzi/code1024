@@ -2,8 +2,37 @@
   <AppLayout>
     <div class="space-y-6">
       <!-- Loading State -->
-      <div v-if="loading" class="flex items-center justify-center py-12">
-        <LoadingSpinner />
+      <div v-if="loading" role="status" aria-busy="true" class="space-y-6">
+        <div class="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))]">
+          <div v-for="cardIndex in 4" :key="`admin-core-skeleton-${cardIndex}`" class="card p-4">
+            <div class="flex items-center gap-3">
+              <UiSkeleton :width="36" :height="36" radius="var(--ui-r-md)" />
+              <div class="flex-1 space-y-2">
+                <UiSkeleton width="55%" :height="12" />
+                <UiSkeleton width="70%" :height="22" />
+                <UiSkeleton width="48%" :height="12" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))]">
+          <div v-for="cardIndex in 4" :key="`admin-token-skeleton-${cardIndex}`" class="card p-4">
+            <div class="flex items-center gap-3">
+              <UiSkeleton :width="36" :height="36" radius="var(--ui-r-md)" />
+              <div class="flex-1 space-y-2">
+                <UiSkeleton width="60%" :height="12" />
+                <UiSkeleton width="75%" :height="22" />
+                <UiSkeleton width="45%" :height="12" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div v-for="chartIndex in 2" :key="`admin-chart-skeleton-${chartIndex}`" class="card space-y-4 p-5">
+            <UiSkeleton width="180px" :height="18" />
+            <UiSkeleton width="100%" :height="240" radius="var(--ui-r-md)" />
+          </div>
+        </div>
       </div>
 
       <template v-else-if="stats">
@@ -364,6 +393,7 @@ import type {
 } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
 import Icon from '@/components/icons/Icon.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'

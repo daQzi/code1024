@@ -1,32 +1,32 @@
 <template>
   <section class="space-y-4">
     <header class="flex flex-wrap items-start justify-between gap-3">
-      <div><h3 class="text-base font-semibold">{{ t('pluginRegistry.external.title') }}</h3><p class="mt-1 max-w-3xl text-sm leading-6 text-gray-500">{{ t('pluginRegistry.external.hint') }}</p></div>
+      <div><h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('pluginRegistry.external.title') }}</h3><p class="mt-1 max-w-3xl text-sm leading-6 text-gray-500 dark:text-dark-400">{{ t('pluginRegistry.external.hint') }}</p></div>
       <button type="button" class="btn btn-secondary btn-sm" :disabled="busy || sourcesLoading || !editable" @click="editSources">{{ t('pluginRegistry.external.manageSources') }}</button>
     </header>
     <div class="flex flex-wrap gap-3">
       <select v-model="sourceURL" class="input min-w-0 flex-1" :disabled="busy || sourcesLoading" :aria-label="t('pluginRegistry.external.source')"><option v-for="source in sources" :key="source.index_url" :value="source.index_url">{{ source.name }} · {{ t(`pluginRegistry.external.origins.${marketplaceSourceKind(source.index_url)}`) }}</option></select>
       <button type="button" class="btn btn-secondary btn-sm" :disabled="busy || loading || !sourceURL" @click="loadIndex">{{ t('common.refresh') }}</button>
     </div>
-    <p class="break-all text-xs text-gray-500">{{ sourceURL }}</p>
+    <p class="break-all font-mono text-xs text-gray-500 dark:text-dark-400">{{ sourceURL }}</p>
     <form class="flex flex-wrap gap-3" @submit.prevent="lookupCode">
       <input v-model.trim="pluginCode" inputmode="numeric" maxlength="8" class="input min-w-48 flex-1" :disabled="busy || lookupLoading" :placeholder="t('pluginRegistry.external.codeHint')" :aria-label="t('pluginRegistry.external.code')" />
       <button type="submit" class="btn btn-secondary btn-sm" :disabled="busy || sourcesLoading || lookupLoading || !/^\d{8}$/.test(pluginCode)">{{ t(lookupLoading ? 'common.loading' : 'pluginRegistry.external.lookup') }}</button>
       <button v-if="lookup" type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="clearLookup">{{ t('pluginRegistry.external.clearLookup') }}</button>
     </form>
-    <p v-if="lookup" class="break-all text-xs text-gray-500">{{ t('pluginRegistry.external.lookupSource') }} {{ lookup.source.name }} · {{ lookup.source.index_url }}</p>
-    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
-    <p v-if="message" role="status" class="text-sm text-emerald-700 dark:text-emerald-400">{{ message }}</p>
+    <p v-if="lookup" class="break-all text-xs text-gray-500 dark:text-dark-400">{{ t('pluginRegistry.external.lookupSource') }} {{ lookup.source.name }} · {{ lookup.source.index_url }}</p>
+    <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
+    <p v-if="message" role="status" class="rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">{{ message }}</p>
     <div class="flex flex-wrap gap-3"><input v-model.trim="search" type="search" class="input min-w-48 flex-1" :placeholder="t('pluginRegistry.external.search')" :aria-label="t('pluginRegistry.external.search')" /><select v-model="kind" class="input w-auto" :aria-label="t('admin.plugins.center.kind')"><option v-for="value in ['all','task','provider','transform']" :key="value" :value="value">{{ t(`admin.plugins.center.kinds.${value}`) }}</option></select></div>
-    <p v-if="loading || sourcesLoading" role="status" class="py-10 text-center text-sm text-gray-500">{{ t('common.loading') }}</p>
-    <p v-else-if="!filtered.length" class="rounded-xl border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500 dark:border-dark-600">{{ t('pluginRegistry.empty') }}</p>
+    <p v-if="loading || sourcesLoading" role="status" class="py-10 text-center text-sm text-gray-500 dark:text-dark-400">{{ t('common.loading') }}</p>
+    <p v-else-if="!filtered.length" class="rounded-xl border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-dark-400">{{ t('pluginRegistry.empty') }}</p>
     <div v-else class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-      <article v-for="plugin in visible" :key="plugin.key" class="card flex min-w-0 flex-col border border-gray-200 p-5 dark:border-dark-700">
-        <h4 class="break-words text-base font-semibold">{{ plugin.name }} <span class="text-xs font-normal text-gray-500">v{{ plugin.latest }}</span></h4>
-        <p class="mt-1 break-all text-xs text-gray-500">{{ plugin.key }}<span v-if="plugin.author"> · {{ plugin.author }}</span><span v-if="plugin.code"> · {{ plugin.code }}</span></p>
-        <p class="mt-3 line-clamp-3 text-sm leading-6 text-gray-500">{{ localized(plugin.description) }}</p>
-        <div class="my-4 flex flex-wrap gap-1.5 text-xs"><span v-for="cap in [...new Set(plugin.versions.map(v => v.kind))]" :key="cap" class="rounded border border-gray-200 px-2 py-1 dark:border-dark-600">{{ t(`admin.plugins.center.kinds.${cap}`) }}</span><span v-if="plugin.recommended" class="rounded bg-gray-100 px-2 py-1 dark:bg-dark-700">{{ t('pluginRegistry.external.recommended') }}</span></div>
-        <div class="mt-auto flex flex-wrap items-center justify-between gap-2"><span class="text-xs text-gray-500">{{ installState(plugin) }}</span><button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="open(plugin)">{{ t('pluginRegistry.open') }}</button></div>
+      <article v-for="plugin in visible" :key="plugin.key" class="card card-hover flex min-w-0 flex-col border border-gray-200 p-5 dark:border-dark-700">
+        <h4 class="break-words text-base font-semibold text-gray-900 dark:text-white">{{ plugin.name }} <span class="text-xs font-normal text-gray-500 dark:text-dark-400">v{{ plugin.latest }}</span></h4>
+        <p class="mt-1 break-all font-mono text-xs text-gray-500 dark:text-dark-400">{{ plugin.key }}<span v-if="plugin.author"> · {{ plugin.author }}</span><span v-if="plugin.code"> · {{ plugin.code }}</span></p>
+        <p class="mt-3 line-clamp-3 text-sm leading-6 text-gray-500 dark:text-dark-400">{{ localized(plugin.description) }}</p>
+        <div class="my-4 flex flex-wrap gap-1.5 text-xs"><span v-for="cap in [...new Set(plugin.versions.map(v => v.kind))]" :key="cap" class="badge badge-primary">{{ t(`admin.plugins.center.kinds.${cap}`) }}</span><span v-if="plugin.recommended" class="badge badge-success">{{ t('pluginRegistry.external.recommended') }}</span></div>
+        <div class="mt-auto flex flex-wrap items-center justify-between gap-2"><span class="text-xs text-gray-500 dark:text-dark-400">{{ installState(plugin) }}</span><button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="open(plugin)">{{ t('pluginRegistry.open') }}</button></div>
       </article>
     </div>
     <component :is="pagination" v-if="filtered.length" :page="page" :page-size="24" :total="filtered.length" @update:page="page = $event" />

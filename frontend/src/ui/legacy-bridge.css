@@ -163,7 +163,7 @@
 
 .btn-primary {
   color: var(--ui-accent-contrast);
-  background-image: var(--ui-arc);
+  background-image: var(--ui-btn-primary-bg, var(--ui-arc));
   background-size: 170% 170%;
   background-position: 10% 50%;
   box-shadow:
@@ -182,8 +182,6 @@
 .btn-secondary {
   color: var(--ui-text);
   background-color: rgb(var(--ui-glass-strong-rgb) / calc(var(--ui-glass-strong-alpha) + 0.1));
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
-  backdrop-filter: blur(14px) saturate(180%);
   border: 0;
   box-shadow:
     inset 0 0 0 1px var(--ui-line),
@@ -234,7 +232,7 @@
 
 .btn-warning {
   color: #fff;
-  background-image: linear-gradient(118deg, #fbbf24 0%, #d97706 100%);
+  background-image: linear-gradient(118deg, #d97706 0%, #b45309 100%);
   box-shadow:
     inset 0 1px 1px rgb(255 255 255 / 0.3),
     0 8px 20px -10px rgb(217 119 6 / 0.6);
@@ -257,8 +255,6 @@
 .input {
   border-radius: var(--ui-r-md);
   background-color: rgb(var(--ui-glass-strong-rgb) / calc(var(--ui-glass-strong-alpha) + 0.04));
-  -webkit-backdrop-filter: blur(12px) saturate(170%);
-  backdrop-filter: blur(12px) saturate(170%);
   border: 0;
   color: var(--ui-text);
   box-shadow:
@@ -459,16 +455,14 @@
 /* ============================================================ 原子类白底
  * 绝大多数页面不用 .card，而是直接写 bg-white（配各种圆角/边框）。
  * 这里把内容区里的白底块统一玻璃化，避免「新旧两种卡片并存」。
- * 例外：二维码 / 图片 / 画布 / 显式 .keep-solid 保持不透明。
+ * 例外：圆形滑块/徽标（.rounded-full）、二维码 / 图片 / 画布 / 显式 .keep-solid 保持原色。
  */
-.shell__content .bg-white:not(.keep-solid):not(.qr-code):not(.qr-container):not(canvas) {
+.shell__content .bg-white:not(.keep-solid):not(.qr-code):not(.qr-container):not(canvas):not(.rounded-full) {
   background-color: rgb(var(--ui-glass-rgb) / calc(var(--ui-glass-alpha) + 0.06));
-  -webkit-backdrop-filter: blur(18px) saturate(175%) brightness(105%);
-  backdrop-filter: blur(18px) saturate(175%) brightness(105%);
 }
 
-html.dark .shell__content .bg-white:not(.keep-solid):not(.qr-code):not(.qr-container):not(canvas),
-html[data-theme='dark'] .shell__content .bg-white:not(.keep-solid):not(.qr-code):not(.qr-container):not(canvas) {
+html.dark .shell__content .bg-white:not(.keep-solid):not(.qr-code):not(.qr-container):not(canvas):not(.rounded-full),
+html[data-theme='dark'] .shell__content .bg-white:not(.keep-solid):not(.qr-code):not(.qr-container):not(canvas):not(.rounded-full) {
   background-color: rgb(var(--ui-glass-rgb) / calc(var(--ui-glass-alpha) + 0.10));
 }
 
@@ -476,6 +470,8 @@ html[data-theme='dark'] .shell__content .bg-white:not(.keep-solid):not(.qr-code)
 .shell__content .bg-white.rounded-xl:not(.keep-solid),
 .shell__content .bg-white.rounded-2xl:not(.keep-solid),
 .shell__content .bg-white.rounded-3xl:not(.keep-solid) {
+  -webkit-backdrop-filter: blur(18px) saturate(175%) brightness(105%);
+  backdrop-filter: blur(18px) saturate(175%) brightness(105%);
   border-color: transparent;
   box-shadow:
     inset 0 0 0 1px var(--ui-edge),
