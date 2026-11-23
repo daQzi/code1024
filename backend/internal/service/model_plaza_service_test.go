@@ -21,6 +21,43 @@ func (r plazaAccountCatalogStub) ListActive(context.Context) ([]Account, error) 
 	return r.accounts, r.err
 }
 
+func TestListPlazaGroups_AccountModelsWithoutPricingChannel(t *testing.T) {
+	groups := []Group{
+		{ID: 10, Platform: PlatformOpenAI, ModelAllowlist: GroupModelAllowlist{Enabled: true, Models: []string{"public-model", "wild-*"}}},
+		{ID: 20, Platform: PlatformOpenAI},
+		{ID: 30, Platform: PlatformOpenAI},
+		{ID: 40, Platform: PlatformAnthropic},
+	}
+	svc := newPlazaService([]Channel{
+		plazaPricedChannel(1, "explicit catalog", []int64{30}, PlatformOpenAI, "priced-model"),
+	}, groups, nil)
+	svc.accountRepo = plazaAccountCatalogStub{accounts: []Account{
+		{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, GroupIDs: []int64{10, 40},
+			Credentials: map[string]any{"model_mapping": map[string]any{
+				"public-model": "upstream-model", "blocked": "blocked", "wild-*": "vendor-*",
+			}}},
+		{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: false, GroupIDs: []int64{10},
+			Credentials: map[string]any{"model_mapping": map[string]any{"wild-paused": "vendor-paused"}}},
+		{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, GroupIDs: []int64{20},
+			Credentials: map[string]any{"model_mapping": map[string]any{"another-group": "another-group"}}},
+		{Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true, GroupIDs: []int64{30},
+			Credentials: map[string]any{"model_mapping": map[string]any{"priced-model": "priced-model", "outside-catalog": "outside-catalog"}}},
+	}}
+
+	out, err := svc.ListGroups(context.Background())
+	require.NoError(t, err)
+	byGroup := make(map[int64][]PlazaModel)
+	for _, group := range out {
+		byGroup[group.ID] = group.Models
+	}
+	require.Equal(t, []PlazaModel{{Name: "public-model", Platform: PlatformOpenAI}}, byGroup[10])
+	require.Equal(t, []PlazaModel{{Name: "another-group", Platform: PlatformOpenAI}}, byGroup[20])
+	require.Len(t, byGroup[30], 1)
+	require.Equal(t, "priced-model", byGroup[30][0].Name)
+	require.NotNil(t, byGroup[30][0].Pricing)
+	require.NotContains(t, byGroup, int64(40))
+}
+
 func TestListPlazaGroups_UsesAccountSupportAndGroupAllowlist(t *testing.T) {
 	channels := []Channel{plazaPricedChannel(1, "shared prices", []int64{10, 20, 30}, PlatformOpenAI, "gpt-5", "unsupported", "blocked")}
 	groups := []Group{

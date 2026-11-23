@@ -37,9 +37,7 @@ type PlazaModel struct {
 
 // PlazaGroup 模型广场中以分组为顶层的条目。
 //
-// 与 AvailableGroupRef 相比多了 Description 与 Models；Models 来自该分组关联渠道的
-// 支持模型（普通分组按分组平台隔离，Composite 分组展开关联渠道已配置的
-// 具体平台），与「可用渠道」页口径一致。
+// Models 来自该分组关联渠道的支持模型。普通分组无启用渠道时使用组内账号的具体模型。
 type PlazaGroup struct {
 	ID                 int64
 	Name               string
@@ -67,7 +65,7 @@ type PlazaGroup struct {
 
 // ModelPlazaService 聚合模型广场数据。
 //
-// 模型枚举来自渠道配置；token 模型的展示单价与阶梯由 BillingService 的阶梯表
+// 模型枚举来自渠道或分组账号配置；token 模型的展示单价与阶梯由 BillingService 的阶梯表
 // 查询给出（与扣费走同一条解析链与计费函数），图片/按次模型沿用渠道/分组档位价。
 type ModelPlazaService struct {
 	channelRepo         ChannelRepository
@@ -109,8 +107,7 @@ func NewModelPlazaService(
 
 // ListGroups 返回模型广场数据：每个活跃分组附带其可用模型与定价。
 //
-// 模型枚举口径与 ListAvailable 一致（Active 渠道、SupportedModels ∪ 全局定价回落、
-// 平台隔离），仅把顶层从渠道换成分组：
+// 启用渠道沿用 ListAvailable 的模型枚举口径，普通分组无启用渠道时从组内账号枚举：
 //   - 渠道按 lower(name) 排序后遍历，保证同名模型去重结果确定；
 //   - 同分组同名模型「先见者胜」，仅当已存条目无定价而新条目有定价时升级替换；
 //   - token 模型的单价与阶梯按实收口径合成（见 ResolveContextPricingSchedule），
@@ -205,6 +202,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 	}
 	// modelIdx[groupID][platform+modelName] = index into byGroup[groupID].Models
 	modelIdx := make(map[int64]map[modelKey]int, len(groups))
+	groupsWithChannel := make(map[int64]bool, len(groups))
 	for i := range channels {
 		ch := &channels[i]
 		if ch.Status != StatusActive {
@@ -220,6 +218,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 			if !ok {
 				continue
 			}
+			groupsWithChannel[gid] = true
 			expandMappingToCache(mappingCache, ch, gid, pg.Platform)
 			idx := modelIdx[gid]
 			if idx == nil {
@@ -240,13 +239,7 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 					if routingModel == "" {
 						routingModel = m.Name
 					}
-					var supportingAccounts []*Account
-					for _, account := range accountsByGroup[gid] {
-						pluginSupports := !account.HasNewAPIPlugin() || account.SupportsAnyNewAPIProviderModel(routingModel)
-						if account.Platform == m.Platform && account.IsModelSupported(routingModel) && pluginSupports {
-							supportingAccounts = append(supportingAccounts, account)
-						}
-					}
+					supportingAccounts := plazaSupportingAccounts(accountsByGroup[gid], m.Platform, routingModel)
 					if len(supportingAccounts) == 0 {
 						continue
 					}
@@ -279,6 +272,13 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		}
 	}
 
+	for groupID, accounts := range accountsByGroup {
+		group := groupEnt[groupID]
+		if group == nil || group.Platform == PlatformComposite || groupsWithChannel[groupID] {
+			continue
+		}
+		byGroup[groupID].Models = plazaModelsFromAccounts(group, accounts, capabilityMetadata)
+	}
 	if err = s.appendGenerationCatalog(ctx, byGroup, groupEnt); err != nil {
 		return nil, err
 	}
@@ -310,6 +310,48 @@ func (s *ModelPlazaService) ListGroups(ctx context.Context) ([]PlazaGroup, error
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+func plazaSupportingAccounts(accounts []*Account, platform, model string) []*Account {
+	var supporting []*Account
+	for _, account := range accounts {
+		if account.Platform == platform && account.IsModelSupported(model) &&
+			(!account.HasNewAPIPlugin() || account.SupportsAnyNewAPIProviderModel(model)) {
+			supporting = append(supporting, account)
+		}
+	}
+	return supporting
+}
+
+func plazaModelsFromAccounts(group *Group, accounts []*Account, metadata map[*Account]map[string]UpstreamModelMetadata) []PlazaModel {
+	candidates := make(map[string]struct{})
+	for _, account := range accounts {
+		if account.Platform != group.Platform {
+			continue
+		}
+		if account.HasNewAPIPlugin() {
+			for _, model := range account.NewAPIProviderModels() {
+				candidates[model] = struct{}{}
+			}
+			continue
+		}
+		for model := range account.GetModelMapping() {
+			candidates[model] = struct{}{}
+		}
+	}
+	var models []PlazaModel
+	for model := range candidates {
+		if model == "" || strings.Contains(model, "*") || !group.ModelAllowlist.Allows(model) {
+			continue
+		}
+		supporting := plazaSupportingAccounts(accounts, group.Platform, model)
+		if len(supporting) == 0 {
+			continue
+		}
+		capabilities, protocols := plazaAccountCapabilities(model, supporting, metadata)
+		models = append(models, PlazaModel{Name: model, Platform: group.Platform, Capabilities: capabilities, Protocols: protocols})
+	}
+	return models
 }
 
 // fillDisplayPricing 把模型的展示定价换成实收口径：
