@@ -1,7 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import NewAPIPluginField from '../NewAPIPluginField.vue'
-import { getNewAPIPluginVersion } from '@/api/admin/newapiPlugins'
+import { getNewAPIPluginVersion, listNewAPIPlugins } from '@/api/admin/newapiPlugins'
+import Select from '@/components/common/Select.vue'
+import SelectStub from '@/__tests__/stubs/SelectStub'
 
 vi.mock('vue-i18n', async original => ({ ...(await original<typeof import('vue-i18n')>()), useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh' } }) }))
 vi.mock('@/api/admin/newapiPlugins', () => ({
@@ -18,9 +20,29 @@ vi.mock('@/api/admin/newapiPlugins', () => ({
 }))
 
 describe('account protocol plugin selection', () => {
+  it('preserves numeric plugin and enum values through the actual host dropdown', async () => {
+    vi.mocked(listNewAPIPlugins).mockResolvedValueOnce({ plugins: [{
+      id: 8, enabled: true, version: '1', meta: { name: 'Numeric config', channelConfig: { type: 'object', properties: {
+        retries: { type: 'integer', enum: [0, 1] }
+      } } }, compatibility: { kinds: ['provider'] }, capabilities: { provider: true }
+    }] } as Awaited<ReturnType<typeof listNewAPIPlugins>>)
+    const wrapper = mount(NewAPIPluginField)
+    await flushPromises()
+    await wrapper.findComponent(Select).get('button').trigger('click')
+    Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(option => option.textContent?.includes('Numeric config'))!.click()
+    await flushPromises()
+    const field = wrapper.findAllComponents(Select)[2]!
+    await field.get('button').trigger('click')
+    Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find(option => option.textContent?.trim() === '0')!.click()
+    await flushPromises()
+    expect(field.props('modelValue')).toBe(0)
+    const api = wrapper.vm as unknown as { apply: (value: Record<string, unknown>) => Record<string, unknown> }
+    expect(api.apply({})).toMatchObject({ newapi_plugin_version_id: 8, newapi_plugin_config: { retries: 0 } })
+    wrapper.unmount()
+  })
   it('shows localized instructions and concrete model requirements for generic video plugins', async () => {
     const wrapper = mount(NewAPIPluginField, {
-      global: { stubs: { NewAPIVideoPricingField: { template: '<div />', methods: { rules: () => ({}) } } } },
+      global: { stubs: { Select: SelectStub, NewAPIVideoPricingField: { template: '<div />', methods: { rules: () => ({}) } } } },
     })
     await flushPromises()
     await wrapper.find('select').setValue(6)
@@ -39,7 +61,7 @@ describe('account protocol plugin selection', () => {
   it('uses the same saved credential controls for Task-only video plugins', async () => {
     const wrapper = mount(NewAPIPluginField, {
       props: { accountId: 17, credentials: { newapi_plugin_version_id: 5 } },
-      global: { stubs: { NewAPIPluginCredential: { template: '<div data-task-login />' }, NewAPIVideoPricingField: { template: '<div data-task-price />' }, NewAPIPluginModels: true, NewAPIPluginBalance: true } },
+      global: { stubs: { Select: SelectStub, NewAPIPluginCredential: { template: '<div data-task-login />' }, NewAPIVideoPricingField: { template: '<div data-task-price />' }, NewAPIPluginModels: true, NewAPIPluginBalance: true } },
     })
     await flushPromises()
     const api = wrapper.vm as unknown as { requiresLogin: boolean }
@@ -54,7 +76,7 @@ describe('account protocol plugin selection', () => {
   it('allows a saved login provider without a dummy key and retains its explicit pause policy', async () => {
     const wrapper = mount(NewAPIPluginField, {
       props: { accountId: 17, credentials: { newapi_plugin_version_id: 4, newapi_plugin_auto_disable: true } },
-      global: { stubs: { NewAPIPluginCredential: { template: '<div data-login-card />' }, NewAPIVideoPricingField: true, NewAPIPluginModels: true, NewAPIPluginBalance: true } },
+      global: { stubs: { Select: SelectStub, NewAPIPluginCredential: { template: '<div data-login-card />' }, NewAPIVideoPricingField: true, NewAPIPluginModels: true, NewAPIPluginBalance: true } },
     })
     await flushPromises()
     const api = wrapper.vm as unknown as { requiresLogin: boolean; apply: (value: Record<string, unknown>) => Record<string, unknown> }
@@ -75,7 +97,7 @@ describe('account protocol plugin selection', () => {
   it('shows model discovery only for a saved revision with an explicit discovery route', async () => {
     const wrapper = mount(NewAPIPluginField, {
       props: { accountId: 17, credentials: { newapi_plugin_version_id: 1 } },
-      global: { stubs: { NewAPIVideoPricingField: true, NewAPIPluginBalance: true, NewAPIPluginModels: { template: '<div data-discovery-card />' } } },
+      global: { stubs: { Select: SelectStub, NewAPIVideoPricingField: true, NewAPIPluginBalance: true, NewAPIPluginModels: { template: '<div data-discovery-card />' } } },
     })
     await flushPromises()
     expect(wrapper.find('[data-discovery-card]').exists()).toBe(true)
@@ -87,7 +109,7 @@ describe('account protocol plugin selection', () => {
     vi.mocked(getNewAPIPluginVersion).mockResolvedValueOnce({ id: 91, version: '0.9.0', enabled: true, meta: { name: 'Saved provider' }, capabilities: { provider: true, hooks: ['buildBalanceRequest', 'parseBalance'] }, compatibility: { kinds: ['provider'] } } as never)
     const wrapper = mount(NewAPIPluginField, {
       props: { accountId: 17, credentials: { newapi_plugin_version_id: 91 } },
-      global: { stubs: { NewAPIVideoPricingField: true, NewAPIPluginModels: true, NewAPIPluginBalance: { template: '<div data-saved-balance />' } } },
+      global: { stubs: { Select: SelectStub, NewAPIPluginCredential: true, NewAPIVideoPricingField: true, NewAPIPluginModels: true, NewAPIPluginBalance: { template: '<div data-saved-balance />' } } },
     })
     await flushPromises()
     expect(getNewAPIPluginVersion).toHaveBeenLastCalledWith(91, expect.any(AbortSignal))
@@ -102,7 +124,7 @@ describe('account protocol plugin selection', () => {
     vi.mocked(getNewAPIPluginVersion).mockImplementationOnce(() => new Promise(done => { resolve = done }))
     const wrapper = mount(NewAPIPluginField, {
       props: { accountId: 17, credentials: { newapi_plugin_version_id: 92 } },
-      global: { stubs: { NewAPIVideoPricingField: true, NewAPIPluginBalance: true } },
+      global: { stubs: { Select: SelectStub, NewAPIVideoPricingField: true, NewAPIPluginBalance: true } },
     })
     await flushPromises()
     const signal = vi.mocked(getNewAPIPluginVersion).mock.calls.at(-1)?.[1]
@@ -116,7 +138,7 @@ describe('account protocol plugin selection', () => {
     vi.mocked(getNewAPIPluginVersion).mockImplementationOnce(() => new Promise(done => { resolve = done }))
     const wrapper = mount(NewAPIPluginField, {
       props: { accountId: 17, credentials: { newapi_plugin_version_id: 1 } },
-      global: { stubs: { NewAPIVideoPricingField: true, NewAPIPluginModels: true, NewAPIPluginBalance: true } },
+      global: { stubs: { Select: SelectStub, NewAPIVideoPricingField: true, NewAPIPluginModels: true, NewAPIPluginBalance: true } },
     })
     await flushPromises()
     await wrapper.setProps({ accountId: 18, credentials: { newapi_plugin_version_id: 93 } })
@@ -134,7 +156,7 @@ describe('account protocol plugin selection', () => {
   it('shows balance only for the saved account revision and hides it while another plugin is selected', async () => {
     const wrapper = mount(NewAPIPluginField, {
       props: { accountId: 17, credentials: { newapi_plugin_version_id: 1 } },
-      global: { stubs: { NewAPIVideoPricingField: true, NewAPIPluginModels: true, NewAPIPluginBalance: { template: '<div data-saved-balance />' } } },
+      global: { stubs: { Select: SelectStub, NewAPIVideoPricingField: true, NewAPIPluginModels: true, NewAPIPluginBalance: { template: '<div data-saved-balance />' } } },
     })
     await flushPromises()
     expect(wrapper.find('[data-saved-balance]').exists()).toBe(true)
@@ -146,7 +168,7 @@ describe('account protocol plugin selection', () => {
     const pricing = { '*': { mode: 'fixed', unit: 'second', unit_price: 1 } }
     const wrapper = mount(NewAPIPluginField, {
       props: { credentials: { newapi_plugin_version_id: 1, newapi_video_pricing: pricing } },
-      global: { stubs: { NewAPIVideoPricingField: { template: '<div data-video-pricing />' } } },
+      global: { stubs: { Select: SelectStub, NewAPIVideoPricingField: { template: '<div data-video-pricing />' } } },
     })
     await flushPromises()
     expect(wrapper.findAll('option').some(option => option.text().includes('Text Provider'))).toBe(true)
@@ -161,7 +183,7 @@ describe('account protocol plugin selection', () => {
   it('keeps video pricing available for task accounts', async () => {
     const wrapper = mount(NewAPIPluginField, {
       props: { credentials: { newapi_plugin_version_id: 2 } },
-      global: { stubs: { NewAPIVideoPricingField: { template: '<div data-video-pricing />' } } },
+      global: { stubs: { Select: SelectStub, NewAPIVideoPricingField: { template: '<div data-video-pricing />' } } },
     })
     await flushPromises()
     expect(wrapper.find('[data-video-pricing]').exists()).toBe(true)

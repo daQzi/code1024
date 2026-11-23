@@ -142,7 +142,7 @@ describe('task log console', () => {
     await flushPromises()
     const form = wrapper.find('[data-native-maintenance]')
     expect(form.exists()).toBe(true)
-    expect(form.find('button').attributes('disabled')).toBeDefined()
+    expect(form.find('button[type="submit"]').attributes('disabled')).toBeDefined()
     await form.find('textarea').setValue('  original upstream verified  ')
     await form.trigger('submit')
     await flushPromises()

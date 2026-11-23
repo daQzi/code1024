@@ -1,10 +1,11 @@
 <template>
-  <RegistryPanel v-bind="props" can-write @installed="$emit('installed')" :client="client" :t="translate" :dialog-component="BaseDialog" :pagination-component="Pagination" :run-mutation="runMutation" :is-cancelled="isStepUpCancelled" />
+  <RegistryPanel :select-component="Select" v-bind="props" can-write @installed="$emit('installed')" :client="client" :t="translate" :dialog-component="BaseDialog" :pagination-component="Pagination" :run-mutation="runMutation" :is-cancelled="isStepUpCancelled" />
   <TotpStepUpDialog :controller="stepUp" />
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import Select from '@/components/common/Select.vue'
 import { PluginRegistryPanel as RegistryPanel, type PluginTranslator, type RunPluginMutation } from '../../../packages/newapi-ui/src'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'

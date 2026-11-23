@@ -5,6 +5,7 @@ import PluginSourcePanel from '../PluginSourcePanel.vue'
 import { getNewAPIPluginSource, getPluginFactorySource, type NewAPIPluginVersion, type PluginFactory, type PluginSource } from '@/api/admin/newapiPlugins'
 import { sourceSHA256 } from '@/utils/pluginMarketplace'
 
+vi.mock('@/components/common/Select.vue', async () => ({ default: (await import('@/__tests__/stubs/SelectStub')).default }))
 vi.mock('vue-i18n', async original => ({ ...(await original<typeof import('vue-i18n')>()), useI18n: () => ({ t: (key: string) => key }) }))
 vi.mock('@/api/admin/newapiPlugins', () => ({ getNewAPIPluginSource: vi.fn(), getPluginFactorySource: vi.fn() }))
 beforeEach(() => { vi.resetAllMocks(); vi.stubGlobal('crypto', webcrypto) })

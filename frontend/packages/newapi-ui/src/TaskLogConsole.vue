@@ -15,7 +15,7 @@
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label><span class="input-label">{{ t('taskLogs.taskId') }}</span><input v-model.trim="filters.task_id" class="input" maxlength="512" :placeholder="t('taskLogs.taskIdHint')" /></label>
             <label><span class="input-label">{{ t('taskLogs.model') }}</span><input v-model.trim="filters.model" class="input" maxlength="256" /></label>
-            <label><span class="input-label">{{ t('common.status') }}</span><select v-model="filters.status" class="input"><option value="">{{ t('common.all') }}</option><option v-for="status in statuses" :key="status" :value="status">{{ statusLabel(status) }}</option></select></label>
+            <div class="min-w-0"><span class="input-label">{{ t('common.status') }}</span><HostSelect v-model="filters.status" :select-component="selectComponent" :label="t('common.status')" :options="statusOptions" /></div>
             <div class="flex flex-wrap items-end gap-2">
               <label class="flex w-full items-center gap-2 text-sm text-gray-500 dark:text-dark-400"><input v-model="filters.review" type="checkbox" class="rounded" />{{ t('taskLogs.reviewOnly') }}</label>
               <button type="submit" class="btn btn-primary btn-sm" :disabled="loading">{{ t('common.search') }}</button>
@@ -27,7 +27,7 @@
           </div>
           <div v-show="showAdvancedFilters" class="grid gap-3 border-t border-gray-100 pt-3 dark:border-dark-700 sm:grid-cols-2 lg:grid-cols-4">
             <label><span class="input-label">{{ t('taskLogs.plugin') }}</span><input v-model.trim="filters.plugin" class="input" maxlength="256" /></label>
-            <label><span class="input-label">{{ t('taskLogs.billing') }}</span><select v-model="filters.billing_status" class="input"><option value="">{{ t('common.all') }}</option><option v-for="status in billingStatuses" :key="status" :value="status">{{ billingLabel(status) }}</option></select></label>
+            <div class="min-w-0"><span class="input-label">{{ t('taskLogs.billing') }}</span><HostSelect v-model="filters.billing_status" :select-component="selectComponent" :label="t('taskLogs.billing')" :options="billingOptions" /></div>
             <label><span class="input-label">{{ t('taskLogs.start') }}</span><input v-model="start" type="datetime-local" class="input" /></label>
             <label><span class="input-label">{{ t('taskLogs.end') }}</span><input v-model="end" type="datetime-local" class="input" /></label>
           </div>
@@ -113,7 +113,8 @@
         <p v-if="detail.source === 'native'" class="text-xs leading-5 text-gray-500 dark:text-dark-400">{{ t('taskLogs.nativeHint') }}</p>
         <form v-if="canMaintainNative && detail.native_actions?.length" class="space-y-3 rounded-lg border border-amber-200 p-4 dark:border-amber-900" data-native-maintenance @submit.prevent="maintainNative">
           <p class="text-sm">{{ t('taskLogs.maintenance.hint') }}</p>
-          <label><span class="input-label">{{ t('taskLogs.maintenance.action') }}</span><select v-model="nativeAction" class="input" :disabled="maintaining"><option v-for="action in detail.native_actions" :key="action" :value="action">{{ t(`taskLogs.maintenance.${action}`) }}</option></select></label>
+          <div><span class="input-label">{{ t('taskLogs.maintenance.action') }}</span><HostSelect v-model="nativeAction" :select-component="selectComponent" :label="t('taskLogs.maintenance.action')" :disabled="maintaining"
+              :options="detail.native_actions.map(value => ({ value, label: t(`taskLogs.maintenance.${value}`) }))" /></div>
           <label><span class="input-label">{{ t('taskLogs.maintenance.reason') }}</span><textarea v-model="nativeReason" class="input" rows="2" maxlength="2000" :disabled="maintaining" required /></label>
           <button type="submit" class="btn btn-primary btn-sm" :disabled="maintaining || nativeReason.trim().length < 4 || !detail.native_actions.includes(nativeAction)">{{ t('taskLogs.maintenance.confirm') }}</button>
         </form>
@@ -125,6 +126,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, useSlots, watch, type Component } from 'vue'
+import HostSelect from './HostSelect.vue'
 import type { PluginTranslator, RunPluginMutation } from './types'
 import type { NativeTaskAction, TaskLog, TaskLogClient, TaskLogDetail, TaskLogFilter, TaskLogPage } from './taskLogs'
 
@@ -133,6 +135,7 @@ const props = withDefaults(defineProps<{
   t: PluginTranslator
   locale: string
   dialogComponent: Component
+  selectComponent?: Component
   paginationComponent: Component
   admin?: boolean
   editable?: boolean
@@ -148,6 +151,14 @@ const tab = ref(admin.value ? 'all' : 'mine')
 const canMaintainNative = computed(() => props.admin && props.editable && !!props.runMutation && !!props.client.maintainNativeTask)
 const statuses = ['queued', 'submitting', 'submission_uncertain', 'running', 'succeeded', 'failed']
 const billingStatuses = ['held', 'pending', 'settled', 'review', 'unconfirmed', 'not_charged']
+const statusOptions = computed(() => [
+  { value: '', label: t('common.all') },
+  ...statuses.map(value => ({ value, label: statusLabel(value) }))
+])
+const billingOptions = computed(() => [
+  { value: '', label: t('common.all') },
+  ...billingStatuses.map(value => ({ value, label: billingLabel(value) }))
+])
 const filters = reactive({ task_id: '', model: '', plugin: '', status: '', billing_status: '', review: false })
 const start = ref('')
 const end = ref('')

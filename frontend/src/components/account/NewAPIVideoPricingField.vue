@@ -8,8 +8,14 @@
     <div v-for="(row, index) in rows" :key="row.id" class="space-y-3 rounded-lg bg-gray-50 p-3 dark:bg-dark-900">
       <div class="grid gap-3 sm:grid-cols-2">
         <label><span class="input-label">{{ t('admin.plugins.js.priceModel') }}</span><input v-model="row.model" class="input" placeholder="*" /></label>
-        <label><span class="input-label">{{ t('admin.plugins.js.priceMode') }}</span><select v-model="row.mode" class="input" @change="normalizeMode(row)"><option value="fixed">{{ t('admin.plugins.js.fixedPrice') }}</option><option value="cost_plus">{{ t('admin.plugins.js.costPlus') }}</option><option value="expression">{{ t('admin.plugins.js.expressionPrice') }}</option></select></label>
-        <label v-if="row.mode !== 'expression'"><span class="input-label">{{ t('admin.plugins.js.priceUnit') }}</span><select v-model="row.unit" class="input"><option v-for="unit in (row.mode === 'cost_plus' ? ['request', 'second', 'token', 'credit', 'upstream_cost'] : ['request', 'second', 'token', 'credit'])" :key="unit" :value="unit">{{ t(`admin.plugins.js.units.${unit}`) }}</option></select></label>
+        <div class="min-w-0">
+          <span class="input-label">{{ t('admin.plugins.js.priceMode') }}</span>
+          <Select v-model="row.mode" :options="modeOptions" :aria-label="t('admin.plugins.js.priceMode')" @change="normalizeMode(row)" />
+        </div>
+        <div v-if="row.mode !== 'expression'" class="min-w-0">
+          <span class="input-label">{{ t('admin.plugins.js.priceUnit') }}</span>
+          <Select v-model="row.unit" :options="row.mode === 'cost_plus' ? costUnits : fixedUnits" :aria-label="t('admin.plugins.js.priceUnit')" />
+        </div>
         <label v-if="row.mode !== 'expression' && row.unit !== 'upstream_cost'"><span class="input-label">{{ t(row.mode === 'fixed' ? 'admin.plugins.js.salePrice' : 'admin.plugins.js.sourcePrice') }}</span><input v-model="row.price" type="number" min="0" step="any" class="input" /></label>
       </div>
       <label v-if="row.mode === 'expression'" class="block">
@@ -33,10 +39,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Select from '@/components/common/Select.vue'
 const props = defineProps<{ value?: unknown }>()
 const { t } = useI18n()
+const modeOptions = computed(() => [
+  { value: 'fixed', label: t('admin.plugins.js.fixedPrice') },
+  { value: 'cost_plus', label: t('admin.plugins.js.costPlus') },
+  { value: 'expression', label: t('admin.plugins.js.expressionPrice') }
+])
+const fixedUnits = computed(() => ['request', 'second', 'token', 'credit'].map(value => ({ value, label: t(`admin.plugins.js.units.${value}`) })))
+const costUnits = computed(() => [...fixedUnits.value, { value: 'upstream_cost', label: t('admin.plugins.js.units.upstream_cost') }])
 type Rule = Record<string, unknown>
 interface Row { id: number; model: string; mode: string; expression: string; unit: string; price: string; currency: string; exchangeRate: string; markup: string; serviceFee: string; minimum: string; maximum: string; original: Rule }
 const rows = ref<Row[]>([])

@@ -17,6 +17,7 @@
 - `editable` 默认 `false`。`runMutation` 必须执行宿主授权/二次验证后再调用传入的操作；服务端仍需独立检查权限。
 - `t` 为翻译函数，`locale` 为当前语言。翻译键沿用 `admin.plugins.*` 和 `common.*`。
 - `dialogComponent` 接收 `show`、`title`、`width`，触发 `close` 并渲染默认插槽。
+- `selectComponent` 可为插件中心、市场、投稿、源码对比和任务日志提供宿主下拉框。接收 `modelValue`、`options`（`{ value, label }`）、`disabled`、`ariaLabel`，触发 `update:modelValue`。省略时使用原生下拉框。
 - 本包沿用宿主 Tailwind 主题和 `btn`、`input`、`card` 类；宿主 Tailwind 的 content 必须包含本包 `src/**/*.{vue,ts}`，并提供现有 `dark`/`primary`/`dark-*` 主题变量。
 
 可选插槽：`header-actions`、`cleanup`、`registry({ mode })`、`community-market({ reload })`、`external-market({ plugins, reload })`、`detail-actions({ plugin })`、`source({ plugin, versions })`。未注入的管理/市场入口不显示；宿主可组合下面的独立面板，也可提供自己的面板。

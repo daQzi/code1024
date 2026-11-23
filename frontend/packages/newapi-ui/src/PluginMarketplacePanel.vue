@@ -5,7 +5,8 @@
       <button type="button" class="btn btn-secondary btn-sm" :disabled="busy || sourcesLoading || !editable" @click="editSources">{{ t('pluginRegistry.external.manageSources') }}</button>
     </header>
     <div class="flex flex-wrap gap-3">
-      <select v-model="sourceURL" class="input min-w-0 flex-1" :disabled="busy || sourcesLoading" :aria-label="t('pluginRegistry.external.source')"><option v-for="source in sources" :key="source.index_url" :value="source.index_url">{{ source.name }} · {{ t(`pluginRegistry.external.origins.${marketplaceSourceKind(source.index_url)}`) }}</option></select>
+      <HostSelect v-model="sourceURL" :select-component="selectComponent" class="min-w-0 flex-1" :disabled="busy || sourcesLoading"
+        :label="t('pluginRegistry.external.source')" :options="sourceOptions" />
       <button type="button" class="btn btn-secondary btn-sm" :disabled="busy || loading || !sourceURL" @click="loadIndex">{{ t('common.refresh') }}</button>
     </div>
     <p class="break-all font-mono text-xs text-gray-500 dark:text-dark-400">{{ sourceURL }}</p>
@@ -17,7 +18,8 @@
     <p v-if="lookup" class="break-all text-xs text-gray-500 dark:text-dark-400">{{ t('pluginRegistry.external.lookupSource') }} {{ lookup.source.name }} · {{ lookup.source.index_url }}</p>
     <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
     <p v-if="message" role="status" class="rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">{{ message }}</p>
-    <div class="flex flex-wrap gap-3"><input v-model.trim="search" type="search" class="input min-w-48 flex-1" :placeholder="t('pluginRegistry.external.search')" :aria-label="t('pluginRegistry.external.search')" /><select v-model="kind" class="input w-auto" :aria-label="t('admin.plugins.center.kind')"><option v-for="value in ['all','task','provider','transform']" :key="value" :value="value">{{ t(`admin.plugins.center.kinds.${value}`) }}</option></select></div>
+    <div class="flex flex-wrap gap-3"><input v-model.trim="search" type="search" class="input min-w-48 flex-1" :placeholder="t('pluginRegistry.external.search')" :aria-label="t('pluginRegistry.external.search')" /><HostSelect v-model="kind" :select-component="selectComponent" class="w-full sm:w-36" :label="t('admin.plugins.center.kind')"
+        :options="['all', 'task', 'provider', 'transform'].map(value => ({ value, label: t(`admin.plugins.center.kinds.${value}`) }))" /></div>
     <p v-if="loading || sourcesLoading" role="status" class="py-10 text-center text-sm text-gray-500 dark:text-dark-400">{{ t('common.loading') }}</p>
     <p v-else-if="!filtered.length" class="rounded-xl border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500 dark:border-dark-600 dark:text-dark-400">{{ t('pluginRegistry.empty') }}</p>
     <div v-else class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
@@ -33,13 +35,14 @@
     <component :is="dialog" :show="!!selected" :title="selected?.name ?? ''" width="wide" @close="close">
       <div v-if="selected" class="space-y-4">
         <p class="break-all text-xs text-gray-500">{{ selected.key }} · {{ reviewSourceURL }}</p>
-        <select v-model="versionName" class="input" :disabled="busy" :aria-label="t('pluginRegistry.external.version')"><option v-for="version in selected.versions" :key="version.version" :value="version.version">v{{ version.version }} · {{ version.kind }}</option></select>
+        <HostSelect v-model="versionName" :select-component="selectComponent" :disabled="busy" :label="t('pluginRegistry.external.version')"
+          :options="selected.versions.map(version => ({ value: version.version, label: `v${version.version} · ${version.kind}` }))" />
         <dl class="grid min-w-0 gap-3 text-xs sm:grid-cols-2"><div class="sm:col-span-2"><dt class="text-gray-500">SHA256</dt><dd class="break-all">{{ entry?.sha256 || t('pluginRegistry.external.errors.hashMissing') }}</dd></div><div><dt class="text-gray-500">{{ t('pluginRegistry.external.hosts') }}</dt><dd class="break-all">{{ entry?.allowedHosts.join(', ') || '—' }}</dd></div><div><dt class="text-gray-500">{{ t('pluginRegistry.external.baseURL') }}</dt><dd class="break-all">{{ entry?.baseUrl || '—' }}</dd></div></dl>
         <p v-if="blocker" role="alert" class="text-sm text-red-600">{{ blocker }}</p>
         <p v-if="detailError" role="alert" class="text-sm text-red-600">{{ detailError }}</p>
         <p v-if="detailLoading" role="status" class="text-sm text-gray-500">{{ t('common.loading') }}</p>
         <label class="block"><span class="input-label">plugin.js</span><textarea :value="code" readonly spellcheck="false" rows="14" class="input font-mono text-xs leading-5" /></label>
-        <PluginSourcePanel :client="sourceClient" :t="t" v-if="code && comparisonIdentity && installedPlugins.some(item => item.key === comparisonIdentity?.key)" :key="`${comparisonIdentity.key}:${comparisonIdentity.version}:${comparisonIdentity.sha256}`" :plugin="comparisonIdentity" :source="code" :versions="installedPlugins" comparison-only />
+        <PluginSourcePanel :select-component="selectComponent" :client="sourceClient" :t="t" v-if="code && comparisonIdentity && installedPlugins.some(item => item.key === comparisonIdentity?.key)" :key="`${comparisonIdentity.key}:${comparisonIdentity.version}:${comparisonIdentity.sha256}`" :plugin="comparisonIdentity" :source="code" :versions="installedPlugins" comparison-only />
         <section v-if="readme || changelog || documentError" class="space-y-3"><p v-if="documentError" role="alert" class="text-xs text-amber-700 dark:text-amber-400">{{ documentError }}</p><div v-if="readme"><h4 class="text-sm font-medium">{{ t('pluginRegistry.external.readme') }}</h4><pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ readme }}</pre></div><div v-if="changelog"><h4 class="text-sm font-medium">{{ t('pluginRegistry.external.changelog') }}</h4><pre class="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ changelog }}</pre></div></section>
         <p class="text-xs leading-6 text-gray-500">{{ t('pluginRegistry.external.compatibilityHint') }}</p>
         <label class="flex items-center gap-2 text-xs text-gray-500"><input v-model="allowOverride" type="checkbox" :disabled="busy" class="rounded" />{{ t('admin.plugins.center.allowOverride') }}</label>
@@ -60,17 +63,22 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch, type Component } from 'vue'
+import HostSelect from './HostSelect.vue'
 import PluginSourcePanel from './PluginSourcePanel.vue'
 import type { LocalizedText, NewAPIPluginVersion, PluginMarketplaceSource, PluginMarketplaceClient, PluginSourceClient, PluginTranslator, RunPluginMutation } from './types'
 import { marketplaceSourceKind, marketplaceURL, requireMarketplaceVersion, type MarketplaceIndex, type MarketplaceLookup, type MarketplacePlugin, type MarketplaceReadClient } from './marketplace'
 
-const props = withDefaults(defineProps<{ installedPlugins: NewAPIPluginVersion[]; client: PluginMarketplaceClient; marketplace: MarketplaceReadClient; sourceClient: PluginSourceClient; t: PluginTranslator; locale: string; dialogComponent: Component; paginationComponent: Component; runMutation: RunPluginMutation; isCancelled?: (error: unknown) => boolean; editable?: boolean }>(), { editable: false, isCancelled: () => false })
+const props = withDefaults(defineProps<{ selectComponent?: Component; installedPlugins: NewAPIPluginVersion[]; client: PluginMarketplaceClient; marketplace: MarketplaceReadClient; sourceClient: PluginSourceClient; t: PluginTranslator; locale: string; dialogComponent: Component; paginationComponent: Component; runMutation: RunPluginMutation; isCancelled?: (error: unknown) => boolean; editable?: boolean }>(), { editable: false, isCancelled: () => false })
 const dialog = computed(() => toRaw(props.dialogComponent))
 const pagination = computed(() => toRaw(props.paginationComponent))
 const emit = defineEmits<{ installed: [] }>()
 const t: PluginTranslator = (key, values) => props.t(key, values)
 const sources = ref<PluginMarketplaceSource[]>([])
 const sourceURL = ref('')
+const sourceOptions = computed(() => sources.value.map(source => ({
+  value: source.index_url,
+  label: `${source.name} · ${t(`pluginRegistry.external.origins.${marketplaceSourceKind(source.index_url)}`)}`
+})))
 const index = ref<MarketplaceIndex>()
 const lookup = ref<MarketplaceLookup>()
 const pluginCode = ref('')

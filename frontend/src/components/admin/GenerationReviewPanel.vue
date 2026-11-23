@@ -27,13 +27,10 @@
         </div>
         <button v-if="selected?.id !== task.id" type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="select(task)">{{ t('admin.plugins.js.review.open') }}</button>
         <form v-else class="space-y-3 rounded-lg bg-gray-50 p-4 dark:bg-dark-900" @submit.prevent="submit">
-          <label class="block"><span class="input-label">{{ t('admin.plugins.js.review.action') }}</span>
-            <select v-model="action" class="input" :disabled="busy">
-              <option v-if="!terminal(task)" value="resume_poll">{{ t('admin.plugins.js.review.resume') }}</option>
-              <option value="refund">{{ t('admin.plugins.js.review.refund') }}</option>
-              <option v-if="terminal(task)" value="settle">{{ t('admin.plugins.js.review.settle') }}</option>
-            </select>
-          </label>
+          <div>
+            <span class="input-label">{{ t('admin.plugins.js.review.action') }}</span>
+            <Select v-model="action" :options="actionOptions" :disabled="busy" :aria-label="t('admin.plugins.js.review.action')" />
+          </div>
           <label v-if="action === 'resume_poll'" class="block"><span class="input-label">{{ t('admin.plugins.js.review.upstreamId') }}</span><input v-model.trim="upstreamId" class="input" required maxlength="512" :disabled="busy" /></label>
           <label v-if="action === 'settle'" class="block"><span class="input-label">{{ t('admin.plugins.js.review.amount') }}</span><input v-model="amount" class="input" type="number" min="0" :max="task.hold_amount" step="0.00000001" required :disabled="busy" /></label>
           <label class="block"><span class="input-label">{{ t('admin.plugins.js.review.reason') }}</span><textarea v-model.trim="reason" class="input" rows="3" required minlength="4" maxlength="2000" :disabled="busy" /></label>
@@ -51,6 +48,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { listGenerationReviews, reconcileGeneration, type GenerationReviewAction, type GenerationReviewTask } from '@/api/admin/newapiPlugins'
 import TotpStepUpDialog from '@/components/auth/TotpStepUpDialog.vue'
+import Select from '@/components/common/Select.vue'
 import { isStepUpCancelled, useStepUp } from '@/composables/useStepUp'
 
 const { t } = useI18n()
@@ -67,6 +65,12 @@ const error = ref('')
 const message = ref('')
 const controller = new AbortController()
 const terminal = (task: GenerationReviewTask) => task.status === 'succeeded' || task.status === 'failed'
+const actionOptions = computed(() => {
+  const refund = { value: 'refund', label: t('admin.plugins.js.review.refund') }
+  return selected.value && terminal(selected.value)
+    ? [refund, { value: 'settle', label: t('admin.plugins.js.review.settle') }]
+    : [{ value: 'resume_poll', label: t('admin.plugins.js.review.resume') }, refund]
+})
 const valid = computed(() => reason.value.length >= 4 && (action.value !== 'resume_poll' || !!upstreamId.value) && (action.value !== 'settle' || (!!amount.value && Number(amount.value) >= 0 && Number(amount.value) <= Number(selected.value?.hold_amount))))
 const errorText = (e: unknown) => (e as { response?: { data?: { message?: string } }; message?: string }).response?.data?.message ?? (e as Error).message
 function select(task: GenerationReviewTask) { selected.value = task; action.value = terminal(task) ? 'settle' : 'resume_poll'; upstreamId.value = task.upstream_id; amount.value = task.hold_amount; reason.value = ''; message.value = '' }

@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import NewAPIVideoPricingField from '../NewAPIVideoPricingField.vue'
+import SelectStub from '@/__tests__/stubs/SelectStub'
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 
 function render(maximum?: string) {
-  return mount(NewAPIVideoPricingField, { props: { value: { '*': { mode: 'cost_plus', source_unit: 'upstream_cost', source_currency: 'CNY', exchange_rate: '0.14', markup: '1.2', service_fee: '0', minimum: '0', ...(maximum ? { maximum } : {}) } } } })
+  return mount(NewAPIVideoPricingField, { global: { stubs: { Select: SelectStub } }, props: { value: { '*': { mode: 'cost_plus', source_unit: 'upstream_cost', source_currency: 'CNY', exchange_rate: '0.14', markup: '1.2', service_fee: '0', minimum: '0', ...(maximum ? { maximum } : {}) } } } })
 }
 describe('final-bill pricing configuration', () => {
   it('requires an explicit positive maximum hold', () => {
@@ -25,7 +26,7 @@ describe('final-bill pricing configuration', () => {
 
 describe('Task expression pricing configuration', () => {
   function expression(value: Record<string, unknown> = {}) {
-    return mount(NewAPIVideoPricingField, { props: { value: { '*': { mode: 'expression', expression: 'u("seconds") * 0.2', maximum: '10', ...value } } } })
+    return mount(NewAPIVideoPricingField, { global: { stubs: { Select: SelectStub } }, props: { value: { '*': { mode: 'expression', expression: 'u("seconds") * 0.2', maximum: '10', ...value } } } })
   }
   function rules(wrapper: ReturnType<typeof expression>) {
     return (wrapper.vm as unknown as { rules: () => Record<string, Record<string, unknown>> }).rules()

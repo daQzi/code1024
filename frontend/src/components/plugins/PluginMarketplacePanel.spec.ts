@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PluginMarketplacePanel from './PluginMarketplacePanel.vue'
+import SelectStub from '@/__tests__/stubs/SelectStub'
 import { getNewAPIPluginSource, installNewAPIPlugin, savePluginMarketplaceSources, type NewAPIPluginVersion } from '@/api/admin/newapiPlugins'
 import { fetchMarketplaceIndex, fetchMarketplacePinIndex, fetchMarketplaceSource, findMarketplacePluginByCode, sourceSHA256 } from '@/utils/pluginMarketplace'
 
@@ -16,7 +17,7 @@ vi.mock('@/composables/useStepUp', () => ({ useStepUp: () => ({ run }), isStepUp
 vi.mock('@/api/admin/newapiPlugins', () => ({ getNewAPIPluginSource: vi.fn(), getPluginFactorySource: vi.fn(), listPluginMarketplaceSources: vi.fn().mockResolvedValue([{ name: 'Example', index_url: 'https://example.test/index.json' }]), savePluginMarketplaceSources: vi.fn().mockImplementation(async items => items), installNewAPIPlugin: vi.fn().mockResolvedValue({ compatibility: { blockers: ['not implemented'], warnings: [] }, enabled: false }) }))
 vi.mock('@/utils/pluginMarketplace', async original => ({ ...(await original<typeof import('@/utils/pluginMarketplace')>()), fetchMarketplaceIndex: vi.fn().mockImplementation(async () => structuredClone(index)), fetchMarketplacePinIndex: vi.fn(), findMarketplacePluginByCode: vi.fn(), fetchMarketplaceSource: vi.fn().mockImplementation(async (_url, version) => `// ${version.version}`) }))
 
-function render(installedPlugins: NewAPIPluginVersion[] = []) { return mount(PluginMarketplacePanel, { props: { installedPlugins }, global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show" data-dialog><slot /></div>' }, Pagination: true, TotpStepUpDialog: true } } }) }
+function render(installedPlugins: NewAPIPluginVersion[] = []) { return mount(PluginMarketplacePanel, { props: { installedPlugins }, global: { stubs: { Select: SelectStub, BaseDialog: { props: ['show'], template: '<div v-if="show" data-dialog><slot /></div>' }, Pagination: true, TotpStepUpDialog: true } } }) }
 async function open(wrapper: ReturnType<typeof render>) { await flushPromises(); await wrapper.find('article button').trigger('click'); await flushPromises() }
 const button = (wrapper: ReturnType<typeof render>, key: string) => wrapper.findAll('button').find(item => item.text() === key)!
 

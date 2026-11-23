@@ -2,11 +2,13 @@
   <section class="space-y-4">
     <header class="flex flex-wrap items-start justify-between gap-3">
       <div><h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t(`pluginRegistry.titles.${mode}`) }}</h3><p class="mt-1 max-w-3xl text-sm leading-6 text-gray-500 dark:text-dark-400">{{ t(`pluginRegistry.hints.${mode}`) }}</p></div>
-      <div class="flex items-center gap-2"><select v-if="mode === 'review'" v-model="status" class="input w-auto" :aria-label="t('common.status')"><option v-for="value in ['submitted', 'published', 'rejected', 'withdrawn']" :key="value" :value="value">{{ t(`pluginRegistry.statuses.${value}`) }}</option></select><button v-if="mode === 'mine' && canWrite" type="button" class="btn btn-primary btn-sm" :disabled="!data?.namespace" @click="createDraft">{{ t('pluginRegistry.create') }}</button><button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="load">{{ t('common.refresh') }}</button></div>
+      <div class="flex items-center gap-2"><HostSelect v-if="mode === 'review'" v-model="status" :select-component="selectComponent" class="min-w-32" :label="t('common.status')"
+        :options="['submitted', 'published', 'rejected', 'withdrawn'].map(value => ({ value, label: t(`pluginRegistry.statuses.${value}`) }))" /><button v-if="mode === 'mine' && canWrite" type="button" class="btn btn-primary btn-sm" :disabled="!data?.namespace" @click="createDraft">{{ t('pluginRegistry.create') }}</button><button type="button" class="btn btn-secondary btn-sm" :disabled="loading" @click="load">{{ t('common.refresh') }}</button></div>
     </header>
     <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
     <p v-if="message" role="status" class="rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">{{ message }}</p>
-    <label v-if="mode === 'mine'" class="block max-w-xs"><span class="input-label">{{ t('pluginRegistry.playground.template') }}</span><select v-model="templateKind" class="input" :disabled="loading"><option v-for="kind in ['ingress', 'task', 'provider']" :key="kind" :value="kind">{{ t(`pluginRegistry.playground.kinds.${kind}`) }}</option></select></label>
+    <div v-if="mode === 'mine'" class="max-w-xs"><span class="input-label">{{ t('pluginRegistry.playground.template') }}</span><HostSelect v-model="templateKind" :select-component="selectComponent" :label="t('pluginRegistry.playground.template')" :disabled="loading"
+        :options="templateOptions" /></div>
     <div class="card overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm"><thead class="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-400"><tr><th class="px-4 py-3">{{ t('pluginRegistry.plugin') }}</th><th class="px-4 py-3">{{ t('common.status') }}</th><th class="px-4 py-3">{{ t('pluginRegistry.author') }}</th><th class="px-4 py-3">{{ t('pluginRegistry.updated') }}</th><th class="px-4 py-3">{{ t('common.actions') }}</th></tr></thead><tbody class="divide-y divide-gray-100 dark:divide-dark-700"><tr v-for="item in data?.items ?? []" :key="item.id" class="transition-colors hover:bg-gray-50/70 dark:hover:bg-dark-800/40"><td class="px-4 py-4"><p class="font-medium text-gray-900 dark:text-white">{{ item.meta.name }}</p><p class="mt-1 font-mono text-xs text-gray-500 dark:text-dark-400">{{ item.key }} · v{{ item.version }}</p></td><td class="px-4 py-4 text-xs"><span class="badge" :class="item.status === 'published' ? 'badge-success' : item.status === 'rejected' ? 'badge-danger' : item.status === 'submitted' ? 'badge-warning' : 'badge-gray'">{{ t(`pluginRegistry.statuses.${item.status}`) }}</span></td><td class="px-4 py-4 text-xs">#{{ item.author_id }}</td><td class="whitespace-nowrap px-4 py-4 text-xs text-gray-500 dark:text-dark-400">{{ new Date(item.updated_at).toLocaleString() }}</td><td class="px-4 py-4"><button type="button" class="btn btn-secondary btn-sm" @click="open(item.id)">{{ t('pluginRegistry.open') }}</button></td></tr><tr v-if="!data?.items.length"><td colspan="5" class="px-4 py-10 text-center text-gray-500 dark:text-dark-400">{{ t(loading ? 'common.loading' : 'pluginRegistry.empty') }}</td></tr></tbody></table>
@@ -52,9 +54,10 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, toRaw, watch, type Component } from 'vue'
+import HostSelect from './HostSelect.vue'
 import type { PluginDeveloperTemplate, PluginDryRunResult, PluginFixture, PluginSubmission, PluginSubmissionPage, RegistryMode, PluginRegistryClient, PluginTranslator, RunPluginMutation } from './types'
 
-const props = withDefaults(defineProps<{ mode: RegistryMode; canInstall?: boolean; canWrite?: boolean; client: PluginRegistryClient; t: PluginTranslator; dialogComponent: Component; paginationComponent: Component; runMutation: RunPluginMutation; isCancelled?: (error: unknown) => boolean }>(), { canInstall: false, canWrite: false, isCancelled: () => false })
+const props = withDefaults(defineProps<{ selectComponent?: Component; mode: RegistryMode; canInstall?: boolean; canWrite?: boolean; client: PluginRegistryClient; t: PluginTranslator; dialogComponent: Component; paginationComponent: Component; runMutation: RunPluginMutation; isCancelled?: (error: unknown) => boolean }>(), { canInstall: false, canWrite: false, isCancelled: () => false })
 const dialog = computed(() => toRaw(props.dialogComponent))
 const pagination = computed(() => toRaw(props.paginationComponent))
 const emit = defineEmits<{ installed: [] }>()
@@ -74,6 +77,9 @@ const readme = ref('')
 const reason = ref('')
 const busy = ref(false)
 const templateKind = ref<PluginDeveloperTemplate['kind']>('ingress')
+const templateOptions = computed(() => (['ingress', 'task', 'provider'] as const).map(value => ({
+  value, label: t(`pluginRegistry.playground.kinds.${value}`)
+})))
 const templates = ref<PluginDeveloperTemplate[]>([])
 const fixtureText = ref('')
 const fixtureError = ref('')

@@ -34,13 +34,29 @@
         <p v-if="error" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="space-y-1 text-sm">{{ t('requestPlugins.name') }}<input v-model="draft.name" class="input" maxlength="128" required :disabled="busy" /></label>
-          <label class="space-y-1 text-sm">{{ t('requestPlugins.version') }}<select v-model="draft.plugin_version_id" class="input" :disabled="busy || !!draft.id" @change="resetConfig"><option v-for="version in versions" :key="version.id" :value="version.id">{{ version.meta.name }} · v{{ version.version }} · #{{ version.id }}</option></select></label>
-          <label class="space-y-1 text-sm">{{ t('requestPlugins.scope') }}<select v-model="draft.scope" class="input" :disabled="busy" data-scope @change="changeScope"><option value="global">{{ t('requestPlugins.scopes.global') }}</option><option value="group">{{ t('requestPlugins.scopes.group') }}</option><option value="account" :disabled="!selectedVersion?.capabilities.hooks?.some(stage => ['ingress','request','outbound','egress','reply','report'].includes(stage))">{{ t('requestPlugins.scopes.account') }}</option></select></label>
+          <div class="min-w-0 space-y-1 text-sm">
+            <span>{{ t('requestPlugins.version') }}</span>
+            <Select :model-value="draft.plugin_version_id" :options="versionOptions" :aria-label="t('requestPlugins.version')"
+              :disabled="busy || !!draft.id" @update:model-value="selectVersion" />
+          </div>
+          <div class="min-w-0 space-y-1 text-sm">
+            <span>{{ t('requestPlugins.scope') }}</span>
+            <Select :model-value="draft.scope" :options="scopeOptions" :aria-label="t('requestPlugins.scope')"
+              :disabled="busy" data-scope @update:model-value="selectScope" />
+          </div>
           <label class="space-y-1 text-sm">{{ t('requestPlugins.order') }}<input v-model.number="draft.position" type="number" min="0" max="10000" required class="input" :disabled="busy" /></label>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
-          <label class="space-y-1 text-sm">{{ t('requestPlugins.stages') }}<select :value="draft.stages.join(',')" class="input" :disabled="busy" data-stage-mode @change="changeStages(($event.target as HTMLSelectElement).value)"><option v-for="choice in stageChoices" :key="choice" :value="choice">{{ choice.split(',').join(' → ') }}</option></select></label>
-          <label class="space-y-1 text-sm">{{ t('requestPlugins.formatScope') }}<select :value="draft.formats?.join(',') || ''" class="input" :disabled="busy" data-format-scope @change="changeFormats(($event.target as HTMLSelectElement).value)"><option v-if="!explicitFormats" value="">{{ t('requestPlugins.allFormats') }}</option><option v-if="explicitFormats" value="openai,openai_responses">{{ t('requestPlugins.providerFormats') }}</option><option v-for="format in supportedFormats" :key="format" :value="format">{{ format }}</option></select></label>
+          <div class="min-w-0 space-y-1 text-sm">
+            <span>{{ t('requestPlugins.stages') }}</span>
+            <Select :model-value="draft.stages.join(',')" :options="stageOptions" :aria-label="t('requestPlugins.stages')"
+              :disabled="busy" data-stage-mode @update:model-value="selectStages" />
+          </div>
+          <div class="min-w-0 space-y-1 text-sm">
+            <span>{{ t('requestPlugins.formatScope') }}</span>
+            <Select :model-value="draft.formats?.join(',') || ''" :options="formatOptions" :aria-label="t('requestPlugins.formatScope')"
+              :disabled="busy" data-format-scope @update:model-value="selectFormats" />
+          </div>
         </div>
         <p v-if="selectedVersion?.meta.scope?.channelTypes?.length" class="text-xs leading-5 text-gray-500" data-channel-scope>{{ t('requestPlugins.channelScopeHint', { types: selectedVersion.meta.scope.channelTypes.join(', ') }) }}</p>
         <fieldset v-if="draft.scope === 'group'" class="rounded-lg border border-gray-200 p-3 dark:border-dark-700"><legend class="px-1 text-sm">{{ t('requestPlugins.groups') }}</legend><div class="flex max-h-40 flex-wrap gap-3 overflow-auto"><label v-for="group in groups" :key="group.id" class="flex items-center gap-1 text-sm"><input v-model="draft.group_ids" :value="group.id" type="checkbox" :disabled="busy" />{{ group.name }} (#{{ group.id }})</label></div></fieldset>
@@ -52,7 +68,14 @@
         <label v-if="draft.stages.some(stage => stage === 'ingress' || stage === 'egress')" class="block space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40" data-stage-network><span class="flex items-center gap-2"><input v-model="draft.network_enabled" type="checkbox" :disabled="busy" />{{ t('requestPlugins.stageNetwork') }}</span><span class="block text-xs leading-5 text-amber-900 dark:text-amber-200">{{ t('requestPlugins.stageNetworkHint') }}</span></label>
         <label v-if="draft.stages.includes('reply')" class="block space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40" data-reply-network><span class="flex items-center gap-2"><input v-model="draft.reply_network_enabled" type="checkbox" :disabled="busy" />{{ t('requestPlugins.replyNetwork') }}</span><span class="block text-xs leading-5 text-amber-900 dark:text-amber-200">{{ t('requestPlugins.replyNetworkHint') }}</span></label>
         <p v-if="draft.stages.includes('report')" class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{{ t('requestPlugins.reportHint') }}</p>
-        <details v-if="draft.stages.some(stage => stage !== 'report')" class="rounded-xl border border-gray-200 p-4 dark:border-dark-700" open><summary class="cursor-pointer text-sm font-medium">{{ t('requestPlugins.dryRun') }}</summary><div class="mt-3 space-y-3"><p class="text-xs text-gray-500">{{ t('requestPlugins.dryRunHint') }}</p><select v-model="sampleStage" class="input w-auto" :disabled="busy" :aria-label="t('requestPlugins.stages')" @change="taskStages && (sampleFormat = 'task')"><option v-for="stage in draft.stages.filter(stage => stage !== 'report')" :key="stage">{{ stage }}</option></select><select v-model="sampleFormat" class="input w-auto" :aria-label="t('requestPlugins.format')" :disabled="busy || taskStages"><option v-for="format in supportedFormats" :key="format">{{ format }}</option></select><textarea v-model="sampleText" class="input font-mono text-xs" rows="6" :disabled="busy" :aria-label="t('requestPlugins.sample')" spellcheck="false" /><button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="dryRun">{{ t('requestPlugins.run') }}</button><div v-if="dryResult" class="space-y-2" data-dry-result><p class="text-sm" :class="dryResult.rejected || dryResult.error_class ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-400'">{{ dryResult.rejected ? t('requestPlugins.actions.reject') : dryResult.error_class ? t('requestPlugins.actions.error') : t('requestPlugins.actions.continue') }} {{ dryResult.error_class }}</p><pre class="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ JSON.stringify(dryResult.body,null,2) }}</pre><RequestPluginMediaRecords v-for="(record,index) in dryResult.records" :key="index" :record="record" /><template v-if="dryResult.headers && Object.keys(dryResult.headers).length"><p class="text-xs text-gray-500">{{ t('requestPlugins.businessHeaders') }}</p><pre class="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-gray-50 p-3 text-xs dark:bg-dark-900" data-dry-headers>{{ JSON.stringify(dryResult.headers,null,2) }}</pre></template></div></div></details>
+        <details v-if="draft.stages.some(stage => stage !== 'report')" class="rounded-xl border border-gray-200 p-4 dark:border-dark-700" open><summary class="cursor-pointer text-sm font-medium">{{ t('requestPlugins.dryRun') }}</summary><div class="mt-3 space-y-3"><p class="text-xs text-gray-500">{{ t('requestPlugins.dryRunHint') }}</p>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <Select v-model="sampleStage" :options="sampleStageOptions" :disabled="busy" :aria-label="t('requestPlugins.stages')"
+              @change="taskStages && (sampleFormat = 'task')" />
+            <Select v-model="sampleFormat" :options="sampleFormatOptions" :disabled="busy || taskStages"
+              :aria-label="t('requestPlugins.format')" />
+          </div>
+          <textarea v-model="sampleText" class="input font-mono text-xs" rows="6" :disabled="busy" :aria-label="t('requestPlugins.sample')" spellcheck="false" /><button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="dryRun">{{ t('requestPlugins.run') }}</button><div v-if="dryResult" class="space-y-2" data-dry-result><p class="text-sm" :class="dryResult.rejected || dryResult.error_class ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-400'">{{ dryResult.rejected ? t('requestPlugins.actions.reject') : dryResult.error_class ? t('requestPlugins.actions.error') : t('requestPlugins.actions.continue') }} {{ dryResult.error_class }}</p><pre class="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-gray-50 p-3 text-xs dark:bg-dark-900">{{ JSON.stringify(dryResult.body,null,2) }}</pre><RequestPluginMediaRecords v-for="(record,index) in dryResult.records" :key="index" :record="record" /><template v-if="dryResult.headers && Object.keys(dryResult.headers).length"><p class="text-xs text-gray-500">{{ t('requestPlugins.businessHeaders') }}</p><pre class="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-gray-50 p-3 text-xs dark:bg-dark-900" data-dry-headers>{{ JSON.stringify(dryResult.headers,null,2) }}</pre></template></div></div></details>
         <div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" :disabled="busy" @click="closeEditor">{{ t('common.cancel') }}</button><button class="btn btn-primary" :disabled="busy || !draft.name.trim() || draft.scope === 'group' && !draft.group_ids.length || draft.scope === 'account' && !draft.account_ids?.length">{{ t('common.save') }}</button></div>
       </form>
     </BaseDialog>
@@ -126,6 +149,39 @@ const stageChoices = computed(() => {
   }
   return choices
 })
+const versionOptions = computed(() => versions.value.map(version => ({
+  value: version.id, label: `${version.meta.name} · v${version.version} · #${version.id}`
+})))
+const scopeOptions = computed(() => (['global', 'group', 'account'] as const).map(value => ({
+  value,
+  label: t(`requestPlugins.scopes.${value}`),
+  disabled: value === 'account' && !selectedVersion.value?.capabilities.hooks?.some(stage => ['ingress', 'request', 'outbound', 'egress', 'reply', 'report'].includes(stage))
+})))
+const stageOptions = computed(() => stageChoices.value.map(value => ({ value, label: value.split(',').join(' → ') })))
+const sampleStageOptions = computed(() => (draft.value?.stages ?? []).filter(stage => stage !== 'report').map(value => ({ value, label: value })))
+const sampleFormatOptions = computed(() => supportedFormats.value.map(value => ({ value, label: value })))
+const formatOptions = computed(() => [
+  explicitFormats.value
+    ? { value: 'openai,openai_responses', label: t('requestPlugins.providerFormats') }
+    : { value: '', label: t('requestPlugins.allFormats') },
+  ...sampleFormatOptions.value
+])
+function selectVersion(value: SelectOption['value']) {
+  if (!draft.value || typeof value !== 'number' || value === draft.value.plugin_version_id) return
+  draft.value.plugin_version_id = value
+  resetConfig()
+}
+function selectScope(value: SelectOption['value']) {
+  if (!draft.value || value === draft.value.scope || (value !== 'global' && value !== 'group' && value !== 'account')) return
+  draft.value.scope = value
+  changeScope()
+}
+function selectStages(value: SelectOption['value']) {
+  if (typeof value === 'string' && value !== draft.value?.stages.join(',')) changeStages(value)
+}
+function selectFormats(value: SelectOption['value']) {
+  if (typeof value === 'string' && value !== (draft.value?.formats?.join(',') || '')) changeFormats(value)
+}
 function changeStages(value: string) {
   if (!draft.value) return
   draft.value.stages = value.split(',')

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import GenerationReviewPanel from '../GenerationReviewPanel.vue'
+import SelectStub from '@/__tests__/stubs/SelectStub'
 import { listGenerationReviews, reconcileGeneration, type GenerationReviewTask } from '@/api/admin/newapiPlugins'
 
 vi.mock('vue-i18n', async () => ({ ...(await vi.importActual('vue-i18n')), useI18n: () => ({ t: (key: string) => key }) }))
@@ -11,7 +12,7 @@ vi.mock('@/composables/useStepUp', () => ({ isStepUpCancelled: () => false, useS
 const task: GenerationReviewTask = { id: 'video_fixture', model: 'fixture-video', account_id: 3, user_id: 4, status: 'submission_uncertain', billing_status: 'review', hold_amount: '1', upstream_id: '', error_code: 'submission_uncertain', created_at: '2026-11-21T00:00:00Z' }
 async function render(override: Partial<GenerationReviewTask> = {}) {
   vi.mocked(listGenerationReviews).mockResolvedValue([{ ...task, ...override }])
-  const wrapper = mount(GenerationReviewPanel, { global: { stubs: { TotpStepUpDialog: true } } })
+  const wrapper = mount(GenerationReviewPanel, { global: { stubs: { Select: SelectStub, TotpStepUpDialog: true } } })
   await flushPromises()
   await wrapper.findAll('button').find(button => button.text() === 'admin.plugins.js.review.open')!.trigger('click')
   return wrapper

@@ -48,8 +48,14 @@
         @update:search="searchQuery = $event"
       />
       <div class="flex flex-wrap items-end gap-3">
-        <label><span class="input-label">{{ t('modelPlaza.catalog.kind') }}</span><select v-model="selectedKind" class="input"><option value="all">{{ t('modelPlaza.filters.all') }}</option><option v-for="kind in kinds" :key="kind" :value="kind">{{ t(`modelPlaza.catalog.modes.${kind}`) }}</option></select></label>
-        <label><span class="input-label">{{ t('modelPlaza.catalog.protocol') }}</span><select v-model="selectedProtocol" class="input"><option value="all">{{ t('modelPlaza.filters.all') }}</option><option v-for="protocol in protocols" :key="protocol" :value="protocol">{{ protocol }}</option></select></label>
+        <div class="w-full sm:w-40">
+          <span class="input-label">{{ t('modelPlaza.catalog.kind') }}</span>
+          <Select v-model="selectedKind" :options="kindOptions" :aria-label="t('modelPlaza.catalog.kind')" />
+        </div>
+        <div class="w-full sm:w-48">
+          <span class="input-label">{{ t('modelPlaza.catalog.protocol') }}</span>
+          <Select v-model="selectedProtocol" :options="protocolOptions" :aria-label="t('modelPlaza.catalog.protocol')" />
+        </div>
         <p role="status" class="pb-2 text-xs text-gray-500">{{ t('modelPlaza.catalog.modelCount', { count: modelCount }) }}</p>
         <div class="ml-auto flex gap-1 rounded-lg border border-gray-200 p-1 dark:border-dark-700" :aria-label="t('modelPlaza.catalog.view')">
           <button v-for="option in ['cards', 'table'] as const" :key="option" type="button" class="rounded-md px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500" :class="view === option ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-500'" :aria-pressed="view === option" @click="view = option">{{ t(`modelPlaza.catalog.${option}`) }}</button>
@@ -77,6 +83,7 @@ import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import Icon from '@/components/icons/Icon.vue'
+import Select from '@/components/common/Select.vue'
 import PlazaFilterBar from './PlazaFilterBar.vue'
 import PlazaModelCatalog from './PlazaModelCatalog.vue'
 import type { ModelPlazaGroup, ModelPlazaResponse, PlazaModel } from '@/api/modelPlaza'
@@ -114,6 +121,14 @@ const view = ref<'cards' | 'table'>('cards')
 function modelKind(model: PlazaModel) { return model.protocols?.includes('openai_video') ? 'video' : model.pricing?.billing_mode ?? 'token' }
 const kinds = computed(() => [...new Set((props.response?.groups ?? []).flatMap(group => group.models.map(modelKind)))].sort())
 const protocols = computed(() => [...new Set((props.response?.groups ?? []).flatMap(group => group.models.flatMap(model => model.protocols ?? [])))].sort())
+const kindOptions = computed(() => [
+  { value: 'all', label: t('modelPlaza.filters.all') },
+  ...kinds.value.map(value => ({ value, label: t(`modelPlaza.catalog.modes.${value}`) }))
+])
+const protocolOptions = computed(() => [
+  { value: 'all', label: t('modelPlaza.filters.all') },
+  ...protocols.value.map(value => ({ value, label: value }))
+])
 const modelCount = computed(() => new Set(filteredGroups.value.flatMap(group => group.models.map(model => model.id ?? JSON.stringify([model.platform, model.name])))).size)
 
 const searchActive = computed(() => searchQuery.value.trim() !== '')

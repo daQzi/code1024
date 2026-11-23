@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import PluginRegistryPanel from './PluginRegistryPanel.vue'
+import SelectStub from '@/__tests__/stubs/SelectStub'
 import { dryRunPlugin, savePluginSubmission, transitionPluginSubmission } from '@/api/pluginRegistry'
 
 const { run, item } = vi.hoisted(() => ({ run: vi.fn((action: () => Promise<unknown>) => action()), item: { id: 1, author_id: 7, key: 'community-7-example', version: '1.0.0', sha256: 'a'.repeat(64), source: 'export const meta = {};', readme: 'docs', status: 'submitted', revision: 2, meta: { name: 'Example' }, compatibility: { blockers: [], warnings: [] }, updated_at: '2026-11-21T00:00:00Z' } }))
@@ -14,7 +15,7 @@ vi.mock('@/api/pluginRegistry', () => ({
   listPluginTemplates: vi.fn().mockResolvedValue(['ingress', 'task', 'provider'].map(kind => ({ kind, source: `export const meta = {key:"community-7-example"}; export function ${kind === 'ingress' ? 'ingress' : kind === 'task' ? 'buildSubmitRequest' : 'convertRequest'}(){}`, fixture: { hook: kind === 'ingress' ? 'ingress' : kind === 'task' ? 'buildSubmitRequest' : 'convertRequest', args: [{ config: {} }] } }))),
   dryRunPlugin: vi.fn().mockResolvedValue({ hook: 'ingress', result: { action: 'continue' }, sha256: 'b'.repeat(64), duration_ms: 4, offline: true })
 }))
-function render(mode: 'mine' | 'review') { return mount(PluginRegistryPanel, { props: { mode }, global: { stubs: { BaseDialog: { props: ['show'], template: '<div v-if="show" data-editor><slot /></div>' }, Pagination: true, TotpStepUpDialog: true } } }) }
+function render(mode: 'mine' | 'review') { return mount(PluginRegistryPanel, { props: { mode }, global: { stubs: { Select: SelectStub, BaseDialog: { props: ['show'], template: '<div v-if="show" data-editor><slot /></div>' }, Pagination: true, TotpStepUpDialog: true } } }) }
 
 describe('community plugin workflow', () => {
   beforeEach(() => vi.clearAllMocks())

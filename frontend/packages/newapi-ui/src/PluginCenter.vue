@@ -44,8 +44,8 @@
         <div v-else class="space-y-4">
         <div class="flex flex-wrap gap-3">
           <input v-model.trim="search" type="search" class="input min-w-48 flex-1" :placeholder="t('admin.plugins.center.search')" :aria-label="t('admin.plugins.center.search')" />
-          <select v-model="kind" class="input w-auto" :aria-label="t('admin.plugins.center.kind')"><option v-for="value in ['all', 'task', 'provider', 'transform']" :key="value" :value="value">{{ t(`admin.plugins.center.kinds.${value}`) }}</option></select>
-          <select v-model="source" class="input w-auto" :aria-label="t('admin.plugins.center.source')"><option v-for="value in ['all', 'system', 'uploaded', 'community', 'external']" :key="value" :value="value">{{ t(`admin.plugins.center.sources.${value}`) }}</option></select>
+          <HostSelect v-model="kind" :select-component="selectComponent" class="w-full sm:w-36" :label="t('admin.plugins.center.kind')" :options="['all', 'task', 'provider', 'transform'].map(value => ({ value, label: t(`admin.plugins.center.kinds.${value}`) }))" />
+          <HostSelect v-model="source" :select-component="selectComponent" class="w-full sm:w-36" :label="t('admin.plugins.center.source')" :options="['all', 'system', 'uploaded', 'community', 'external'].map(value => ({ value, label: t(`admin.plugins.center.sources.${value}`) }))" />
           <button type="button" class="btn btn-secondary btn-sm" :aria-pressed="view === 'table'" @click="view = view === 'cards' ? 'table' : 'cards'">{{ t(`admin.plugins.center.${view === 'cards' ? 'table' : 'cards'}`) }}</button>
         </div>
         <label class="flex items-center gap-2 text-xs text-gray-500 dark:text-dark-400"><input v-model="allowOverride" type="checkbox" class="rounded" />{{ t('admin.plugins.center.allowOverride') }}</label>
@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, type Component } from 'vue'
+import HostSelect from './HostSelect.vue'
 import type { LocalizedText, NewAPIPluginCatalog, NewAPIPluginVersion, PluginFactory, PluginCenterClient } from './types'
 
 const props = withDefaults(defineProps<{
@@ -90,6 +91,7 @@ const props = withDefaults(defineProps<{
   t: (key: string) => string
   locale: string
   dialogComponent: Component
+  selectComponent?: Component
   editable?: boolean
   showHeader?: boolean
   runMutation: (action: () => Promise<unknown>) => Promise<unknown>

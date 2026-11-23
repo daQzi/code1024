@@ -2,7 +2,7 @@
   <AppLayout>
     <TaskLogConsole
       :client="client" :admin="admin" :t="translate" :locale="locale"
-      :dialog-component="BaseDialog" :pagination-component="Pagination"
+      :dialog-component="BaseDialog" :pagination-component="Pagination" :select-component="Select"
       :editable="admin" :run-mutation="runMutation" :cancel-mutation="stepUp.onCancel"
       :is-cancelled="isStepUpCancelled"
     >
@@ -16,6 +16,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import Select from '@/components/common/Select.vue'
 import { TaskLogConsole, type TaskLogClient, type PluginTranslator, type RunPluginMutation } from '../../packages/newapi-ui/src'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
