@@ -59,7 +59,7 @@ func (r *generationTaskRepository) ListVideoDecodeCandidates(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var result []service.GenerationVideoDecodeCandidate
 	totalMappingBytes := 0
 	for rows.Next() {
