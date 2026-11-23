@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/newapi/replyfilter"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/relaymetrics"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	"github.com/Wei-Shaw/sub2api/newapi-engine/modelmodifier"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
@@ -263,6 +264,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if !gjson.ValidBytes(trimmed) {
 			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
 		}
+		// 帧内重复字段会让这里 gjson 读到的首个值与后续重编码/上游读到的值分叉
+		// （GHSA-p3r4-jcm3-2hph），在读取任何字段之前拒绝。
+		if field, conflict := requestmodel.ConflictingField("application/json", trimmed); conflict {
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, fmt.Sprintf("websocket request payload declares field %.64q more than once", field), nil)
+		}
 
 		values := gjson.GetManyBytes(trimmed, "type", "model", "prompt_cache_key", "previous_response_id")
 		eventType := strings.TrimSpace(values[0].String())
@@ -469,7 +475,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			normalized = stripped
 			logOpenAIWSModeInfo("ingress_ws_codex_spark_image_tool_stripped account_id=%d", account.ID)
 		}
-		imageIntent := IsImageGenerationIntentForPlatform(openAIResponsesEndpoint, originalModel, normalized, account.Platform)
+		// normalized 由 parseClientPayload 中已通过 gjson.ValidBytes 校验的字节派生，
+		// 后续改写只走 sjson 或 decode→json.Marshal，合法性保持，因此跳过重复校验。
+		imageIntent := IsImageGenerationIntentForPlatformValidated(openAIResponsesEndpoint, originalModel, normalized, account.Platform)
 		if imageIntent && !imageGenerationAllowed {
 			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, ImageGenerationPermissionMessage(), nil)
 		}
@@ -1084,6 +1092,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if bridgeErr != nil && isOpenAIWSSessionPreempted(ctx) {
 				return errOpenAIWSSessionPreempted
 			}
+			if result != nil {
+				// The HTTP payload can contain a policy rewrite or replayed configuration from an earlier turn.
+				result.RequestedReasoningEffort = currentBridgePayload.requestedReasoningEffort
+			}
 			var bridgeFailoverErr *UpstreamFailoverError
 			isTurn1BridgeFailover := turn == 1 && bridgeErr != nil && errors.As(bridgeErr, &bridgeFailoverErr) && bridgeFailoverErr != nil
 			if currentPluginTurn != nil && result != nil && bridgeErr == nil && hooks != nil && hooks.AfterTurn != nil {
@@ -1651,115 +1663,115 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 
 			if !clientDisconnected {
 				if !replyStopped {
-				if needModelReplace && len(mappedModelBytes) > 0 && openAIWSEventMayContainModel(eventType) && bytes.Contains(upstreamMessage, mappedModelBytes) {
-					upstreamMessage = replaceOpenAIWSMessageModel(upstreamMessage, mappedModel, originalModel)
-				}
-				if openAIWSEventMayContainToolCalls(eventType) && openAIWSMessageLikelyContainsToolCalls(upstreamMessage) {
-					if corrected, changed := s.toolCorrector.CorrectToolCallsInSSEBytes(upstreamMessage); changed {
-						upstreamMessage = corrected
+					if needModelReplace && len(mappedModelBytes) > 0 && openAIWSEventMayContainModel(eventType) && bytes.Contains(upstreamMessage, mappedModelBytes) {
+						upstreamMessage = replaceOpenAIWSMessageModel(upstreamMessage, mappedModel, originalModel)
 					}
-				}
-				replayCollector.AddEvent(eventType, upstreamMessage)
-				// 客户端写出副本改写容量降载码：Codex 对 error/response.failed 中的
-				// server_is_overloaded / slow_down 判致命并终止会话，改写后走客户端
-				// 内置退避重试。HTTP/SSE（openai_gateway_response_handling.go）与
-				// http_bridge（openai_ws_http_bridge.go）两条路径早已这么做，
-				// ctx_pool 的 ingress 直写路径是唯一漏掉的一条 —— 同一个上游降载
-				// 事件在这里会让会话就地终止，切到 http_bridge 却能正常退避重试。
-				//
-				// 必须写进独立变量而不是原地改 upstreamMessage：下面的
-				// markOpenAIWSClientVisibleFailure 与 handleOpenAIWSTerminalTransientFailure
-				// 仍要按未改写的原始 payload 判定账号状态，这正是
-				// sanitizeOpenAICapacityShedErrorCodeForClient 注释里写明的前提。
-				clientMessage := upstreamMessage
-				if eventType == "error" || eventType == "response.failed" {
-					if rewritten, changed := sanitizeOpenAICapacityShedErrorCodeForClient(clientMessage); changed {
-						clientMessage = rewritten
+					if openAIWSEventMayContainToolCalls(eventType) && openAIWSMessageLikelyContainsToolCalls(upstreamMessage) {
+						if corrected, changed := s.toolCorrector.CorrectToolCallsInSSEBytes(upstreamMessage); changed {
+							upstreamMessage = corrected
+						}
 					}
-				}
-				if pluginTurn != nil {
-					if isTerminalEvent {
-						stopFail, err := pluginTurn.EmitTerminal(clientMessage, writeClientMessage)
-						if err != nil {
-							if isOpenAIWSClientDisconnectError(err) {
-								clientDisconnected = true
-								closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
-								logOpenAIWSModeInfo(
-									"ingress_ws_client_disconnected_drain account_id=%d turn=%d conn_id=%s close_status=%s close_reason=%s",
-									account.ID,
-									turn,
-									truncateOpenAIWSLogValue(lease.ConnID(), openAIWSIDValueMaxLen),
-									closeStatus,
-									truncateOpenAIWSLogValue(closeReason, openAIWSHeaderValueMaxLen),
-								)
+					replayCollector.AddEvent(eventType, upstreamMessage)
+					// 客户端写出副本改写容量降载码：Codex 对 error/response.failed 中的
+					// server_is_overloaded / slow_down 判致命并终止会话，改写后走客户端
+					// 内置退避重试。HTTP/SSE（openai_gateway_response_handling.go）与
+					// http_bridge（openai_ws_http_bridge.go）两条路径早已这么做，
+					// ctx_pool 的 ingress 直写路径是唯一漏掉的一条 —— 同一个上游降载
+					// 事件在这里会让会话就地终止，切到 http_bridge 却能正常退避重试。
+					//
+					// 必须写进独立变量而不是原地改 upstreamMessage：下面的
+					// markOpenAIWSClientVisibleFailure 与 handleOpenAIWSTerminalTransientFailure
+					// 仍要按未改写的原始 payload 判定账号状态，这正是
+					// sanitizeOpenAICapacityShedErrorCodeForClient 注释里写明的前提。
+					clientMessage := upstreamMessage
+					if eventType == "error" || eventType == "response.failed" {
+						if rewritten, changed := sanitizeOpenAICapacityShedErrorCodeForClient(clientMessage); changed {
+							clientMessage = rewritten
+						}
+					}
+					if pluginTurn != nil {
+						if isTerminalEvent {
+							stopFail, err := pluginTurn.EmitTerminal(clientMessage, writeClientMessage)
+							if err != nil {
+								if isOpenAIWSClientDisconnectError(err) {
+									clientDisconnected = true
+									closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
+									logOpenAIWSModeInfo(
+										"ingress_ws_client_disconnected_drain account_id=%d turn=%d conn_id=%s close_status=%s close_reason=%s",
+										account.ID,
+										turn,
+										truncateOpenAIWSLogValue(lease.ConnID(), openAIWSIDValueMaxLen),
+										closeStatus,
+										truncateOpenAIWSLogValue(closeReason, openAIWSHeaderValueMaxLen),
+									)
+								} else {
+									return nil, wrapOpenAIWSIngressTurnError(
+										"write_client",
+										fmt.Errorf("write client websocket event: %w", err),
+										wroteDownstream,
+									)
+								}
+							} else if stopFail != nil {
+								if stopErr := handleReplyStop(stopFail, false); stopErr != nil {
+									return nil, stopErr
+								}
 							} else {
-								return nil, wrapOpenAIWSIngressTurnError(
-									"write_client",
-									fmt.Errorf("write client websocket event: %w", err),
-									wroteDownstream,
-								)
-							}
-						} else if stopFail != nil {
-							if stopErr := handleReplyStop(stopFail, false); stopErr != nil {
-								return nil, stopErr
+								wroteDownstream = true
+								markOpenAIWSClientVisibleFailure(c, eventType, upstreamMessage)
 							}
 						} else {
-							wroteDownstream = true
-							markOpenAIWSClientVisibleFailure(c, eventType, upstreamMessage)
-						}
-					} else {
-						if err := pluginTurn.EmitEvent(clientMessage, writeClientMessage); err != nil {
-							if isOpenAIWSClientDisconnectError(err) {
-								clientDisconnected = true
-								closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
-								logOpenAIWSModeInfo(
-									"ingress_ws_client_disconnected_drain account_id=%d turn=%d conn_id=%s close_status=%s close_reason=%s",
-									account.ID,
-									turn,
-									truncateOpenAIWSLogValue(lease.ConnID(), openAIWSIDValueMaxLen),
-									closeStatus,
-									truncateOpenAIWSLogValue(closeReason, openAIWSHeaderValueMaxLen),
-								)
+							if err := pluginTurn.EmitEvent(clientMessage, writeClientMessage); err != nil {
+								if isOpenAIWSClientDisconnectError(err) {
+									clientDisconnected = true
+									closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
+									logOpenAIWSModeInfo(
+										"ingress_ws_client_disconnected_drain account_id=%d turn=%d conn_id=%s close_status=%s close_reason=%s",
+										account.ID,
+										turn,
+										truncateOpenAIWSLogValue(lease.ConnID(), openAIWSIDValueMaxLen),
+										closeStatus,
+										truncateOpenAIWSLogValue(closeReason, openAIWSHeaderValueMaxLen),
+									)
+								} else {
+									return nil, wrapOpenAIWSIngressTurnError(
+										"write_client",
+										fmt.Errorf("write client websocket event: %w", err),
+										wroteDownstream,
+									)
+								}
 							} else {
-								return nil, wrapOpenAIWSIngressTurnError(
-									"write_client",
-									fmt.Errorf("write client websocket event: %w", err),
-									wroteDownstream,
-								)
+								wroteDownstream = true
+								markOpenAIWSClientVisibleFailure(c, eventType, upstreamMessage)
 							}
+							if stopFail := pluginTurn.ReplyStopped(); stopFail != nil {
+								if stopErr := handleReplyStop(stopFail, true); stopErr != nil {
+									return nil, stopErr
+								}
+							}
+						}
+					} else if err := writeClientMessage(clientMessage); err != nil {
+						if isOpenAIWSClientDisconnectError(err) {
+							clientDisconnected = true
+							closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
+							logOpenAIWSModeInfo(
+								"ingress_ws_client_disconnected_drain account_id=%d turn=%d conn_id=%s close_status=%s close_reason=%s",
+								account.ID,
+								turn,
+								truncateOpenAIWSLogValue(lease.ConnID(), openAIWSIDValueMaxLen),
+								closeStatus,
+								truncateOpenAIWSLogValue(closeReason, openAIWSHeaderValueMaxLen),
+							)
 						} else {
-							wroteDownstream = true
-							markOpenAIWSClientVisibleFailure(c, eventType, upstreamMessage)
+							return nil, wrapOpenAIWSIngressTurnError(
+								"write_client",
+								fmt.Errorf("write client websocket event: %w", err),
+								wroteDownstream,
+							)
 						}
-						if stopFail := pluginTurn.ReplyStopped(); stopFail != nil {
-							if stopErr := handleReplyStop(stopFail, true); stopErr != nil {
-								return nil, stopErr
-							}
-						}
-					}
-				} else if err := writeClientMessage(clientMessage); err != nil {
-					if isOpenAIWSClientDisconnectError(err) {
-						clientDisconnected = true
-						closeStatus, closeReason := summarizeOpenAIWSReadCloseError(err)
-						logOpenAIWSModeInfo(
-							"ingress_ws_client_disconnected_drain account_id=%d turn=%d conn_id=%s close_status=%s close_reason=%s",
-							account.ID,
-							turn,
-							truncateOpenAIWSLogValue(lease.ConnID(), openAIWSIDValueMaxLen),
-							closeStatus,
-							truncateOpenAIWSLogValue(closeReason, openAIWSHeaderValueMaxLen),
-						)
 					} else {
-						return nil, wrapOpenAIWSIngressTurnError(
-							"write_client",
-							fmt.Errorf("write client websocket event: %w", err),
-							wroteDownstream,
-						)
+						wroteDownstream = true
+						markOpenAIWSClientVisibleFailure(c, eventType, upstreamMessage)
 					}
-				} else {
-					wroteDownstream = true
-					markOpenAIWSClientVisibleFailure(c, eventType, upstreamMessage)
-				}
 				}
 			}
 			if isTerminalEvent {
