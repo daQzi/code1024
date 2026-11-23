@@ -16,7 +16,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
-	golang.org/x/image v0.41.0
+	golang.org/x/image v0.45.0
 	golang.org/x/net v0.62.0
 )
 

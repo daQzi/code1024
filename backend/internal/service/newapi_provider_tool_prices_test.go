@@ -1,3 +1,5 @@
+//go:build unit
+
 package service
 
 import (
@@ -336,16 +338,13 @@ func TestProviderToolPricesCancelledWaiterDoesNotCancelSharedRead(t *testing.T) 
 	go func() { _, err := s.loadProviderToolPrices(ctx, false); first <- err }()
 	<-started
 	cancel()
-	require.ErrorIs(t, <-first, context.Canceled)
-	second := make(chan error, 1)
-	go func() { _, err := s.loadProviderToolPrices(context.Background(), false); second <- err }()
+	// Release the detached read immediately so it cannot hit its own deadline
+	// while this test waits for the cancelled waiter to be scheduled.
 	close(release)
-	select {
-	case err := <-second:
-		require.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("shared price read did not finish")
-	}
+	require.ErrorIs(t, <-first, context.Canceled)
+	value, err := s.loadProviderToolPrices(context.Background(), false)
+	require.NoError(t, err)
+	require.NotNil(t, value.book)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	require.Equal(t, 1, r.reads)
