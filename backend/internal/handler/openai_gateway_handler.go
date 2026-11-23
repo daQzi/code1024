@@ -2810,9 +2810,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	requestPlatform := openAICompatibleRequestPlatform(ctx, apiKey)
 	requiredTransport := service.OpenAIUpstreamTransportResponsesWebsocketV2Ingress
-	if requestPlatform == service.PlatformGrok {
+	switch requestPlatform {
+	case service.PlatformGrok:
 		requiredTransport = service.OpenAIUpstreamTransportHTTPSSE
-	} else if requestPlatform == service.PlatformOpenAI {
+	case service.PlatformOpenAI:
 		ctx = service.WithNewAPIResponsesWebSocketRouting(ctx)
 	}
 	if err := h.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {

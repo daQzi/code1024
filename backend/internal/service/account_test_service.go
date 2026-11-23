@@ -182,7 +182,7 @@ func (s *AccountTestService) SetOpenAIGatewayService(gateway *OpenAIGatewayServi
 // on its own copy; the shared catalog and its cache stay untouched.
 func (s *AccountTestService) FetchOpenAIAccountModels(ctx context.Context, account *Account) ([]openai.Model, error) {
 	if s == nil || s.openaiGatewayService == nil {
-		return nil, errors.New("OpenAI model discovery service is unavailable")
+		return nil, errors.New("openai model discovery service is unavailable")
 	}
 	response, err := s.openaiGatewayService.FetchOpenAIModelsList(ctx, account)
 	if err != nil {

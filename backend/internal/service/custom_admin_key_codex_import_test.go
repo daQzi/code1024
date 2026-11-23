@@ -43,7 +43,7 @@ func (r *scopedCodexTestRepo) GetByID(ctx context.Context, id int64) (*Account, 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var extra []byte
 	var rate float64
 	if rows.Next() {

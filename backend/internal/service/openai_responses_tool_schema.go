@@ -25,7 +25,7 @@ const (
 	openAIResponsesToolSchemaFallbackType = `"object"`
 )
 
-var errOpenAIResponsesToolSchemaLimit = errors.New("OpenAI Responses tool schema safety limit exceeded")
+var errOpenAIResponsesToolSchemaLimit = errors.New("openai Responses tool schema safety limit exceeded")
 
 // shouldRepairOpenAIResponsesNullToolSchemaType reports whether the upstream
 // path requires a concrete object type at a function tool's parameter root.

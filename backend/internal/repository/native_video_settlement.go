@@ -86,7 +86,7 @@ func (r *usageBillingRepository) ResolveNativeVideoFinalUsage(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var stored []byte
 	err = tx.QueryRowContext(ctx, `SELECT pending_billing FROM sub2api_native_video_tasks WHERE id=$1 FOR UPDATE`, id).Scan(&stored)
 	if errors.Is(err, sql.ErrNoRows) {

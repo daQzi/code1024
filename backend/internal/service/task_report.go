@@ -297,7 +297,7 @@ func (s *NewAPIPluginService) requestPluginFetcher(hosts []string) jsplugin.Fetc
 		if err != nil {
 			return jsplugin.FetchResponse{}, errors.New("request plugin service request failed")
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		stop := context.AfterFunc(callCtx, func() { _ = resp.Body.Close() })
 		defer stop()
 		body, err := io.ReadAll(io.LimitReader(resp.Body, jsplugin.MaxFetchBodyBytes+1))

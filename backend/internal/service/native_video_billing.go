@@ -121,7 +121,8 @@ func (s *OpenAIGatewayService) CaptureNativeVideoBilling(ctx context.Context, ke
 	}
 	result := &OpenAIForwardResult{Model: model, BillingModel: model, UpstreamModel: p.UpstreamModel}
 	resolved := s.resolveOpenAIChannelPricing(ctx, model, key)
-	if protocol == GenerationProtocolXAI {
+	switch protocol {
+	case GenerationProtocolXAI:
 		if resolved != nil && resolved.Mode == BillingModeToken {
 			return nil, errors.New("native xai token pricing requires the legacy completion path")
 		}
@@ -132,10 +133,10 @@ func (s *OpenAIGatewayService) CaptureNativeVideoBilling(ctx context.Context, ke
 		if !apiKeyHasConfiguredVideoPrice(key, model, p.Resolution) && resolved != nil && resolved.Source == PricingSourceChannel && (resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage) {
 			p.Unit = "request"
 		}
-	} else if protocol == GenerationProtocolArk {
+	case GenerationProtocolArk:
 		result.Usage.OutputTokens = 1
 		p.Unit, p.Multiplier = "output_tokens", tokenRate
-	} else {
+	default:
 		return nil, errors.New("unsupported native video financial protocol")
 	}
 	gate := openAILongContextBillingGate(account)
@@ -223,11 +224,12 @@ func (p *NativeVideoBillingSnapshot) quantity(r *OpenAIForwardResult) (decimal.D
 func (p *NativeVideoBillingSnapshot) command(log *UsageLog, cost *CostBreakdown, payload string) *UsageBillingCommand {
 	c := &UsageBillingCommand{NativeVideoLog: log, NativeVideoLogOnly: p.Mode == "log_only", RequestID: log.RequestID, UserID: p.UserID, APIKeyID: p.APIKeyID, AccountID: p.AccountID, AccountType: AccountTypeAPIKey,
 		Model: log.Model, BillingType: log.BillingType, OutputTokens: log.OutputTokens, RequestPayloadHash: payload}
-	if p.Mode == "rate_only" {
+	switch p.Mode {
+	case "rate_only":
 		if p.KeyRateLimit {
 			c.APIKeyRateLimitCost = cost.ActualCost
 		}
-	} else if p.Mode == "standard" {
+	case "standard":
 		if p.SubscriptionID != nil {
 			id := *p.SubscriptionID
 			c.SubscriptionID, c.SubscriptionCost = &id, cost.ActualCost

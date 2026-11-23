@@ -38,7 +38,7 @@ func (r *newAPIPluginRepository) ClaimPluginCredential(ctx context.Context, expe
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var connection []byte
 	err = tx.QueryRowContext(ctx, `SELECT `+pluginCredentialConnectionSQL+` FROM accounts a WHERE a.id=$1 AND a.deleted_at IS NULL AND a.credentials->>'newapi_plugin_version_id'=$2::text AND (NOT $3 OR a.status='active' AND a.schedulable=true OR (`+pluginCredentialNativeMaintenanceSQL+`)) FOR SHARE`, expected.AccountID, expected.PluginVersionID, expected.OnlyIfDue).Scan(&connection)
 	if err != nil {
@@ -85,7 +85,7 @@ func (r *newAPIPluginRepository) FinishPluginCredential(ctx context.Context, sta
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var matches bool
 	var key string
 	err = tx.QueryRowContext(ctx, `SELECT `+pluginCredentialConnectionSQL+`=$2::jsonb,v.plugin_key FROM accounts a JOIN sub2api_js_plugin_versions v ON v.id=$3 WHERE a.id=$1 AND a.deleted_at IS NULL AND (NOT $4 OR a.status='active' AND a.schedulable=true OR (`+pluginCredentialNativeMaintenanceSQL+`)) FOR UPDATE OF a`, state.AccountID, state.Connection, state.PluginVersionID, state.OnlyIfDue).Scan(&matches, &key)
@@ -186,7 +186,7 @@ ORDER BY COALESCE(s.next_run_at,'epoch'::timestamptz),a.id LIMIT 32`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var result []int64
 	for rows.Next() {
 		var id int64

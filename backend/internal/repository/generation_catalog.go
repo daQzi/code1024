@@ -23,7 +23,7 @@ func (r *newAPIPluginRepository) ListGenerationCatalog(ctx context.Context) ([]s
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.GenerationCatalogAccount, 0)
 	for rows.Next() {
 		if len(result) >= 1024 {

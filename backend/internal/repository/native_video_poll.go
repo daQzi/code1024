@@ -68,7 +68,7 @@ func (r *generationTaskRepository) SaveNativeVideoPoll(ctx context.Context, t *s
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	id := service.NativeVideoTaskID(o)
 	// The foreground observer locks history before the monitor. Use the same
 	// order here so a client poll and a worker cannot deadlock each other.

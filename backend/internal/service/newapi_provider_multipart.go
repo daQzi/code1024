@@ -49,7 +49,7 @@ func parseNewAPIProviderMultipart(contentType string, rawBody []byte) (*newAPIPr
 		return nil, errors.New("multipart boundary is required")
 	}
 	if int64(len(rawBody)) > newAPIProviderMultipartMaxBytes {
-		return nil, errors.New("Provider multipart request exceeds size limit")
+		return nil, errors.New("provider multipart request exceeds size limit")
 	}
 	reader := multipart.NewReader(bytes.NewReader(rawBody), boundary)
 	fields := make(map[string][]string)
@@ -67,7 +67,7 @@ func parseNewAPIProviderMultipart(contentType string, rawBody []byte) (*newAPIPr
 		partsCount++
 		if partsCount > newAPIProviderMultipartMaxParts {
 			_ = part.Close()
-			return nil, errors.New("Provider multipart request exceeds part limit")
+			return nil, errors.New("provider multipart request exceeds part limit")
 		}
 		name := strings.TrimSpace(part.FormName())
 		if name == "" {
@@ -77,7 +77,7 @@ func parseNewAPIProviderMultipart(contentType string, rawBody []byte) (*newAPIPr
 		remaining := newAPIProviderMultipartMaxBytes - totalBytes
 		if remaining < 0 {
 			_ = part.Close()
-			return nil, errors.New("Provider multipart request exceeds size limit")
+			return nil, errors.New("provider multipart request exceeds size limit")
 		}
 		data, readErr := io.ReadAll(io.LimitReader(part, remaining+1))
 		filename := strings.TrimSpace(part.FileName())
@@ -88,7 +88,7 @@ func parseNewAPIProviderMultipart(contentType string, rawBody []byte) (*newAPIPr
 		}
 		totalBytes += int64(len(data))
 		if totalBytes > newAPIProviderMultipartMaxBytes {
-			return nil, errors.New("Provider multipart request exceeds size limit")
+			return nil, errors.New("provider multipart request exceeds size limit")
 		}
 		if filename != "" {
 			copied := bytes.Clone(data)
@@ -152,12 +152,12 @@ func (m *newAPIProviderMultipartInput) buildPassthrough(upstreamModel string) ([
 func materializeProviderStepBody(step jsplugin.ConvertedRequest, mp *newAPIProviderMultipartInput) ([]byte, string, bool, error) {
 	if step.Form != nil || step.File != "" {
 		if mp == nil {
-			return nil, "", false, errors.New("Provider conversion requires an unsupported transport or stream mode change")
+			return nil, "", false, errors.New("provider conversion requires an unsupported transport or stream mode change")
 		}
 		return provider.BuildUpstreamBody(step, mp.indexed, true, newAPIProviderMultipartMaxBytes)
 	}
 	if len(step.Body) > MaxRequestPluginBody || (step.Body != nil && !gjson.ValidBytes(step.Body)) {
-		return nil, "", false, errors.New("Provider conversion requires a bounded JSON body")
+		return nil, "", false, errors.New("provider conversion requires a bounded JSON body")
 	}
 	body := step.Body
 	if len(body) > 0 && bytes.Contains(body, []byte(`"$file"`)) {
@@ -265,7 +265,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProviderImages(
 
 	if s.newAPIPlugins == nil || (path != newAPIProviderImagesGenerations && path != newAPIProviderImagesEdits) {
 		writeNewAPIProviderError(c, path, http.StatusServiceUnavailable, "plugin_unavailable", "", "Provider Images endpoint is not available")
-		return nil, errors.New("Provider Images endpoint unavailable")
+		return nil, errors.New("provider Images endpoint unavailable")
 	}
 	upstreamModel := resolveOpenAIForwardModel(account, requestModel, channelMappedModel)
 	report := beginRelayReportAttempt(ctx, account, upstreamModel, true)
@@ -280,7 +280,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProviderImages(
 	if requestModel == "" || !account.SupportsNewAPIProviderModel(path, requestModel) || !account.newAPIProviderBinding().supports(path, modelmodifier.Base(upstreamModel)) {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
 		writeNewAPIProviderError(c, path, http.StatusBadRequest, "invalid_request_error", "", "Provider does not support this Images endpoint and model")
-		return nil, errors.New("Provider model or endpoint mismatch")
+		return nil, errors.New("provider model or endpoint mismatch")
 	}
 
 	var mpInput *newAPIProviderMultipartInput
@@ -329,7 +329,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProviderImages(
 			return nil, writeProviderRequestPluginFailure(c, processingErr)
 		}
 		writeNewAPIProviderError(c, path, http.StatusServiceUnavailable, "plugin_unavailable", "", "Provider Images request preparation failed")
-		return nil, fmt.Errorf("Provider Images setup: %w", err)
+		return nil, fmt.Errorf("provider Images setup: %w", err)
 	}
 
 	chainTimer := time.AfterFunc(newAPIProviderChainTimeout, cancel)
@@ -389,7 +389,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProviderImages(
 		continuationStarted = true
 		if followups >= newAPIProviderMaxFollowups {
 			writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider exceeded its chained request limit")
-			return nil, errors.New("Provider exceeded 32 follow-up requests")
+			return nil, errors.New("provider exceeded 32 follow-up requests")
 		}
 		_ = resp.Body.Close()
 		if err := waitProviderFollowup(upstreamCtx, exchange.followup.Delay); err != nil {
@@ -465,7 +465,7 @@ func (s *OpenAIGatewayService) ForwardNewAPIProviderMultipart(
 	ClearActualOpenAIUpstreamEndpoint(c)
 	if s.newAPIPlugins == nil {
 		writeNewAPIProviderError(c, path, http.StatusServiceUnavailable, "plugin_unavailable", "", "Provider service is unavailable")
-		return nil, errors.New("Provider service unavailable")
+		return nil, errors.New("provider service unavailable")
 	}
 	upstreamModel := resolveOpenAIForwardModel(account, model, defaultMappedModel)
 	report := beginRelayReportAttempt(ctx, account, upstreamModel, true)
@@ -478,7 +478,7 @@ func (s *OpenAIGatewayService) ForwardNewAPIProviderMultipart(
 	}
 	if model == "" || !account.SupportsNewAPIProviderModel(path, model) || !account.newAPIProviderBinding().supports(path, modelmodifier.Base(upstreamModel)) {
 		writeNewAPIProviderError(c, path, http.StatusBadRequest, "invalid_request_error", "", "Provider does not support this endpoint and model")
-		return nil, errors.New("Provider model or endpoint mismatch")
+		return nil, errors.New("provider model or endpoint mismatch")
 	}
 	price, priced := s.resolveProviderAudioPrice(ctx, getAPIKeyFromContext(c), path, upstreamModel, defaultMappedModel, model)
 	if !priced {
@@ -539,7 +539,7 @@ func (s *OpenAIGatewayService) ForwardNewAPIProviderMultipart(
 		input := gjson.GetBytes(exchange.hostBody, "input")
 		if input.Type != gjson.String || input.String() == "" {
 			writeNewAPIProviderError(c, path, http.StatusBadRequest, "invalid_request_error", "", "Speech metering requires a nonempty text input")
-			return nil, errors.New("Provider Audio input cannot be metered")
+			return nil, errors.New("provider Audio input cannot be metered")
 		}
 		units = float64(utf8.RuneCountInString(input.String())) / 1_000_000
 	}
@@ -599,7 +599,7 @@ func (s *OpenAIGatewayService) ForwardNewAPIProviderMultipart(
 		continuationStarted = true
 		if followups >= newAPIProviderMaxFollowups {
 			writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider exceeded its chained request limit")
-			return nil, errors.New("Provider exceeded 32 follow-up requests")
+			return nil, errors.New("provider exceeded 32 follow-up requests")
 		}
 		_ = resp.Body.Close()
 		if err := waitProviderFollowup(upstreamCtx, exchange.followup.Delay); err != nil {
@@ -626,14 +626,14 @@ func (s *OpenAIGatewayService) ForwardNewAPIProviderMultipart(
 	payload, err := io.ReadAll(io.LimitReader(resp.Body, newAPIProviderMultipartMaxBytes+1))
 	if err != nil || int64(len(payload)) > newAPIProviderMultipartMaxBytes {
 		writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider response exceeds limit")
-		return nil, errors.New("Provider response exceeds limit")
+		return nil, errors.New("provider response exceeds limit")
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		if failover := s.failoverOpenAIUpstreamHTTPError(ctx, c, account, resp, payload, string(payload), upstreamModel); failover != nil {
 			return nil, failover
 		}
 		writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider Audio request failed")
-		return nil, errors.New("Provider Audio upstream returned a non-success status")
+		return nil, errors.New("provider Audio upstream returned a non-success status")
 	}
 	respCT, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if !validProviderAudioResponse(path, respCT, payload) {
@@ -658,7 +658,7 @@ func (s *OpenAIGatewayService) ForwardNewAPIProviderMultipart(
 	audioPrice := price.amount * units
 	if !validProviderAudioPrice(audioPrice) {
 		writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider Audio cost exceeds bounds")
-		return nil, errors.New("Provider Audio cost exceeds bounds")
+		return nil, errors.New("provider Audio cost exceeds bounds")
 	}
 	c.Header("X-Content-Type-Options", "nosniff")
 	c.Header("Referrer-Policy", "no-referrer")

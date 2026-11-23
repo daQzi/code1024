@@ -143,7 +143,7 @@ func (s *newAPITaskSession) fetch(ctx context.Context, f jsplugin.FetchRequest) 
 	if err != nil {
 		return jsplugin.FetchResponse{}, errors.New("plugin upstream fetch failed")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	stop := context.AfterFunc(opCtx, func() { _ = resp.Body.Close() })
 	defer stop()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, jsplugin.MaxFetchBodyBytes+1))
@@ -277,7 +277,7 @@ func (s *newAPITaskSession) request(ctx context.Context, descriptor pluginTask.R
 		if createErr != nil {
 			return nil, 0, nil, createErr
 		}
-		defer spool.Close()
+		defer func() { _ = spool.Close() }()
 		hasher := sha256.New()
 		contentType, err = pluginTask.WriteMultipart(ctx, io.MultiWriter(spool, hasher), descriptor.Parts, s.openFile)
 		if err != nil {
@@ -333,7 +333,7 @@ func (s *newAPITaskSession) request(ctx context.Context, descriptor pluginTask.R
 	if err != nil {
 		return nil, 0, nil, errors.New("task upstream transport failed")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	mediaType, _, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if mediaType == "text/event-stream" {
 		if descriptor.ResponseType != "sse" || resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -807,7 +807,7 @@ func (s *NewAPIPluginService) openTaskContent(ctx context.Context, account *Acco
 		// checks and without upstream credentials, cookies or signature headers.
 		for hop := 0; err == nil && response != nil && response.StatusCode >= 300 && response.StatusCode < 400 && response.StatusCode != http.StatusNotModified; hop++ {
 			location := response.Header.Get("Location")
-			response.Body.Close()
+			_ = response.Body.Close()
 			if embedded != nil {
 				return errors.New("embedded artifact redirects are not supported")
 			}
@@ -1130,7 +1130,7 @@ func (s *newAPITaskSession) requestRaw(ctx context.Context, descriptor pluginTas
 	if err != nil {
 		return nil, 0, nil, errors.New("task upstream transport failed")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, pluginTask.MaxSnapshotBytes+1))
 	if err != nil {
 		return nil, resp.StatusCode, nil, err

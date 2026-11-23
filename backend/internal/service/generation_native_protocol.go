@@ -240,8 +240,6 @@ func WithNativeVideoPluginRouting(ctx context.Context, protocol string) context.
 	return withGenerationProtocol(WithNewAPIPluginRouting(ctx), protocol)
 }
 
-func generationContentURL(t *GenerationTask) string { return t.ContentURL() }
-
 func generationNativePublicFields(body, decoded json.RawMessage, protocol string) GenerationVideoFields {
 	fields := generationVideoFields(body, decoded)
 	if protocol == GenerationProtocolOpenAI {

@@ -429,7 +429,7 @@ func (s *OpenAIGatewayService) streamRawChatCompletions(
 		errors.Is(scanErr, context.Canceled) ||
 		errors.Is(scanErr, context.DeadlineExceeded)
 	if pluginStreamFailed {
-		return resultWithUsage(), newOpenAIUpstreamStreamReadError(errors.New("Provider returned a stream error"))
+		return resultWithUsage(), newOpenAIUpstreamStreamReadError(errors.New("provider returned a stream error"))
 	}
 
 	// 上游在任何终止信号之前结束：连接被 reset（scanErr != nil）或干净 EOF。

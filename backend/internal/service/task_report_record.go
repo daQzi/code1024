@@ -289,6 +289,6 @@ func projectTaskReportResult(data json.RawMessage, primary ...string) taskReport
 
 func taskReportBase64(text string) bool {
 	return len(text) >= 1024 && !strings.ContainsFunc(text, func(r rune) bool {
-		return !(r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '+' || r == '/' || r == '=' || r == '-' || r == '_')
+		return (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '+' && r != '/' && r != '=' && r != '-' && r != '_'
 	})
 }

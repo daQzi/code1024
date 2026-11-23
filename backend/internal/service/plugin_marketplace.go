@@ -7,7 +7,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/newapi-engine/market"
 )
 
-const pluginMarketplaceSettingKey = market.SettingKey
 const PluginMarketplaceOfficial = market.Official
 const PluginMarketplaceGitHub = market.GitHub
 const PluginMarketplaceCommunity = market.Community
@@ -16,9 +15,6 @@ type PluginMarketplaceSource = market.Source
 type PluginMarketplacePin = market.Pin
 
 func PluginMarketplaceKind(address string) string { return market.Kind(address) }
-func normalizeMarketplaceSources(items []PluginMarketplaceSource) ([]PluginMarketplaceSource, error) {
-	return market.NormalizeSources(items)
-}
 
 type marketplaceSettingsAdapter struct{ SettingRepository }
 

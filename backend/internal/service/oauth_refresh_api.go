@@ -218,7 +218,7 @@ func (api *OAuthRefreshAPI) RefreshIfNeeded(
 				// cache invalidation and lock release, including request-path calls.
 				budget := api.lockTTL - defaultOpenAIRefreshPersistTimeout - defaultRefreshRepositorySyncTimeout - defaultRefreshPostPersistCleanupTimeout - defaultRefreshLockReleaseTimeout - maxTokenRefreshLockSafetyMargin
 				if budget <= 0 {
-					return nil, &providerConfigurationRefreshError{err: errors.New("OpenAI OAuth refresh lock lease is too short for credential persistence")}
+					return nil, &providerConfigurationRefreshError{err: errors.New("openai OAuth refresh lock lease is too short for credential persistence")}
 				}
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithTimeout(ctx, budget)
@@ -424,7 +424,7 @@ func hasOpenAIRefreshCredentials(account *Account, credentials map[string]any) b
 func persistOpenAIRefreshCredentials(parent context.Context, repo AccountRepository, attempted *Account, credentials map[string]any) (*Account, bool, error) {
 	conditionalRepo, ok := repo.(OpenAIOAuthRefreshSuccessRepository)
 	if !ok {
-		return nil, false, &providerConfigurationRefreshError{err: errors.New("OpenAI OAuth refresh success CAS repository is not configured")}
+		return nil, false, &providerConfigurationRefreshError{err: errors.New("openai OAuth refresh success CAS repository is not configured")}
 	}
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), defaultOpenAIRefreshPersistTimeout)
 	defer cancel()

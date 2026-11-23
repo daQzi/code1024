@@ -45,7 +45,7 @@ func (r *newAPIPluginRepository) ListPluginSubmissions(ctx context.Context, f se
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]service.PluginSubmission, 0)
 	for rows.Next() {
 		item, err := scanPluginSubmission(rows)
@@ -79,7 +79,7 @@ func (r *newAPIPluginRepository) SavePluginDraft(ctx context.Context, item *serv
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('plugin-author:'||$1::text,0))`, item.AuthorID); err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (r *newAPIPluginRepository) TransitionPluginSubmission(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	item, err := scanPluginSubmission(tx.QueryRowContext(ctx, `SELECT `+pluginSubmissionColumns+` FROM sub2api_plugin_submissions WHERE id=$1 FOR UPDATE`, id))
 	if err != nil {
 		return err

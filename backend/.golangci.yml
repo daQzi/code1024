@@ -139,6 +139,9 @@ linters:
       - path: '_test\.go$'
         linters: [ gosec ]
         text: 'G70[34]'
+      # 测试夹具常有意忽略 Close/Write 返回值；生产代码仍逐点检查。
+      - path: '_test\.go$'
+        linters: [ errcheck ]
 
 formatters:
   enable:

@@ -565,7 +565,7 @@ func (m *PluginManager) Enable(ctx context.Context, id int64, acceptUntested boo
 		return nil, err
 	}
 	if active := m.route.Load(); active != nil && active.pluginID != id {
-		return nil, errors.New("OpenAI OAuth 出站能力已有启用插件，请先停用当前插件")
+		return nil, errors.New("openai OAuth 出站能力已有启用插件，请先停用当前插件")
 	}
 	if installation.State == PluginStateEnabled && hasEnabledOpenAIBinding(installation.Bindings) {
 		installation.Compatibility = EvaluatePluginCompatibility(installation.Manifest, m.hostInfo)
@@ -953,17 +953,17 @@ func (m *PluginManager) RoundTripOpenAIOAuth(ctx context.Context, request *http.
 		return nil, false, nil
 	}
 	if route.runtime == nil {
-		return nil, true, fmt.Errorf("OpenAI OAuth 插件不可用: %s", route.unavailable)
+		return nil, true, fmt.Errorf("openai OAuth 插件不可用: %s", route.unavailable)
 	}
 	if route.runtime.client.Exited() {
-		runtimeErr := errors.New("OpenAI OAuth 插件进程已退出")
+		runtimeErr := errors.New("openai OAuth 插件进程已退出")
 		if stateErr := m.markRuntimeUnavailable(route, runtimeErr.Error()); stateErr != nil {
 			return nil, true, errors.Join(runtimeErr, stateErr)
 		}
 		return nil, true, runtimeErr
 	}
 	if !route.runtime.beginRequest() {
-		return nil, true, errors.New("OpenAI OAuth 插件正在停止")
+		return nil, true, errors.New("openai OAuth 插件正在停止")
 	}
 	response, err := route.runtime.roundTrip(ctx, request, proxyURL, account)
 	if err != nil {

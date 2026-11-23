@@ -152,7 +152,7 @@ func (h *TaskLogHandler) content(c *gin.Context, admin bool) {
 		return
 	}
 	defer release()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
 		c.Header("Content-Range", resp.Header.Get("Content-Range"))
 		response.Error(c, http.StatusRequestedRangeNotSatisfiable, "Requested task content range is not available")

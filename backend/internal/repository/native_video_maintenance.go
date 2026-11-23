@@ -41,7 +41,7 @@ func (r *generationTaskRepository) ResumeNativeVideo(ctx context.Context, id str
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var status, delivery string
 	if err := tx.QueryRowContext(ctx, `SELECT status,delivery_status FROM sub2api_native_video_tasks WHERE id=$1 FOR UPDATE`, id).Scan(&status, &delivery); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

@@ -201,10 +201,6 @@ func (s *NewAPIPluginService) queryNewAPIPluginBalance(ctx context.Context, acco
 	}
 }
 
-func (s *NewAPIPluginService) buildNewAPIPluginBalanceRequest(ctx context.Context, version *NewAPIPluginVersion, credential jsplugin.CredentialContext, step jsplugin.ConvertedRequest) (*http.Request, error) {
-	return s.buildNewAPIPluginManagementRequest(ctx, version, credential, step, nil)
-}
-
 // A management request does not run relay preparation or request transforms.
 // Model discovery opts into its explicit relay auth; balances supply their own.
 func (s *NewAPIPluginService) buildNewAPIPluginManagementRequest(ctx context.Context, version *NewAPIPluginVersion, credential jsplugin.CredentialContext, step jsplugin.ConvertedRequest, route *contract.AdvancedCustomRoute, accounts ...*Account) (*http.Request, error) {
@@ -306,7 +302,7 @@ func readNewAPIPluginBalanceBody(ctx context.Context, resp *http.Response) ([]by
 	body := resp.Body
 	stop := context.AfterFunc(ctx, func() { _ = body.Close() })
 	defer stop()
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(body, MaxRequestPluginBody+1))
 	if err != nil || len(raw) > MaxRequestPluginBody {
 		return nil, errors.New("balance response read failed or exceeds limit")

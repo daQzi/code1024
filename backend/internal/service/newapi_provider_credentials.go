@@ -70,7 +70,7 @@ func (c *newAPIProviderTokenCache) get(ctx context.Context, key string, exchange
 	if flight == nil {
 		if len(c.flights) >= newAPIProviderExchangeLimit {
 			c.mu.Unlock()
-			return nil, errors.New("Provider credential exchange is busy")
+			return nil, errors.New("provider credential exchange is busy")
 		}
 		if c.flights == nil {
 			c.flights = make(map[string]*newAPIProviderTokenFlight)
@@ -164,11 +164,11 @@ func (s *NewAPIPluginService) providerCredentialAccount(ctx context.Context, acc
 	copy := *account
 	if account.ProxyID != nil && (account.Proxy == nil || account.Proxy.ID != *account.ProxyID) {
 		if s.proxyRepo == nil {
-			return nil, errors.New("Provider account proxy is unavailable")
+			return nil, errors.New("provider account proxy is unavailable")
 		}
 		proxy, err := s.proxyRepo.GetByID(ctx, *account.ProxyID)
 		if err != nil || proxy == nil {
-			return nil, errors.New("Provider account proxy is unavailable")
+			return nil, errors.New("provider account proxy is unavailable")
 		}
 		copy.Proxy = proxy
 	}
@@ -247,7 +247,7 @@ func (s *NewAPIPluginService) providerCredentialWasRejected(ctx context.Context,
 	err = s.pool.With(hookCtx, exchange.source, func(client *runner.Client) error {
 		values, err := client.Typed(hookCtx, nil, "CallCredentialRejected", exchange.hookCtx, resp.StatusCode, pluginResponseHeaders(resp.Header), string(prefix))
 		if err != nil || len(values) != 1 || json.Unmarshal(values[0], &rejected) != nil {
-			return errors.New("Provider rejection check failed")
+			return errors.New("provider rejection check failed")
 		}
 		return nil
 	})

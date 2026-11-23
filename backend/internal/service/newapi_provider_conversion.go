@@ -72,7 +72,7 @@ func newAPIProviderProtectedHeader(route contract.AdvancedCustomRoute, name stri
 
 func prepareNewAPIProviderRequest(ctx context.Context, client *runner.Client, hookCtx jsplugin.HookContext, req *http.Request, route contract.AdvancedCustomRoute, model string, stream bool, body []byte) ([]byte, error) {
 	if len(body) > MaxRequestPluginBody {
-		return nil, errors.New("Provider preparation body exceeds limit")
+		return nil, errors.New("provider preparation body exceeds limit")
 	}
 	business := map[string]string{}
 	for name := range req.Header {
@@ -85,7 +85,7 @@ func prepareNewAPIProviderRequest(ctx context.Context, client *runner.Client, ho
 		Stream: stream, Body: body, Headers: business,
 	})
 	if err != nil {
-		return nil, errors.New("Provider request preparation failed")
+		return nil, errors.New("provider request preparation failed")
 	}
 	var prepared jsplugin.PreparedRequest
 	if len(values) != 1 || json.Unmarshal(values[0], &prepared) != nil {
@@ -191,7 +191,7 @@ func (s *NewAPIPluginService) convertProviderResponse(ctx context.Context, excha
 	eventStream := kind == "text/event-stream" || kind == "application/x-ndjson" || kind == "application/ndjson"
 	if success && (exchange.readStream || eventStream) {
 		if !eventStream {
-			return errors.New("Provider conversion requires an SSE or NDJSON stream")
+			return errors.New("provider conversion requires an SSE or NDJSON stream")
 		}
 		if !exchange.stream {
 			return s.collectProviderStreamJSON(ctx, exchange, resp, kind == "text/event-stream")
@@ -206,7 +206,7 @@ func (s *NewAPIPluginService) convertProviderResponse(ctx context.Context, excha
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, MaxRequestPluginBody+1))
 	if err != nil || len(raw) > MaxRequestPluginBody {
-		return errors.New("Provider response read failed or exceeds conversion limit")
+		return errors.New("provider response read failed or exceeds conversion limit")
 	}
 	var converted jsplugin.ConvertedResponse
 	var upstreamErr *jsplugin.UpstreamError
@@ -215,10 +215,10 @@ func (s *NewAPIPluginService) convertProviderResponse(ctx context.Context, excha
 	err = s.pool.With(hookCtx, exchange.source, func(client *runner.Client) error {
 		values, err := client.Typed(hookCtx, nil, "CallConvertResponse", exchange.hookCtx, resp.StatusCode, pluginResponseHeaders(resp.Header), raw)
 		if err != nil || len(values) != 2 {
-			return errors.New("Provider response conversion failed")
+			return errors.New("provider response conversion failed")
 		}
 		if json.Unmarshal(values[0], &converted) != nil || json.Unmarshal(values[1], &upstreamErr) != nil {
-			return errors.New("invalid Provider converted response")
+			return errors.New("invalid provider converted response")
 		}
 		return nil
 	})
@@ -230,7 +230,7 @@ func (s *NewAPIPluginService) convertProviderResponse(ctx context.Context, excha
 			resp.Body = io.NopCloser(bytes.NewReader(raw))
 			return nil
 		}
-		return errors.New("Provider response conversion failed")
+		return errors.New("provider response conversion failed")
 	}
 	// A converter may return next/state even for an HTTP credential rejection.
 	// The rejection owns this step: neither billing facts nor a continuation
@@ -242,7 +242,7 @@ func (s *NewAPIPluginService) convertProviderResponse(ctx context.Context, excha
 	}
 	if !credentialRejected && upstreamErr == nil && converted.Next != nil {
 		if len(converted.State) > MaxRequestPluginBody {
-			return errors.New("Provider chained state exceeds limit")
+			return errors.New("provider chained state exceeds limit")
 		}
 		exchange.followup, exchange.followupState = converted.Next, converted.State
 		// Keep the bounded original response available if credential renewal
@@ -269,7 +269,7 @@ func (s *NewAPIPluginService) convertProviderResponse(ctx context.Context, excha
 		// A converter cannot turn a failed HTTP status into a paid success.
 		// Keep the original status/body for the existing failover rules.
 	case !newAPIProviderJSONContentType(converted.ContentType) || len(converted.Body) > MaxRequestPluginBody:
-		return errors.New("Provider converted response must be bounded JSON")
+		return errors.New("provider converted response must be bounded JSON")
 	default:
 		raw = converted.Body
 		resp.StatusCode = http.StatusOK
@@ -323,7 +323,7 @@ func (r *newAPIProviderActivityReader) Read(p []byte) (int, error) {
 	s.mutex.Lock()
 	if s.closed {
 		s.mutex.Unlock()
-		return 0, errors.New("Provider stream closed or timed out")
+		return 0, errors.New("provider stream closed or timed out")
 	}
 	s.mutex.Unlock()
 	// Bound waiting for upstream data, not the time a downstream spends
@@ -335,7 +335,7 @@ func (r *newAPIProviderActivityReader) Read(p []byte) (int, error) {
 	closed := s.closed
 	s.mutex.Unlock()
 	if closed || !stopped {
-		err = errors.New("Provider stream closed or timed out")
+		err = errors.New("provider stream closed or timed out")
 	}
 	return n, err
 }
@@ -354,7 +354,7 @@ func (s *newAPIProviderStream) next() (*jsplugin.StreamEvent, error) {
 		line := s.scanner.Text()
 		size += len(line) + 1
 		if size > MaxRequestPluginBody {
-			return nil, errors.New("Provider stream event exceeds conversion limit")
+			return nil, errors.New("provider stream event exceeds conversion limit")
 		}
 		if !s.sse {
 			if strings.TrimSpace(line) != "" {
@@ -373,9 +373,9 @@ func (s *newAPIProviderStream) next() (*jsplugin.StreamEvent, error) {
 			event.Event = value
 		case "data":
 			if hasData {
-				data.WriteByte('\n')
+				_ = data.WriteByte('\n')
 			}
-			data.WriteString(value)
+			_, _ = data.WriteString(value)
 			hasData = true
 		}
 		if line == "" {
@@ -383,7 +383,7 @@ func (s *newAPIProviderStream) next() (*jsplugin.StreamEvent, error) {
 		}
 	}
 	if err := s.scanner.Err(); err != nil {
-		return nil, errors.New("Provider upstream stream read failed")
+		return nil, errors.New("provider upstream stream read failed")
 	}
 	if hasData || event.Event != "" {
 		event.Data = data.String()
@@ -422,22 +422,22 @@ func (s *newAPIProviderStream) Read(p []byte) (int, error) {
 func (s *newAPIProviderStream) convert(event *jsplugin.StreamEvent, done bool) error {
 	output, err := s.convertResult(event, done)
 	if err != nil {
-		return errors.New("Provider stream conversion failed")
+		return errors.New("provider stream conversion failed")
 	}
 	if output.HasBody || len(output.Chunks) > 0 {
-		return errors.New("Provider streaming clients require events, not a body or chunks")
+		return errors.New("provider streaming clients require events, not a body or chunks")
 	}
 	for _, event := range output.Events {
 		if event.Event != "" {
-			s.pending.WriteString("event: " + event.Event + "\n")
+			_, _ = s.pending.WriteString("event: " + event.Event + "\n")
 		}
 		for line := range strings.SplitSeq(event.Data, "\n") {
-			s.pending.WriteString("data: " + strings.TrimSuffix(line, "\r") + "\n")
+			_, _ = s.pending.WriteString("data: " + strings.TrimSuffix(line, "\r") + "\n")
 		}
-		s.pending.WriteString("\n")
+		_, _ = s.pending.WriteString("\n")
 		if s.pending.Len() > MaxRequestPluginBody {
 			s.pending.Reset()
-			return errors.New("Provider converted event exceeds output limit")
+			return errors.New("provider converted event exceeds output limit")
 		}
 	}
 	return nil
@@ -446,7 +446,7 @@ func (s *newAPIProviderStream) convert(event *jsplugin.StreamEvent, done bool) e
 func (s *newAPIProviderStream) convertResult(event *jsplugin.StreamEvent, done bool) (jsplugin.StreamResult, error) {
 	s.events++
 	if s.events > 65536 {
-		return jsplugin.StreamResult{}, errors.New("Provider stream exceeds event count limit")
+		return jsplugin.StreamResult{}, errors.New("provider stream exceeds event count limit")
 	}
 	ctx, cancel := context.WithTimeout(s.ctx, 5*time.Second)
 	defer cancel()
@@ -476,7 +476,7 @@ func (s *newAPIProviderStream) convertResult(event *jsplugin.StreamEvent, done b
 	err := s.service.pool.With(ctx, s.exchange.source, func(client *runner.Client) error {
 		values, err := client.Typed(ctx, nil, "CallConvertStreamEvent", s.exchange.hookCtx, event, done)
 		if err != nil || len(values) != 3 {
-			return errors.New("Provider stream conversion failed")
+			return errors.New("provider stream conversion failed")
 		}
 		if json.Unmarshal(values[0], &output) != nil || json.Unmarshal(values[1], &state) != nil || json.Unmarshal(values[2], &upstreamErr) != nil {
 			return errors.New("invalid Provider converted stream event")
@@ -484,13 +484,13 @@ func (s *newAPIProviderStream) convertResult(event *jsplugin.StreamEvent, done b
 		return nil
 	})
 	if err != nil {
-		return jsplugin.StreamResult{}, errors.New("Provider stream conversion failed")
+		return jsplugin.StreamResult{}, errors.New("provider stream conversion failed")
 	}
 	if upstreamErr != nil {
 		return jsplugin.StreamResult{}, upstreamErr
 	}
 	if len(state) > MaxRequestPluginBody || s.socket == nil && (len(output.Send) > 0 || output.Close) || done && len(output.Send) > 0 {
-		return jsplugin.StreamResult{}, errors.New("Provider stream conversion requires an unsupported output mode")
+		return jsplugin.StreamResult{}, errors.New("provider stream conversion requires an unsupported output mode")
 	}
 	if err := s.exchange.tools.add(output.Tools); err != nil {
 		return jsplugin.StreamResult{}, err

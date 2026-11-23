@@ -200,7 +200,7 @@ func (s *GenerationService) PrepareVideoRouting(ctx context.Context, key *APIKey
 		if err != nil {
 			return nil, err
 		}
-		pinned = ctx.Value(generationVideoCandidatesKey{}).(generationVideoCandidates)
+		pinned, _ = ctx.Value(generationVideoCandidatesKey{}).(generationVideoCandidates)
 	}
 	candidates := pinned.candidates
 	if len(candidates) == 0 {
@@ -294,7 +294,7 @@ func (s *GenerationService) PrepareVideoRouting(ctx context.Context, key *APIKey
 			return nil, ErrGenerationOrigin
 		}
 		view := generationTaskView(parent)
-		plan.origins = append(plan.origins, GenerationOriginTask{TaskID: parent.ID, UpstreamTaskID: parent.UpstreamID, Action: parent.Action, Status: view["status"].(string), Data: bytes.Clone(parent.Data)})
+		plan.origins = append(plan.origins, GenerationOriginTask{TaskID: parent.ID, UpstreamTaskID: parent.UpstreamID, Action: parent.Action, Status: generationViewStatus(view), Data: bytes.Clone(parent.Data)})
 	}
 	if err := ValidateGenerationOrigins(plan.origins); err != nil {
 		return nil, err
@@ -339,4 +339,9 @@ func (s *GenerationService) previewVideoDecodeFiles(ctx context.Context, key *AP
 		}
 	}
 	return body, nil, nil
+}
+
+func generationViewStatus(view map[string]any) string {
+	status, _ := view["status"].(string)
+	return status
 }

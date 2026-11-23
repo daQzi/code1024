@@ -42,7 +42,7 @@ func (r *newAPIPluginRepository) query(ctx context.Context, query string, args .
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.NewAPIPluginVersion, 0)
 	for rows.Next() {
 		v, err := scanNewAPIPlugin(rows)
@@ -76,7 +76,7 @@ func (r *newAPIPluginRepository) Install(ctx context.Context, v *service.NewAPIP
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// Bound retained source storage and serialize installs across replicas.
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(734562910245)`); err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (r *newAPIPluginRepository) DeleteVersion(ctx context.Context, id int64, is
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(734562910245)`); err != nil {
 		return nil, err
 	}
@@ -256,7 +256,7 @@ func (r *newAPIPluginRepository) ListPluginAccountPricing(ctx context.Context, p
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.PluginAccountPricingSummary, 0)
 	for rows.Next() {
 		var item service.PluginAccountPricingSummary

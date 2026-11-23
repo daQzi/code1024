@@ -148,7 +148,7 @@ func (r *userPlatformQuotaRepository) GetByUserPlatform(ctx context.Context, use
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return nil, rows.Err()
 	}
@@ -480,17 +480,17 @@ func (r *userPlatformQuotaRepository) BatchSnapshotUsage(ctx context.Context, sn
 			for rows.Next() {
 				var id int64
 				if err := rows.Scan(&id); err != nil {
-					rows.Close()
+					_ = rows.Close()
 					return err
 				}
 			}
 			readErr := rows.Err()
-			rows.Close()
+			_ = rows.Close()
 			if readErr != nil {
 				return readErr
 			}
 			var set strings.Builder
-			set.WriteString("UPDATE user_platform_quotas q SET ")
+			_, _ = set.WriteString("UPDATE user_platform_quotas q SET ")
 			for _, window := range []string{"daily", "weekly", "monthly"} {
 				// Redis stores starts at second precision. A manual reset marks
 				// the same precision boundary, including zero-usage snapshots.
@@ -498,7 +498,7 @@ func (r *userPlatformQuotaRepository) BatchSnapshotUsage(ctx context.Context, sn
 				fmt.Fprintf(&set, `%[1]s_usage_usd=CASE WHEN %[2]s THEN q.%[1]s_usage_usd ELSE v.%[1]s_usage_usd+COALESCE(d.%[1]s,0) END,
  %[1]s_window_start=CASE WHEN %[2]s THEN q.%[1]s_window_start ELSE v.%[1]s_window_start END,`, window, condition)
 			}
-			set.WriteString(`generation_cursor=GREATEST(q.generation_cursor,v.generation_cursor),updated_at=$1
+			_, _ = set.WriteString(`generation_cursor=GREATEST(q.generation_cursor,v.generation_cursor),updated_at=$1
  FROM user_platform_quotas basis JOIN ` + values + ` ON basis.user_id=v.user_id AND basis.platform=v.platform
  LEFT JOIN LATERAL(SELECT
  SUM(e.amount) FILTER(WHERE e.created_at>=v.daily_window_start) AS daily,

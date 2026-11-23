@@ -143,7 +143,8 @@ func (s *NewAPIPluginService) loadModelModifierSettings(ctx context.Context, for
 			if result.Err != nil {
 				return ModelModifierSettings{}, result.Err
 			}
-			return cloneModelModifierSettings(result.Val.(ModelModifierSettings)), nil
+			value, _ := result.Val.(ModelModifierSettings)
+			return cloneModelModifierSettings(value), nil
 		}
 	}
 }

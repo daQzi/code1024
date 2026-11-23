@@ -164,7 +164,7 @@ func (r *modelPlazaMetricsRepository) ReadModelSummaries(ctx context.Context, sc
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id string
 		var p service.PlazaMetricsPoint
@@ -198,7 +198,7 @@ func (r *modelPlazaMetricsRepository) ReadModelMetrics(ctx context.Context, mode
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.PlazaMetricsPoint, 0)
 	for rows.Next() {
 		var p service.PlazaMetricsPoint

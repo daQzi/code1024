@@ -29,7 +29,7 @@ func (b *generationEmbeddedBody) Close() error { b.once.Do(b.release); return ni
 // unescaping are bounded separately from the decoded media (never allocated).
 // Two fixed slots bound this path even when ingress memory accounting is off.
 func generationEmbeddedResponse(ctx context.Context, upstream *http.Response, descriptor *pluginTask.Request, method string) (*http.Response, error) {
-	defer upstream.Body.Close()
+	defer func() { _ = upstream.Body.Close() }()
 	if upstream.StatusCode != http.StatusOK {
 		return nil, errors.New("embedded artifact upstream did not return HTTP 200")
 	}

@@ -137,10 +137,6 @@ func generationQuantity(facts json.RawMessage, unit string) (decimal.Decimal, bo
 func generationBillingPending(task *GenerationTask) bool         { return generation.BillingPendingFor(task) }
 func generationObservedCost(raw json.RawMessage) *GenerationCost { return generation.ObservedCost(raw) }
 
-func generationRule(account *Account, group *Group, model, resolution string) (GenerationPriceRule, error) {
-	return generationRuleWithFallback(account, group, model, resolution, true)
-}
-
 func generationRuleWithFallback(account *Account, group *Group, model, resolution string, video bool) (GenerationPriceRule, error) {
 	var rules map[string]GenerationPriceRule
 	if configured := account.Credentials[NewAPIVideoPricingKey]; configured != nil {

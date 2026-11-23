@@ -202,14 +202,14 @@ func (s *NewAPIPluginService) pluginManager() *engineplugin.Manager {
 
 func (s *NewAPIPluginService) List(ctx context.Context) ([]NewAPIPluginVersion, error) {
 	if s == nil {
-		return nil, errors.New("New API plugin service is disabled")
+		return nil, errors.New("new API plugin service is disabled")
 	}
 	items, err := s.pluginManager().List(ctx)
 	return withSunoTaskCompatibility(items), err
 }
 func (s *NewAPIPluginService) Versions(ctx context.Context, key string) ([]NewAPIPluginVersion, error) {
 	if s == nil {
-		return nil, errors.New("New API plugin service is disabled")
+		return nil, errors.New("new API plugin service is disabled")
 	}
 	items, err := s.pluginManager().Versions(ctx, key)
 	return withSunoTaskCompatibility(items), err
@@ -234,13 +234,13 @@ func applySunoTaskCompatibility(item *NewAPIPluginVersion) {
 }
 func (s *NewAPIPluginService) Install(ctx context.Context, source, builtinKey string, actor *int64, options ...PluginInstallOptions) (*NewAPIPluginVersion, error) {
 	if s == nil {
-		return nil, errors.New("New API plugin service is disabled")
+		return nil, errors.New("new API plugin service is disabled")
 	}
 	return s.pluginManager().Install(ctx, source, builtinKey, actor, options...)
 }
 func (s *NewAPIPluginService) Activate(ctx context.Context, id int64, enabled bool) error {
 	if s == nil {
-		return errors.New("New API plugin service is disabled")
+		return errors.New("new API plugin service is disabled")
 	}
 	return s.pluginManager().Activate(ctx, id, enabled)
 }
@@ -309,14 +309,14 @@ func (s *NewAPIPluginService) NormalizeAccountBinding(ctx context.Context, accou
 		}
 	}
 	if len(provider.Routes) > 0 && account.Platform != PlatformOpenAI {
-		return errors.New("Provider 插件请选择 OpenAI 平台 API Key 账号")
+		return errors.New("provider 插件请选择 OpenAI 平台 API Key 账号")
 	}
 	if len(provider.Routes) > 0 {
 		projected := *account
 		projected.Credentials = maps.Clone(account.Credentials)
 		projected.Credentials[newAPIPluginProviderKey] = provider
 		if len(projected.NewAPIProviderModels()) == 0 {
-			return errors.New("Provider 需要至少一个具体模型；请在账号模型映射中配置公开模型及上游模型")
+			return errors.New("provider 需要至少一个具体模型；请在账号模型映射中配置公开模型及上游模型")
 		}
 	}
 	if _, credential := jsplugin.ParseCredential(account.GetCredential("api_key")); credential {

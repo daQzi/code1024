@@ -39,7 +39,7 @@ func (s *OpenAIGatewayService) doNewAPIProviderTransport(ctx context.Context, re
 		if resp != nil && resp.StatusCode >= 300 && resp.StatusCode <= 599 && resp.Body != nil {
 			return resp, nil // HTTP credential rejection may renew once before any frames.
 		}
-		return nil, errors.New("Provider WebSocket handshake failed")
+		return nil, errors.New("provider WebSocket handshake failed")
 	}
 	conn.SetReadLimit(MaxRequestPluginBody)
 	stream := &providerSocketBody{conn: conn}
@@ -137,7 +137,7 @@ func (d providerResponsesSocketDialer) Dial(ctx context.Context, _ string, heade
 			return &coderOpenAIWSClientConn{conn: conn}, 0, resp.Header.Clone(), nil
 		}
 		if resp == nil {
-			return nil, 0, nil, errors.New("Provider Responses socket handshake failed")
+			return nil, 0, nil, errors.New("provider Responses socket handshake failed")
 		}
 		rejected := resp.Body != nil && plugins.providerCredentialWasRejected(ctx, step, resp)
 		if resp.Body != nil {
@@ -152,7 +152,7 @@ func (d providerResponsesSocketDialer) Dial(ctx context.Context, _ string, heade
 				}
 			}
 		}
-		return nil, resp.StatusCode, resp.Header.Clone(), errors.New("Provider Responses socket handshake rejected")
+		return nil, resp.StatusCode, resp.Header.Clone(), errors.New("provider Responses socket handshake rejected")
 	}
 }
 
@@ -164,7 +164,7 @@ type providerSocketBody struct {
 }
 
 func (*providerSocketBody) Read([]byte) (int, error) {
-	return 0, errors.New("Provider socket must be decoded as frames")
+	return 0, errors.New("provider socket must be decoded as frames")
 }
 
 func (b *providerSocketBody) Close() error {
@@ -180,7 +180,7 @@ func (b *providerSocketBody) next(ctx context.Context, idle time.Duration) (*jsp
 		if coderws.CloseStatus(err) == coderws.StatusNormalClosure {
 			return nil, io.EOF
 		}
-		return nil, errors.New("Provider WebSocket frame read failed")
+		return nil, errors.New("provider WebSocket frame read failed")
 	}
 	if kind == coderws.MessageBinary {
 		if data == nil {
@@ -198,12 +198,12 @@ func (b *providerSocketBody) send(ctx context.Context, messages []jsplugin.WebSo
 			kind, data = coderws.MessageBinary, message.Binary
 		}
 		if len(data) > MaxRequestPluginBody || b.frames >= 4096 || b.bytesSent+len(data) > 16<<20 {
-			return errors.New("Provider WebSocket exceeded its outgoing frame budget")
+			return errors.New("provider WebSocket exceeded its outgoing frame budget")
 		}
 		b.frames++
 		b.bytesSent += len(data)
 		if err := b.conn.Write(ctx, kind, data); err != nil {
-			return errors.New("Provider WebSocket frame write failed")
+			return errors.New("provider WebSocket frame write failed")
 		}
 	}
 	return nil

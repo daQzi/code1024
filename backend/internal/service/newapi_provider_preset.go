@@ -25,7 +25,7 @@ func (s *NewAPIPluginService) convertProviderPresetResponse(ctx context.Context,
 			return errors.New("preset Provider requires a JSON upstream response")
 		}
 		body := resp.Body
-		defer body.Close()
+		defer func() { _ = body.Close() }()
 		raw, err := io.ReadAll(io.LimitReader(body, MaxRequestPluginBody+1))
 		if err != nil || len(raw) > MaxRequestPluginBody {
 			return errors.New("preset Provider response read failed or exceeds limit")

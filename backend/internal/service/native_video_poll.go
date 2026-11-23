@@ -207,7 +207,7 @@ func (s *NativeVideoWorkers) fetchNativeVideoPoll(ctx context.Context, task *Nat
 	if err != nil {
 		return nil, "native_monitor_upstream_error", false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return nil, "native_monitor_auth_failed", false
 	}

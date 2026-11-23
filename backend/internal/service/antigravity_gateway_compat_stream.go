@@ -274,7 +274,7 @@ func mergeAntigravityCompatUsage(dst *ClaudeUsage, src *antigravity.ClaudeUsage)
 	dst.ImageOutputTokens = src.ImageOutputTokens
 }
 
-func (s *AntigravityGatewayService) handleAntigravityCompatStream(
+func (s *AntigravityGatewayService) handleAntigravityCompatStream( //nolint:unused // used only from compat tests
 	c *gin.Context,
 	resp *http.Response,
 	startTime time.Time,
@@ -318,7 +318,7 @@ func (s *AntigravityGatewayService) handleAntigravityCompatStreamAfterHeaders(
 	)
 }
 
-func (s *AntigravityGatewayService) handleAntigravityCompatStreamWithKeepaliveInterval(
+func (s *AntigravityGatewayService) handleAntigravityCompatStreamWithKeepaliveInterval( //nolint:unused // used only from compat tests
 	c *gin.Context, resp *http.Response, startTime time.Time, originalModel string,
 	adapter antigravityCompatStreamAdapter, prefix string, interval, maxPreContentWait time.Duration,
 ) (*antigravityStreamResult, error) {

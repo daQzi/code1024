@@ -59,7 +59,7 @@ func (r *generationTaskRepository) StoreGenerationFile(ctx context.Context, user
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// Serialize capacity admission across nodes, only after the bounded input
 	// is on host-owned disk. A slow uploading client never holds this lock.
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('sub2api-generation-files-capacity'))`); err != nil {
@@ -182,7 +182,7 @@ func (r *generationTaskRepository) DeleteGenerationFile(ctx context.Context, id 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var found string
 	if err = tx.QueryRowContext(ctx, `SELECT id FROM sub2api_generation_files WHERE id=$1 AND user_id=$2 AND api_key_id=$3 AND group_id=$4 FOR UPDATE`, id, user, key, group).Scan(&found); errors.Is(err, sql.ErrNoRows) {
 		return service.ErrGenerationFileNotFound

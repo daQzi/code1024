@@ -200,7 +200,7 @@ func TestGenerationQuotaLocalSnapshotWaitsForConcurrentProjection(t *testing.T) 
 	task := generationQuotaTask(t, f, service.GenerationSucceeded)
 	tx, err := f.db.BeginTx(ctx, nil)
 	require.NoError(t, err)
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// Exercise the same projection helper under an uncommitted quota lock.
 	require.NoError(t, applyGenerationQuotaTx(ctx, tx, task.ID, f.user, decimal.RequireFromString("0.4")))
 	finished := make(chan error, 1)

@@ -33,12 +33,12 @@ func (r *newAPIProviderToolStream) observeLine() error {
 	if bytes.HasPrefix(line, []byte("data:")) {
 		value := bytes.TrimPrefix(line[5:], []byte{' '})
 		if len(value) > MaxRequestPluginBody-r.data.Len()-1 {
-			return errors.New("Provider tool event exceeds limit")
+			return errors.New("provider tool event exceeds limit")
 		}
 		if r.data.Len() > 0 {
-			r.data.WriteByte('\n')
+			_ = r.data.WriteByte('\n')
 		}
-		r.data.Write(value)
+		_, _ = r.data.Write(value)
 	}
 	return nil
 }
@@ -56,7 +56,7 @@ func (r *newAPIProviderToolStream) Read(p []byte) (int, error) {
 			}
 		} else {
 			if len(r.line) >= MaxRequestPluginBody {
-				r.failure = errors.New("Provider tool SSE line exceeds limit")
+				r.failure = errors.New("provider tool SSE line exceeds limit")
 				return 0, r.failure
 			}
 			r.line = append(r.line, b)

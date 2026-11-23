@@ -62,7 +62,7 @@ func (r *generationTaskRepository) ObserveNativeVideo(ctx context.Context, o ser
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var lockedID string
 	err = tx.QueryRowContext(ctx, `SELECT id FROM sub2api_native_video_tasks WHERE id=$1 FOR UPDATE`, id).Scan(&lockedID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -108,7 +108,7 @@ func (r *generationTaskRepository) GetNativeVideoRecovery(ctx context.Context, q
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var found *service.NativeVideoRecovery
 	var payload []byte
 	for rows.Next() {

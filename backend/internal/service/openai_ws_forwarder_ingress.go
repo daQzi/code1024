@@ -91,7 +91,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	firstProviderModel := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String())
 	firstProviderUpstreamModel := ""
 	if providerSocket && (s.newAPIPlugins == nil || !s.isOpenAIAccountTransportCompatible(account, OpenAIUpstreamTransportResponsesWebsocketV2Ingress)) {
-		return errors.New("Provider account does not serve native Responses WebSocket")
+		return errors.New("provider account does not serve native Responses WebSocket")
 	}
 	// A handler may reuse the same gin context across account failover attempts.
 	// Never let an OAuth attempt's response aliases leak into the next account.
@@ -450,7 +450,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "Provider WebSocket is pinned to its first model; reconnect to switch models", nil)
 			}
 			if !account.supportsNewAPIResponsesWebSocket(requestModel) {
-				return openAIWSClientPayload{}, errors.New("Provider account does not serve native Responses WebSocket")
+				return openAIWSClientPayload{}, errors.New("provider account does not serve native Responses WebSocket")
 			}
 		}
 		if modelMissing || upstreamModel != originalModel || (modApplied && upstreamModel != modSpec.Base) {
@@ -751,7 +751,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			firstPayload = parsed
 			currentPluginTurn = pluginTurn
-			break
+			break //nolint:staticcheck // single-initial-turn loop kept for minimal upstream diff
 		}
 	}
 

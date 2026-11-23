@@ -26,7 +26,7 @@ AND (a.platform='openai' AND v.capabilities->>'provider'='true' OR v.capabilitie
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.PluginCredentialScheduling, 0, len(ids))
 	for rows.Next() {
 		var state service.PluginCredentialScheduling

@@ -96,7 +96,7 @@ func (s *GenerationService) UploadGenerationFile(ctx context.Context, key *APIKe
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	n, err := io.CopyBuffer(file, io.LimitReader(body, pluginTask.MaxFileBytes+1), make([]byte, 32<<10))
 	if err != nil {
 		return nil, err

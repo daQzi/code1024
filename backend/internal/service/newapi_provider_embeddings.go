@@ -20,19 +20,19 @@ import (
 func (s *OpenAIGatewayService) finishNewAPIProviderEmbeddings(ctx context.Context, c *gin.Context, account *Account, resp *http.Response, req *http.Request, model, upstreamModel string, started time.Time) (*OpenAIForwardResult, error) {
 	if !newAPIProviderJSONContentType(resp.Header.Get("Content-Type")) {
 		writeOpenAIEmbeddingsError(c, http.StatusBadGateway, "upstream_error", "Provider embeddings require a JSON response")
-		return nil, errors.New("Provider embeddings response content type mismatch")
+		return nil, errors.New("provider embeddings response content type mismatch")
 	}
 	stop := context.AfterFunc(ctx, func() { _ = resp.Body.Close() })
 	defer stop()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxRequestPluginBody+1))
 	if err != nil || len(body) > MaxRequestPluginBody || ctx.Err() != nil {
 		writeOpenAIEmbeddingsError(c, http.StatusBadGateway, "upstream_error", "Provider embeddings response is unavailable or exceeds 1 MiB")
-		return nil, errors.New("Provider embeddings response read failed or exceeds limit")
+		return nil, errors.New("provider embeddings response read failed or exceeds limit")
 	}
 	root := gjson.ParseBytes(body)
 	if !gjson.ValidBytes(body) || !root.IsObject() || !newAPIProviderUnambiguousJSON(root, 0) || embeddingsPerformance(body) != relaymetrics.Success || !newAPIProviderEmbeddingUsage(root.Get("usage")) {
 		writeOpenAIEmbeddingsError(c, http.StatusBadGateway, "upstream_error", "Provider returned invalid embeddings")
-		return nil, errors.New("Provider embeddings protocol mismatch")
+		return nil, errors.New("provider embeddings protocol mismatch")
 	}
 	usage := extractOpenAIEmbeddingsUsage(body)
 	if observed := root.Get("model"); observed.Type == gjson.String {

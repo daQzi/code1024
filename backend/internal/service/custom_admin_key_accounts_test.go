@@ -126,7 +126,7 @@ func (r *scopedAdminWriteTestRepo) GetByID(ctx context.Context, id int64) (*Acco
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var group int64
 		if err = rows.Scan(&group); err != nil {
@@ -152,7 +152,7 @@ func (r *scopedAdminWriteTestRepo) Create(ctx context.Context, a *Account) error
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return errors.New("创建未返回 ID")
 	}

@@ -125,7 +125,7 @@ func (h *ModelPlazaHandler) WatchPerformance(c *gin.Context) {
 		response.Error(c, http.StatusServiceUnavailable, "Performance notifications require write deadlines")
 		return
 	}
-	defer controller.SetWriteDeadline(time.Time{})
+	defer func() { _ = controller.SetWriteDeadline(time.Time{}) }()
 	write := func(frame string) bool {
 		if ctx.Err() != nil {
 			return false

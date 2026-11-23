@@ -13,7 +13,7 @@ func (r *generationTaskRepository) DeleteGenerationResult(ctx context.Context, i
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	const identity = `id=$1 AND user_id=$2 AND api_key_id=$3 AND group_id=$4 AND plugin_version_id>0`
 	var protocol, status, billing string
 	var deleted sql.NullTime

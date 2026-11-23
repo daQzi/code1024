@@ -56,7 +56,7 @@ func (r *scopedSelectionAccountRepo) GetByID(ctx context.Context, id int64) (*Ac
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if rows.Next() {
 		err = rows.Scan(&a.ProxyID)
 	}

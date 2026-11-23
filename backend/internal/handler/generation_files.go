@@ -34,7 +34,7 @@ func (h *OpenAIGatewayHandler) GenerationFileUpload(c *gin.Context) {
 	}
 	controller := http.NewResponseController(c.Writer)
 	_ = controller.SetReadDeadline(time.Now().Add(60 * time.Second))
-	defer controller.SetReadDeadline(time.Time{})
+	defer func() { _ = controller.SetReadDeadline(time.Time{}) }()
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 	defer cancel()
 	file, err := h.generations.UploadGenerationFile(ctx, key, c.GetHeader("X-Filename"), c.GetHeader("Content-Type"), c.Request.Body)

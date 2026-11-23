@@ -133,7 +133,7 @@ func (r *generationTaskRepository) CreateHeld(ctx context.Context, t *service.Ge
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var inserted string
 	err = tx.QueryRowContext(ctx, `INSERT INTO sub2api_generation_tasks(id,user_id,api_key_id,group_id,account_id,plugin_version_id,idempotency_key,fingerprint,
  model,upstream_model,platform,protocol,action,request,config_encrypted,price,funding,hold_amount,connection,public_fields,files,request_plugins_encrypted,request_report_encrypted,request_text,origins,credential_binding,preparation_status)
@@ -304,7 +304,7 @@ func (r *generationTaskRepository) ListOwned(ctx context.Context, user, key int6
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.GenerationTask, 0)
 	for rows.Next() {
 		t, err := scanGenerationTask(rows)
@@ -379,7 +379,7 @@ func (r *generationTaskRepository) Settle(ctx context.Context, t *service.Genera
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var fundingRaw []byte
 	var hold decimal.Decimal
 	var status, billing, lease string
@@ -603,7 +603,7 @@ func (r *generationTaskRepository) ListReview(ctx context.Context, limit int) ([
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.GenerationTask, 0)
 	for rows.Next() {
 		task, err := scanGenerationTask(rows)
@@ -623,7 +623,7 @@ func (r *generationTaskRepository) Reconcile(ctx context.Context, id string, act
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	task, err := scanGenerationTask(tx.QueryRowContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE id=$1 AND (lease_until IS NULL OR lease_until<NOW()) FOR UPDATE`, id))
 	if err != nil {
 		return err

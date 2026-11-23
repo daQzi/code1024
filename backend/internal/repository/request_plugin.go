@@ -52,7 +52,7 @@ func (r *newAPIPluginRepository) ListRequestPluginInstances(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]service.RequestPluginInstance, 0)
 	for rows.Next() {
 		item, err := scanRequestPlugin(rows)
@@ -93,7 +93,7 @@ func (r *newAPIPluginRepository) SaveRequestPluginInstance(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('request-plugin-instances',0))`); err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (r *newAPIPluginRepository) ListRequestPluginRuns(ctx context.Context, requ
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]service.RequestPluginRun, 0)
 	for rows.Next() {
 		var item service.RequestPluginRun

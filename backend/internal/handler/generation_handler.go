@@ -409,7 +409,7 @@ func (h *OpenAIGatewayHandler) writeGenerationContent(c *gin.Context, task *serv
 		return
 	}
 	defer release()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
 		if value := resp.Header.Get("Content-Range"); len(value) <= 256 {
 			c.Header("Content-Range", value)
@@ -439,7 +439,7 @@ func streamGenerationContent(c *gin.Context, resp *http.Response) {
 		return
 	}
 	controller := http.NewResponseController(c.Writer)
-	defer controller.SetWriteDeadline(time.Time{})
+	defer func() { _ = controller.SetWriteDeadline(time.Time{}) }()
 	buffer := make([]byte, 32<<10)
 	for {
 		n, readErr := resp.Body.Read(buffer)

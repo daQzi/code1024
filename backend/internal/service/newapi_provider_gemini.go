@@ -112,13 +112,13 @@ func (s *OpenAIGatewayService) finishNewAPIProviderGemini(ctx context.Context, c
 	if !stream {
 		raw, err := io.ReadAll(io.LimitReader(resp.Body, MaxRequestPluginBody+1))
 		if err != nil || len(raw) > MaxRequestPluginBody {
-			return fail(errors.New("Gemini response exceeds limits or was interrupted"))
+			return fail(errors.New("gemini response exceeds limits or was interrupted"))
 		}
 		if err := observe(raw); err != nil {
 			return fail(err)
 		}
 		if !seenUsage || !terminal {
-			return fail(errors.New("Gemini response has no terminal usage"))
+			return fail(errors.New("gemini response has no terminal usage"))
 		}
 		c.Data(http.StatusOK, "application/json", raw)
 	} else {
@@ -153,7 +153,7 @@ func (s *OpenAIGatewayService) finishNewAPIProviderGemini(ctx context.Context, c
 			return fail(err)
 		}
 		if !seenUsage || !terminal {
-			return fail(errors.New("Gemini stream ended without terminal usage"))
+			return fail(errors.New("gemini stream ended without terminal usage"))
 		}
 	}
 	result.PerformanceOutcome = relaymetrics.Success

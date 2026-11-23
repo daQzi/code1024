@@ -53,7 +53,7 @@ func (r *modelPlazaMetricsRepository) ReadModelPerformanceVersion(ctx context.Co
 	if err != nil {
 		return "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	digest := sha256.New()
 	encoder := json.NewEncoder(digest)
 	for rows.Next() {

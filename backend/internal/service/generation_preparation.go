@@ -175,7 +175,7 @@ func (s *NewAPIPluginService) officialUploadDo(account *Account, value *generati
 		if resp == nil || resp.Body == nil {
 			return nil, errors.New("reference-upload returned no response")
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		stop := context.AfterFunc(opCtx, func() { _ = resp.Body.Close() })
 		defer stop()
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -248,14 +248,14 @@ func (s *NewAPIPluginService) prepareTaskFiles(ctx context.Context, account *Acc
 			return err
 		}
 		err = func() error {
-			defer spool.Close()
+			defer func() { _ = spool.Close() }()
 			_, reader, err := session.openFile(ctx, file.Ref)
 			if err != nil {
 				return &officialupload.Permanent{Reason: "bound reference file is unavailable"}
 			}
 			stop := context.AfterFunc(ctx, func() { _ = reader.Close() })
 			defer stop()
-			defer reader.Close()
+			defer func() { _ = reader.Close() }()
 			hasher := sha256.New()
 			n, err := io.CopyBuffer(io.MultiWriter(spool, hasher), io.LimitReader(reader, file.File.Size+1), make([]byte, 32<<10))
 			if err != nil || n != file.File.Size || hex.EncodeToString(hasher.Sum(nil)) != file.File.SHA256 {

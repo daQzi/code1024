@@ -69,7 +69,7 @@ func (r *generationTaskRepository) ListTaskLogs(ctx context.Context, f service.T
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	items := make([]service.TaskLog, 0)
 	for rows.Next() {
 		t, err := scanTaskLog(rows, false)
@@ -98,7 +98,7 @@ func (r *generationTaskRepository) GetTaskLog(ctx context.Context, id string, ow
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var event service.TaskLogEvent
 		if err := rows.Scan(&event.Type, &event.CreatedAt); err != nil {
@@ -189,7 +189,7 @@ func (r *generationTaskRepository) nativeVideoTaskEvents(ctx context.Context, t 
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var event service.TaskLogEvent
 		if err := rows.Scan(&event.Type, &event.CreatedAt); err != nil {

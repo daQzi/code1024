@@ -287,7 +287,7 @@ func (s *NewAPIPluginService) SaveRequestPluginInstance(ctx context.Context, inp
 	return saved, err
 }
 
-func (s *NewAPIPluginService) validateRequestPluginConfig(ctx context.Context, v *NewAPIPluginVersion, config json.RawMessage) (json.RawMessage, error) {
+func (s *NewAPIPluginService) validateRequestPluginConfig(ctx context.Context, v *NewAPIPluginVersion, config json.RawMessage) (json.RawMessage, error) { //nolint:unused // exercised by request plugin tests
 	return s.validateRequestPluginStageConfig(ctx, v, config, false, false)
 }
 
@@ -724,7 +724,7 @@ func (s *NewAPIPluginService) DryRunRequestPluginStage(ctx context.Context, vers
 	}
 	provider := (lateIngress || stage == "request" || stage == "outbound" || stage == "egress") && slices.Contains([]string{"openai", "openai_responses", "claude", "gemini"}, call.Format)
 	reply := stage == "reply" && slices.Contains([]string{"openai", "openai_responses", "claude", "gemini"}, call.Format)
-	if stage != "ingress" && !(stage == "egress" && call.Format == "task") && !provider && !reply || !slices.Contains(v.Capabilities.Hooks, hook) {
+	if stage != "ingress" && (stage != "egress" || call.Format != "task") && !provider && !reply || !slices.Contains(v.Capabilities.Hooks, hook) {
 		return RequestPluginOutcome{}, pluginInputError("试运行阶段或请求格式未支持")
 	}
 	config, err = s.validateRequestPluginStageConfig(ctx, v, config, stage == "egress", reply)

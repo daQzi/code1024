@@ -230,14 +230,14 @@ func (s *NewAPIPluginService) buildProviderRequestWithMultipart(ctx context.Cont
 		return nil, errors.New("cannot load Provider version")
 	}
 	if !version.Enabled || !AssessPluginHost(version.Meta, version.Capabilities).Runnable || account.Type != AccountTypeAPIKey || account.Platform != PlatformOpenAI {
-		return nil, errors.New("Provider version is disabled or account type is unsupported")
+		return nil, errors.New("provider version is disabled or account type is unsupported")
 	}
 	binding := pluginProviderBinding(version.Meta, version.Capabilities)
 	if !binding.supports(path, model) {
-		return nil, errors.New("Provider does not support this endpoint and model")
+		return nil, errors.New("provider does not support this endpoint and model")
 	}
 	if s.gateway == nil || s.gateway.httpUpstream == nil {
-		return nil, errors.New("Provider HTTP service is unavailable")
+		return nil, errors.New("provider HTTP service is unavailable")
 	}
 	account, err = s.providerCredentialAccount(ctx, account)
 	if err != nil {
@@ -245,17 +245,17 @@ func (s *NewAPIPluginService) buildProviderRequestWithMultipart(ctx context.Cont
 	}
 	base, err := s.gateway.validateUpstreamBaseURL(account.GetCredential("base_url"))
 	if err != nil {
-		return nil, errors.New("Provider base URL is invalid")
+		return nil, errors.New("provider base URL is invalid")
 	}
 	key := account.GetCredential("api_key")
 	if _, credential := jsplugin.ParseCredential(key); credential {
-		return nil, errors.New("Provider login credentials are not yet supported")
+		return nil, errors.New("provider login credentials are not yet supported")
 	}
 	config := json.RawMessage(`{}`)
 	if sealed := account.GetCredential(newAPIPluginConfigEncryptedKey); sealed != "" {
 		plain, err := s.encryptor.Decrypt(sealed)
 		if err != nil {
-			return nil, errors.New("cannot decrypt Provider configuration")
+			return nil, errors.New("cannot decrypt provider configuration")
 		}
 		config = json.RawMessage(plain)
 	}
@@ -266,7 +266,7 @@ func (s *NewAPIPluginService) buildProviderRequestWithMultipart(ctx context.Cont
 	})
 	configCancel()
 	if err != nil {
-		return nil, errors.New("Provider configuration is invalid")
+		return nil, errors.New("provider configuration is invalid")
 	}
 	// Retries retain the original connection, source and validated config.
 	// A concurrent account edit or plugin switch only affects new requests.
@@ -321,11 +321,11 @@ func (s *NewAPIPluginService) buildPinnedProviderRequest(ctx context.Context, ac
 	routes := version.Meta.ChannelRelayConfig(config)
 	route, ok := routes.MatchPathForModel(path, model)
 	if !ok {
-		return nil, errors.New("Provider route is unavailable")
+		return nil, errors.New("provider route is unavailable")
 	}
 	if rawHeaders, socketHandshake := ctx.Value(newAPIResponsesHandshakeKey{}).(map[string]string); socketHandshake {
 		if path != newAPIProviderResponses || !route.IsNative() || !newAPIProviderRouteSupported(route) {
-			return nil, errors.New("Provider Responses WebSocket requires a native route")
+			return nil, errors.New("provider Responses WebSocket requires a native route")
 		}
 		exchange.hookCtx = jsplugin.HookContext{BaseURL: base, Path: path, Config: config, Token: token}
 		var headers map[string]string
@@ -383,7 +383,7 @@ func (s *NewAPIPluginService) buildPinnedProviderRequest(ctx context.Context, ac
 		original := contract.AdvancedCustomConfig{Routes: version.Meta.Relay}
 		rawRoute, rawOK := original.MatchPathForModel(path, model)
 		if !ok || !rawOK || !newAPIProviderRouteSupported(rawRoute) {
-			return errors.New("Provider route requires an unsupported converter")
+			return errors.New("provider route requires an unsupported converter")
 		}
 		_, exchange.convert = jsplugin.SplitProviderConverter(rawRoute.Converter)
 		exchange.hookCtx = jsplugin.HookContext{BaseURL: base, Path: path, Config: config, Token: token}
@@ -401,13 +401,13 @@ func (s *NewAPIPluginService) buildPinnedProviderRequest(ctx context.Context, ac
 			}
 			values, err := client.Typed(ctx, nil, "CallConvertRequest", exchange.hookCtx, convertInput)
 			if err != nil {
-				return errors.New("Provider request conversion failed")
+				return errors.New("provider request conversion failed")
 			}
 			if len(values) != 1 || json.Unmarshal(values[0], &step) != nil {
 				return errors.New("invalid Provider converted request")
 			}
 			if step.NativeResponse && step.Stream != nil && *step.Stream && !exchange.stream {
-				return errors.New("Provider conversion requires an unsupported transport or stream mode change")
+				return errors.New("provider conversion requires an unsupported transport or stream mode change")
 			}
 			if socket := step.WebSocket; socket != nil {
 				exchange.socket = socket
@@ -415,7 +415,7 @@ func (s *NewAPIPluginService) buildPinnedProviderRequest(ctx context.Context, ac
 				step.Method, step.Path, step.URL, step.Headers = http.MethodGet, socket.Path, providerWebSocketHTTPURL(socket.URL), socket.Headers
 			}
 			if len(step.State) > MaxRequestPluginBody {
-				return errors.New("Provider conversion state exceeds limit")
+				return errors.New("provider conversion state exceeds limit")
 			}
 			var matErr error
 			body, wireContentType, formOrFile, matErr = materializeProviderStepBody(step, mp)
@@ -487,7 +487,7 @@ func (s *NewAPIPluginService) buildProviderStepWithContentType(ctx context.Conte
 	}
 	if !formOrFile && step.ContentType != "" {
 		if !newAPIProviderJSONContentType(step.ContentType) {
-			return errors.New("Provider conversion requires JSON content type")
+			return errors.New("provider conversion requires JSON content type")
 		}
 		req.Header.Set("Content-Type", step.ContentType)
 	} else if !formOrFile && wireContentType != "" {
@@ -501,7 +501,7 @@ func (s *NewAPIPluginService) buildProviderStepWithContentType(ctx context.Conte
 	}
 	for name, value := range step.Headers {
 		if newAPIProviderProtectedHeader(route, name) {
-			return errors.New("Provider conversion changed a protected header")
+			return errors.New("provider conversion changed a protected header")
 		}
 		req.Header.Set(name, value)
 	}
@@ -565,11 +565,11 @@ func (s *NewAPIPluginService) buildProviderStepWithContentType(ctx context.Conte
 		// signRequest cannot perform fetch, as required by the Provider API.
 		values, err := client.Typed(ctx, nil, "CallSignRequest", providerCredentialContext(account, base, config, token), req.Method, req.URL.String(), pluginResponseHeaders(req.Header), hex.EncodeToString(digest[:]))
 		if err != nil {
-			return errors.New("Provider signing failed")
+			return errors.New("provider signing failed")
 		}
 		var signed jsplugin.SignResult
 		if len(values) != 1 || json.Unmarshal(values[0], &signed) != nil {
-			return errors.New("invalid Provider signature")
+			return errors.New("invalid provider signature")
 		}
 		for name, value := range signed.Headers {
 			req.Header.Set(name, value)
@@ -582,10 +582,10 @@ func (s *NewAPIPluginService) buildProviderStepWithContentType(ctx context.Conte
 	}
 	hosts := append(slices.Clone(version.Meta.AllowedHosts), client.Meta.ChannelConfig.URLHosts(config)...)
 	if err := jsplugin.ValidateRequestURL(req.URL.String(), base, hosts); err != nil {
-		return errors.New("Provider target host is not allowed")
+		return errors.New("provider target host is not allowed")
 	}
 	if _, err := s.gateway.validateOutboundURL(req.URL.String()); err != nil || req.URL.User != nil || req.URL.Fragment != "" || len(req.URL.String()) > 8192 {
-		return errors.New("Provider target URL is invalid")
+		return errors.New("provider target URL is invalid")
 	}
 	if err := jsplugin.ValidateRequestHeaders(pluginResponseHeaders(req.Header)); err != nil {
 		return errors.New("invalid Provider request headers")
@@ -653,11 +653,11 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 	// These accounts cannot fall through to Codex/native protocol heuristics.
 	if s.newAPIPlugins == nil || (!gemini && path != newAPIProviderChat && path != newAPIProviderResponses && path != newAPIProviderMessages && path != newAPIProviderEmbeddings) || isOpenAIResponsesCompactPath(c) {
 		writeNewAPIProviderError(c, path, http.StatusServiceUnavailable, "plugin_unavailable", "", "Provider endpoint is not available")
-		return nil, errors.New("Provider endpoint unavailable")
+		return nil, errors.New("provider endpoint unavailable")
 	}
 	if len(body) > MaxRequestPluginBody {
 		writeNewAPIProviderError(c, path, http.StatusRequestEntityTooLarge, "invalid_request_error", "", "Provider JSON request exceeds 1 MiB")
-		return nil, errors.New("Provider request body exceeds limit")
+		return nil, errors.New("provider request body exceeds limit")
 	}
 	if err := pkghttputil.ReserveRequestBodyMemory(ctx, newAPIProviderMemory); err != nil {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
@@ -668,7 +668,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 	if !validNewAPIProviderJSON(body) || model == "" || !account.SupportsNewAPIProviderModel(path, model) || !account.newAPIProviderBinding().supports(path, modelmodifier.Base(upstreamModel)) {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
 		writeNewAPIProviderError(c, path, http.StatusBadRequest, "invalid_request_error", "", "Provider does not support this endpoint and model")
-		return nil, errors.New("Provider model or endpoint mismatch")
+		return nil, errors.New("provider model or endpoint mismatch")
 	}
 	modifiers, err := modelmodifier.Resolve(model, upstreamModel)
 	if err != nil {
@@ -679,7 +679,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 	if path == newAPIProviderEmbeddings && (modifiers.HasControls() || gjson.GetBytes(body, "stream").Bool()) {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
 		writeNewAPIProviderError(c, path, http.StatusBadRequest, "invalid_request_error", "", "Embeddings do not accept generation modifiers or streaming")
-		return nil, errors.New("Provider embeddings generation controls are unsupported")
+		return nil, errors.New("provider embeddings generation controls are unsupported")
 	}
 	body, err = modifiers.ApplyForFormat(body, newAPIProviderFormat(path))
 	if err != nil {
@@ -693,12 +693,12 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 	if IsImageGenerationIntent(path, upstreamModel, body) || slices.ContainsFunc(gjson.GetBytes(body, "modalities").Array(), func(v gjson.Result) bool { return v.String() == "audio" }) {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
 		writeNewAPIProviderError(c, path, http.StatusBadRequest, "invalid_request_error", "", "Provider relay currently supports text output only")
-		return nil, errors.New("Provider generated media output is not yet supported")
+		return nil, errors.New("provider generated media output is not yet supported")
 	}
 	if restriction := s.detectCodexClientRestriction(c, account, body); restriction.Enabled && !restriction.Matched {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
 		writeNewAPIProviderError(c, path, http.StatusForbidden, "permission_error", "", "This account only allows Codex official clients")
-		return nil, errors.New("Provider account client restriction")
+		return nil, errors.New("provider account client restriction")
 	}
 	upstreamBody := body
 	if !gemini {
@@ -765,7 +765,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
 		}
 		writeNewAPIProviderError(c, path, http.StatusServiceUnavailable, "plugin_unavailable", "", "Provider request preparation is unavailable")
-		return nil, fmt.Errorf("Provider setup: %w", err)
+		return nil, fmt.Errorf("provider setup: %w", err)
 	}
 	var reply *providerReplySession
 	upstreamCtx, reply, err = s.newAPIPlugins.beginProviderReply(upstreamCtx, c, account, upstreamModel)
@@ -866,7 +866,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 		continuationStarted = true
 		if followups >= newAPIProviderMaxFollowups {
 			writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider exceeded its chained request limit")
-			return nil, errors.New("Provider exceeded 32 follow-up requests")
+			return nil, errors.New("provider exceeded 32 follow-up requests")
 		}
 		_ = resp.Body.Close()
 		if err := waitProviderFollowup(upstreamCtx, exchange.followup.Delay); err != nil {
@@ -900,11 +900,11 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 		}
 		if resp.StatusCode < 400 {
 			writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider returned an unexpected redirect")
-			return nil, errors.New("Provider redirect rejected")
+			return nil, errors.New("provider redirect rejected")
 		}
 		if gemini {
 			writeNewAPIProviderError(c, path, resp.StatusCode, "upstream_error", "", "Provider Gemini request failed")
-			return nil, errors.New("Provider Gemini upstream rejected request")
+			return nil, errors.New("provider Gemini upstream rejected request")
 		}
 		if path == newAPIProviderMessages {
 			return s.handleAnthropicErrorResponse(resp, c, account, upstreamModel)
@@ -913,7 +913,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 	}
 	if stream && !isEventStreamResponse(resp.Header) {
 		writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider did not return an SSE stream")
-		return nil, errors.New("Provider stream content type mismatch")
+		return nil, errors.New("provider stream content type mismatch")
 	}
 	convertedStream, _ := resp.Body.(*newAPIProviderStream)
 	var toolStream *newAPIProviderToolStream
@@ -946,7 +946,7 @@ func (s *OpenAIGatewayService) forwardNewAPIProvider(ctx context.Context, c *gin
 		}
 		if !valid {
 			writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider returned an invalid or failed response")
-			return nil, errors.New("Provider response protocol mismatch")
+			return nil, errors.New("provider response protocol mismatch")
 		}
 		if err := toolUsage.observe(path, responseBody, false); err != nil {
 			writeNewAPIProviderError(c, path, http.StatusBadGateway, "upstream_error", "", "Provider tool usage could not be priced")

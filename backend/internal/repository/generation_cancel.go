@@ -11,7 +11,7 @@ func (r *generationTaskRepository) CancelQueuedTask(ctx context.Context, id stri
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	const identity = `id=$1 AND user_id=$2 AND api_key_id=$3 AND group_id=$4 AND plugin_version_id>0 AND public_deleted_at IS NULL`
 	current, err := scanGenerationTask(tx.QueryRowContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE `+identity+` FOR UPDATE`, id, user, key, group))
 	if err != nil {
@@ -50,7 +50,7 @@ func (r *generationTaskRepository) ConfirmUpstreamCancelTask(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	const identity = `id=$1 AND user_id=$2 AND api_key_id=$3 AND group_id=$4 AND plugin_version_id>0 AND public_deleted_at IS NULL`
 	current, err := scanGenerationTask(tx.QueryRowContext(ctx, `SELECT `+prefixGenerationColumns("")+` FROM sub2api_generation_tasks WHERE `+identity+` FOR UPDATE`, id, user, key, group))
 	if err != nil {

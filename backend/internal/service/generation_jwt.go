@@ -115,7 +115,7 @@ func (s *NewAPIPluginService) exchangeTaskJWT(ctx context.Context, account *Acco
 	if err != nil {
 		return fail()
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = resp.Body.Close() })
 	defer stop()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

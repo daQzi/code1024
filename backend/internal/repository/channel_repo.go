@@ -533,7 +533,7 @@ func (r *channelRepository) GetGroupPlatforms(ctx context.Context, groupIDs []in
 	if err != nil {
 		return nil, fmt.Errorf("get group platforms: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
+	defer func() { _ = rows.Close() }() //nolint:errcheck
 
 	result := make(map[int64]string, len(groupIDs))
 	for rows.Next() {

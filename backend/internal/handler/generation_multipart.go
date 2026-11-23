@@ -45,9 +45,9 @@ func (h *OpenAIGatewayHandler) readTaskMultipart(c *gin.Context, key *service.AP
 	}
 	controller := http.NewResponseController(c.Writer)
 	_ = controller.SetReadDeadline(time.Now().Add(60 * time.Second))
-	defer controller.SetReadDeadline(time.Time{})
+	defer func() { _ = controller.SetReadDeadline(time.Time{}) }()
 	readCtx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
-	defer c.Request.Body.Close()
+	defer func() { _ = c.Request.Body.Close() }()
 	ctx, body, cleanup, err := h.generations.ReadVideoMultipart(readCtx, key, c.GetHeader("Content-Type"), c.Request.Body)
 	_ = controller.SetReadDeadline(time.Time{})
 	if err != nil {

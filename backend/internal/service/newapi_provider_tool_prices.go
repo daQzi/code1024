@@ -111,7 +111,8 @@ func (s *NewAPIPluginService) loadProviderToolPrices(ctx context.Context, force 
 			if result.Err != nil {
 				return providerToolPricesSnapshot{}, result.Err
 			}
-			return result.Val.(providerToolPricesSnapshot).clone(), nil
+			value, _ := result.Val.(providerToolPricesSnapshot)
+			return value.clone(), nil
 		}
 	}
 }

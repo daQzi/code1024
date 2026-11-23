@@ -18,7 +18,7 @@ import (
 // The caller holds the shared Provider memory reservation throughout this read.
 func (s *NewAPIPluginService) collectProviderStreamJSON(ctx context.Context, exchange *newAPIProviderExchange, resp *http.Response, sse bool) error {
 	stream := newNewAPIProviderStream(ctx, s, exchange, resp.Body, sse)
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 	var chunks bytes.Buffer
 	chunked := false
 	contentType := ""
@@ -56,11 +56,11 @@ func (s *NewAPIPluginService) collectProviderStreamJSON(ctx context.Context, exc
 			return err
 		}
 		if len(output.Events) > 0 {
-			return errors.New("Provider JSON clients require a body or chunks, not events")
+			return errors.New("provider JSON clients require a body or chunks, not events")
 		}
 		if output.HasBody {
 			if chunked {
-				return errors.New("Provider body cannot follow chunks")
+				return errors.New("provider body cannot follow chunks")
 			}
 			body, contentType = output.Body, output.ContentType
 			if contentType == "" {
@@ -75,18 +75,18 @@ func (s *NewAPIPluginService) collectProviderStreamJSON(ctx context.Context, exc
 			// This public entry only serves Chat/Responses JSON, so binary
 			// chunks are still unsupported even though the typed codec has them.
 			if !newAPIProviderJSONContentType(contentType) {
-				return errors.New("Provider collected chunks must keep a JSON content type")
+				return errors.New("provider collected chunks must keep a JSON content type")
 			}
 			for _, chunk := range output.Chunks {
 				if len(chunk) > MaxRequestPluginBody-chunks.Len() {
-					return errors.New("Provider collected body exceeds limit")
+					return errors.New("provider collected body exceeds limit")
 				}
-				chunks.Write(chunk)
+				_, _ = chunks.Write(chunk)
 			}
 		}
 		if done {
 			if !chunked {
-				return errors.New("Provider stream ended without a JSON body")
+				return errors.New("provider stream ended without a JSON body")
 			}
 			body = chunks.Bytes()
 			break
@@ -96,7 +96,7 @@ func (s *NewAPIPluginService) collectProviderStreamJSON(ctx context.Context, exc
 		return err
 	}
 	if !newAPIProviderJSONContentType(contentType) || len(body) > MaxRequestPluginBody || !utf8.Valid(body) || !gjson.ValidBytes(body) || !newAPIProviderUnambiguousJSON(gjson.ParseBytes(body), 0) {
-		return errors.New("Provider collected response must be bounded unambiguous JSON")
+		return errors.New("provider collected response must be bounded unambiguous JSON")
 	}
 	resp.Body = io.NopCloser(bytes.NewReader(body))
 	resp.Header = resp.Header.Clone()

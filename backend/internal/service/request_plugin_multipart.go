@@ -178,10 +178,10 @@ func ParseRequestPluginMultipart(contentType string, raw []byte) (*RequestPlugin
 		values[field.name] = append(values[field.name], field.value)
 	}
 	var view bytes.Buffer
-	view.WriteByte('{')
+	_ = view.WriteByte('{')
 	for idx, name := range names {
 		if idx > 0 {
-			view.WriteByte(',')
+			_ = view.WriteByte(',')
 		}
 		keyRaw, err := json.Marshal(name)
 		if err != nil {
@@ -196,11 +196,11 @@ func ParseRequestPluginMultipart(contentType string, raw []byte) (*RequestPlugin
 		if err != nil {
 			return nil, ErrRequestPluginMultipartInvalid
 		}
-		view.Write(keyRaw)
-		view.WriteByte(':')
-		view.Write(valRaw)
+		_, _ = view.Write(keyRaw)
+		_ = view.WriteByte(':')
+		_, _ = view.Write(valRaw)
 	}
-	view.WriteByte('}')
+	_ = view.WriteByte('}')
 	if view.Len() > MaxRequestPluginBody {
 		return nil, ErrRequestPluginMultipartTooLarge
 	}

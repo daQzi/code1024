@@ -166,7 +166,7 @@ func (r *RequestPluginHTTPReport) RecordWSEvent(event []byte) {
 		return
 	}
 	payload := bytes.TrimSpace(event)
-	if bytes.IndexAny(payload, "\r\n") >= 0 {
+	if bytes.ContainsAny(payload, "\r\n") {
 		var compacted bytes.Buffer
 		if err := json.Compact(&compacted, payload); err == nil {
 			payload = compacted.Bytes()
@@ -620,9 +620,10 @@ func relayReportEvents(body []byte, truncated bool) ([]relayReportEvent, bool) {
 			}
 			field, value, _ := strings.Cut(line, ":")
 			value = strings.TrimPrefix(value, " ")
-			if field == "event" {
+			switch field {
+			case "event":
 				event.Event = value
-			} else if field == "data" {
+			case "data":
 				lines = append(lines, value)
 			}
 		}

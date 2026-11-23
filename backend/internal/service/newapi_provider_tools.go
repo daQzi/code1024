@@ -74,13 +74,13 @@ func (u *newAPIProviderToolUsage) admitRequest(body []byte) error {
 	}
 	admit := func(kind string) error {
 		if _, found := u.lookup(kind); !found {
-			return errors.New("Provider hosted tools require an explicit tool price")
+			return errors.New("provider hosted tools require an explicit tool price")
 		}
 		return nil
 	}
 	strategy, dashEnabled, _, dashOK := provider.ParseDashScopeSearchStrategy(body)
 	if !dashOK {
-		return errors.New("Provider DashScope search configuration is unsupported")
+		return errors.New("provider DashScope search configuration is unsupported")
 	}
 	if dashEnabled {
 		if err := admit(strategy); err != nil {
@@ -91,7 +91,7 @@ func (u *newAPIProviderToolUsage) admitRequest(body []byte) error {
 		if provider.IsGLMSearchTool(tool) {
 			engine, enabled, _, ok := provider.ParseGLMSearchEngine(tool)
 			if !ok {
-				return errors.New("Provider GLM web_search configuration is unsupported")
+				return errors.New("provider GLM web_search configuration is unsupported")
 			}
 			if enabled {
 				if err := admit(engine); err != nil {
@@ -135,11 +135,11 @@ func (u *newAPIProviderToolUsage) add(counts map[string]int) error {
 		return nil
 	}
 	if u == nil {
-		return errors.New("Provider tool accounting is unavailable")
+		return errors.New("provider tool accounting is unavailable")
 	}
 	for name, count := range counts {
 		if _, found := u.lookup(name); count > 0 && !found {
-			return errors.New("Provider tool requires an explicit price")
+			return errors.New("provider tool requires an explicit price")
 		}
 	}
 	return u.usage.Add(counts)

@@ -61,10 +61,10 @@ type newAPIProviderChainSpec struct {
 
 func (s *NewAPIPluginService) buildProviderFollowup(ctx context.Context, spec *newAPIProviderChainSpec, step jsplugin.ConvertedRequest, state json.RawMessage) (*newAPIProviderExchange, error) {
 	if spec == nil || step.WebSocket != nil || step.NativeResponse && step.Stream != nil && *step.Stream && !spec.stream {
-		return nil, errors.New("Provider chained transport is unsupported")
+		return nil, errors.New("provider chained transport is unsupported")
 	}
 	if len(state) > MaxRequestPluginBody {
-		return nil, errors.New("Provider chained body or state exceeds JSON limits")
+		return nil, errors.New("provider chained body or state exceeds JSON limits")
 	}
 	wireBody, wireContentType, formOrFile, err := materializeProviderStepBody(step, spec.multipart)
 	if err != nil {
@@ -76,7 +76,7 @@ func (s *NewAPIPluginService) buildProviderFollowup(ctx context.Context, spec *n
 	routes := spec.version.Meta.ChannelRelayConfig(spec.config)
 	route, ok := routes.MatchPathForModel(spec.path, spec.model)
 	if !ok {
-		return nil, errors.New("Provider chained route is unavailable")
+		return nil, errors.New("provider chained route is unavailable")
 	}
 	exchange := &newAPIProviderExchange{
 		source: spec.version.Source, convert: true, stream: spec.stream,
@@ -133,7 +133,7 @@ func waitProviderFollowup(ctx context.Context, delay time.Duration) error {
 	// The typed decoder already validates this; preserve the bound for host
 	// callers too, so direct calls cannot accidentally create a long wait.
 	if delay > 10*time.Second {
-		return errors.New("Provider chained delay exceeds limit")
+		return errors.New("provider chained delay exceeds limit")
 	}
 	timer := time.NewTimer(delay)
 	defer timer.Stop()

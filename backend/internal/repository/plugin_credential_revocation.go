@@ -16,7 +16,7 @@ func (r *newAPIPluginRepository) DuePluginCredentialRevocations(ctx context.Cont
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var ids []int64
 	for rows.Next() {
 		var id int64
@@ -34,7 +34,7 @@ func (r *newAPIPluginRepository) ClaimPluginCredentialRevocation(ctx context.Con
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var identity string
 	err = tx.QueryRowContext(ctx, `SELECT identity_fingerprint FROM sub2api_plugin_credential_revocations WHERE id=$1 AND status='pending' AND next_run_at<=NOW() AND (lease_until IS NULL OR lease_until<NOW()) FOR UPDATE`, id).Scan(&identity)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -101,7 +101,7 @@ func (r *newAPIPluginRepository) ListPluginCredentialRevocations(ctx context.Con
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	result := make([]service.PluginCredentialRevocation, 0)
 	for rows.Next() {
 		var job service.PluginCredentialRevocation

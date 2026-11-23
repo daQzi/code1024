@@ -69,9 +69,10 @@ func writeRequestPluginFailure(c *gin.Context, err error, format string) error {
 		c.Header("Retry-After", "1")
 	}
 	payload := gin.H{"error": gin.H{"type": "request_processing_error", "code": code, "message": failure.Error()}}
-	if format == "claude" {
+	switch format {
+	case "claude":
 		payload["type"] = "error"
-	} else if format == "gemini" {
+	case "gemini":
 		state := "UNAVAILABLE"
 		if failure.Rejected {
 			state = "PERMISSION_DENIED"
@@ -184,12 +185,13 @@ func (s *NewAPIPluginService) relayRequestPluginStages(ctx context.Context, acco
 	}
 	initialEffort := gjson.GetBytes(clientBody, "reasoning_effort").String()
 	initialReasoning := initialEffort != ""
-	if format == "openai_responses" {
+	switch format {
+	case "openai_responses":
 		initialEffort = gjson.GetBytes(clientBody, "reasoning.effort").String()
 		initialReasoning = initialEffort != ""
-	} else if format == "claude" {
+	case "claude":
 		initialEffort, initialReasoning = requestpatch.ClaudeReasoningEffort(clientBody)
-	} else if format == "gemini" {
+	case "gemini":
 		initialEffort, initialReasoning = requestpatch.GeminiReasoningEffort(clientBody)
 		if plan.call.Format == "claude" {
 			initialEffort, initialReasoning = requestpatch.ClaudeReasoningEffort(clientBody)
@@ -289,11 +291,12 @@ func (s *NewAPIPluginService) relayRequestPluginStages(ctx context.Context, acco
 				class = "invalid_effect"
 				var effects []requestpatch.Effect
 				allowed := []string{}
-				if stage == "request" {
+				switch stage {
+				case "request":
 					allowed = []string{requestpatch.EffectReasoningSet}
-				} else if stage == "ingress" {
+				case "ingress":
 					allowed = []string{requestpatch.EffectJSONPatch, requestpatch.EffectMediaText}
-				} else if stage == "outbound" {
+				case "outbound":
 					allowed = []string{requestpatch.EffectJSONPatch, requestpatch.EffectHeaderPatch, requestpatch.EffectMediaText, requestpatch.EffectMediaReencode}
 				}
 				if len(result.Effects) > 0 {

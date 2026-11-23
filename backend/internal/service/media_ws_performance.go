@@ -137,7 +137,7 @@ func mediaWSTerminal(body []byte, platform string) relaymetrics.Outcome {
 			return relaymetrics.Failure
 		}
 	}
-	if status != "completed" && !(platform == PlatformGrok && status == "" && gjson.GetBytes(body, "type").String() == "response.done") {
+	if status != "completed" && (platform != PlatformGrok || status != "" || gjson.GetBytes(body, "type").String() != "response.done") {
 		return relaymetrics.Failure
 	}
 	return relaymetrics.Terminal(body)

@@ -50,7 +50,7 @@ type PluginPricingSummaryRepository interface {
 
 func (s *NewAPIPluginService) DeleteVersion(ctx context.Context, id int64) (*PluginDeleteResult, error) {
 	if s == nil || s.repo == nil {
-		return nil, errors.New("New API plugin service is disabled")
+		return nil, errors.New("new API plugin service is disabled")
 	}
 	if id <= 0 {
 		return nil, pluginInputError("插件版本 ID 无效")
@@ -97,7 +97,7 @@ func (s *NewAPIPluginService) DeleteVersion(ctx context.Context, id int64) (*Plu
 
 func (s *NewAPIPluginService) DryRunInstalledVersion(ctx context.Context, id int64, hook string, args []json.RawMessage) (*PluginPlaygroundResult, error) {
 	if s == nil || s.repo == nil {
-		return nil, errors.New("New API plugin service is disabled")
+		return nil, errors.New("new API plugin service is disabled")
 	}
 	if id <= 0 {
 		return nil, pluginInputError("插件版本 ID 无效")
@@ -138,7 +138,7 @@ func (s *NewAPIPluginService) DryRunInstalledVersion(ctx context.Context, id int
 
 func (s *NewAPIPluginService) ListAccountPricing(ctx context.Context, pluginKey string) ([]PluginAccountPricingSummary, error) {
 	if s == nil || s.repo == nil {
-		return nil, errors.New("New API plugin service is disabled")
+		return nil, errors.New("new API plugin service is disabled")
 	}
 	if !jsplugin.ValidPluginKey(pluginKey) {
 		return nil, pluginInputError("插件 key 无效")
