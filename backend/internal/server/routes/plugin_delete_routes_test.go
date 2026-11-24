@@ -127,6 +127,17 @@ export function ingress(req) { return { count: req.n }; }`
 		require.Contains(t, w.Body.String(), "not available in the offline playground")
 	})
 
+	t.Run("POST /versions/:id/dry-run requires step-up auth", func(t *testing.T) {
+		allowStepUp = false
+		defer func() { allowStepUp = true }()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/newapi-plugins/versions/7/dry-run", bytes.NewBufferString(`{"hook":"ingress","args":[{"n":8}]}`))
+		req.Header.Set("x-api-key", key)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		require.Equal(t, http.StatusForbidden, w.Code)
+	})
+
 	t.Run("POST /versions/:id/dry-run executes retained source offline", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/newapi-plugins/versions/7/dry-run", bytes.NewBufferString(`{"hook":"ingress","args":[{"n":8}]}`))
 		req.Header.Set("x-api-key", key)
@@ -148,6 +159,7 @@ export function ingress(req) { return { count: req.n }; }`
 	})
 
 	t.Run("DELETE /versions/:id requires step-up auth and deletes custom version", func(t *testing.T) {
+		beforeDeleteStepUps := stepUps
 		allowStepUp = false
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/newapi-plugins/versions/7", nil)
 		req.Header.Set("x-api-key", key)
@@ -163,6 +175,6 @@ export function ingress(req) { return { count: req.n }; }`
 		r.ServeHTTP(w, req)
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		require.EqualValues(t, 7, repo.deleted)
-		require.Equal(t, 2, stepUps)
+		require.Equal(t, beforeDeleteStepUps+2, stepUps)
 	})
 }

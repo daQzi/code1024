@@ -26,7 +26,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
-import { PluginCenter, ProviderToolPricePanel, type PluginCenterClient, type ProviderToolPriceClient, type RunPluginMutation } from '../../../packages/newapi-ui/src'
+import { PluginCenter, ProviderToolPricePanel, type PluginCenterClient, type PluginTranslator, type ProviderToolPriceClient, type RunPluginMutation } from '../../../packages/newapi-ui/src'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import PluginCredentialCleanupPanel from '@/components/admin/PluginCredentialCleanupPanel.vue'
@@ -38,7 +38,7 @@ import { useStepUp, isStepUpCancelled } from '@/composables/useStepUp'
 import { activateNewAPIPlugin, installNewAPIPlugin, listNewAPIPlugins, listNewAPIPluginVersions, restorePluginFactory, getProviderToolPrices, saveProviderToolPrices, deleteNewAPIPluginVersion, dryRunNewAPIPluginVersion, getNewAPIPluginPricing } from '@/api/admin/newapiPlugins'
 
 const { t, locale } = useI18n()
-const translate = (key: string) => t(key)
+const translate: PluginTranslator = (key, values) => (values ? t(key, values) : t(key))
 const stepUp = useStepUp()
 const runMutation: RunPluginMutation = action => stepUp.run(action)
 const client: PluginCenterClient = { list: listNewAPIPlugins, versions: listNewAPIPluginVersions, install: installNewAPIPlugin, activate: activateNewAPIPlugin, restore: restorePluginFactory, remove: deleteNewAPIPluginVersion, dryRun: dryRunNewAPIPluginVersion, pricing: getNewAPIPluginPricing }

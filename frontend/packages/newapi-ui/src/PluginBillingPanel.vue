@@ -4,7 +4,7 @@
       <PluginModelList :models="group.models" :limit="6" expandable :more-label="t('admin.plugins.detail.moreModels')" :collapse-label="t('admin.plugins.detail.collapse')" />
       <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-dark-700">
         <table class="w-full text-left text-xs"><thead class="bg-gray-50 text-gray-500 dark:bg-dark-900"><tr><th v-for="column in ['field', 'type', 'unit', 'enum', 'description']" :key="column" class="px-3 py-3 font-medium">{{ t(`admin.plugins.detail.${column}`) }}</th></tr></thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-dark-700"><tr v-for="(field, name) in group.schema" :key="name"><td class="px-3 py-3 font-mono">{{ name }}</td><td class="whitespace-nowrap px-3 py-3">{{ t(`admin.plugins.detail.${field.enum?.length ? 'string' : field.type || 'number'}`) }}</td><td class="whitespace-nowrap px-3 py-3">{{ localized(field.unitLabel) || (field.unit ? t(`admin.plugins.detail.units.${field.unit}`) : '—') }}</td><td class="max-w-64 px-3 py-3 font-mono">{{ field.enum?.map(value => localized(field.enumLabels?.[value]) ? `${value} → ${localized(field.enumLabels?.[value])}` : value).join(', ') || '—' }}</td><td class="min-w-40 px-3 py-3 leading-5">{{ localized(field.description) || '—' }}</td></tr></tbody>
+          <tbody class="divide-y divide-gray-200 dark:divide-dark-700"><tr v-for="(field, name) in group.schema" :key="name"><td class="px-3 py-3 font-mono">{{ name }}</td><td class="whitespace-nowrap px-3 py-3">{{ fieldType(field) }}</td><td class="whitespace-nowrap px-3 py-3">{{ fieldUnit(field) }}</td><td class="max-w-64 px-3 py-3 font-mono">{{ field.enum?.map(value => localized(field.enumLabels?.[value]) ? `${value} → ${localized(field.enumLabels?.[value])}` : value).join(', ') || '—' }}</td><td class="min-w-40 px-3 py-3 leading-5">{{ localized(field.description) || '—' }}</td></tr></tbody>
         </table>
       </div>
       <details v-if="group.examples?.length" class="text-xs text-gray-500"><summary class="cursor-pointer">{{ t('admin.plugins.detail.examples') }}</summary><div v-for="example in group.examples" :key="example.label" class="mt-2"><p>{{ example.label }}</p><pre class="overflow-auto rounded-lg bg-gray-50 p-3 dark:bg-dark-900">{{ JSON.stringify(example.facts, null, 2) }}</pre></div></details>
@@ -34,12 +34,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import PluginModelList from './PluginModelList.vue'
-import { localizedPluginText, pluginUsageGroups } from './pluginDisplay'
-import type { NewAPIPluginVersion, PluginAccountPricingSummary, PluginCenterClient, PluginTranslator } from './types'
+import { localizedPluginText, pluginUsageFieldTypeLabel, pluginUsageGroups, pluginUsageUnitLabel } from './pluginDisplay'
+import type { NewAPIPluginVersion, PluginAccountPricingSummary, PluginCenterClient, PluginTranslator, UsageFieldSchema } from './types'
 const props = defineProps<{ plugin: Pick<NewAPIPluginVersion, 'key' | 'meta'>; client: PluginCenterClient; t: PluginTranslator; locale: string }>()
+const knownPricingUnits = new Set(['request', 'second', 'token', 'credit', 'upstream_cost'])
 const groups = computed(() => pluginUsageGroups(props.plugin.meta))
 const localized = (value: Parameters<typeof localizedPluginText>[0]) => localizedPluginText(value, props.locale)
-const unit = (value?: string) => value ? props.t(`admin.plugins.js.units.${value}`) : '—'
+const fieldType = (field: UsageFieldSchema) => pluginUsageFieldTypeLabel(field, props.t)
+const fieldUnit = (field: UsageFieldSchema) => pluginUsageUnitLabel(field, props.t, props.locale) || '—'
+const unit = (value?: string) => !value ? '—' : knownPricingUnits.has(value) ? props.t(`admin.plugins.js.units.${value}`) : value
 const accounts = ref<PluginAccountPricingSummary[]>([])
 const loading = ref(false)
 const error = ref('')

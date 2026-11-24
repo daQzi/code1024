@@ -38,13 +38,13 @@
         <p class="text-xs leading-6 text-gray-500">{{ t('admin.plugins.js.versionNote') }}</p>
       </section>
       <slot v-else-if="tab === 'source' || tab === 'diff'" name="source" :mode="tab === 'source' ? 'source' : 'diff'" />
-      <PluginSandboxPanel v-else-if="tab === 'sandbox' && 'id' in plugin" :key="plugin.id" :plugin="plugin" :client="client" :t="t" :select-component="selectComponent" />
+      <PluginSandboxPanel v-else-if="tab === 'sandbox' && 'id' in plugin" :key="plugin.id" :plugin="plugin" :client="client" :t="t" :select-component="selectComponent" :editable="editable" :run-mutation="runMutation" :cancel-mutation="cancelMutation" :is-cancelled="isCancelled" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, type Component } from 'vue'
+import { computed, ref, useId, watch, type Component } from 'vue'
 import PluginBillingPanel from './PluginBillingPanel.vue'
 import PluginCopyButton from './PluginCopyButton.vue'
 import PluginEndpointsPanel from './PluginEndpointsPanel.vue'
@@ -57,6 +57,8 @@ const props = defineProps<{
   plugin: NewAPIPluginVersion | PluginFactory; factory?: PluginFactory; history: NewAPIPluginVersion[]; historyLoading: boolean
   client: PluginCenterClient; t: PluginTranslator; locale: string; editable: boolean; busy: boolean
   selectComponent?: Component; iconComponent?: Component; hasSource: boolean
+  runMutation?: (action: () => Promise<unknown>) => Promise<unknown>
+  cancelMutation?: () => void; isCancelled?: (error: unknown) => boolean
 }>()
 const emit = defineEmits<{ activate: [version: NewAPIPluginVersion, enabled?: boolean]; restore: [key: string]; remove: [version: NewAPIPluginVersion]; upload: [key: string] }>()
 defineSlots<{
@@ -79,6 +81,9 @@ function navigateTab(event: KeyboardEvent, current: string) {
 const localized = (value: Parameters<typeof localizedPluginText>[0]) => localizedPluginText(value, props.locale)
 const name = computed(() => localized(props.plugin.meta.name_i18n) || props.plugin.meta.name)
 const tabs = computed(() => ['overview', ...(props.plugin.capabilities.task || props.plugin.meta.usageProfiles?.length || Object.keys(props.plugin.meta.usageSchema ?? {}).length ? ['billing'] : []), ...(props.hasSource ? ['source'] : []), 'history', ...(props.hasSource ? ['diff'] : []), ...('id' in props.plugin && props.client.dryRun ? ['sandbox'] : [])])
+watch(tabs, available => {
+  if (!available.includes(tab.value)) tab.value = 'overview'
+})
 const website = computed(() => {
   try {
     const url = new URL(props.plugin.meta.website ?? '')

@@ -5,7 +5,7 @@
       <button type="button" class="btn btn-secondary btn-sm" @click="add">{{ t('admin.plugins.js.addPrice') }}</button>
     </div>
     <p class="input-hint">{{ t('admin.plugins.js.pricingHint') }}</p>
-    <datalist :id="`${uid}-models`"><option v-for="model in pluginMeta?.models ?? []" :key="model" :value="model" /></datalist>
+    <datalist :id="`${uid}-models`"><option v-for="model in concreteModels" :key="model" :value="model" /></datalist>
     <div v-for="(row, index) in rows" :key="row.id" class="space-y-3 rounded-lg bg-gray-50 p-3 dark:bg-dark-900">
       <div class="grid gap-3 sm:grid-cols-2">
         <label><span class="input-label">{{ t('admin.plugins.js.priceModel') }}</span><input v-model="row.model" class="input" placeholder="*" :list="`${uid}-models`" /></label>
@@ -31,7 +31,7 @@
           <div v-for="(field, name) in group.schema" :key="name" class="flex flex-wrap items-start gap-2 leading-5">
             <button v-if="row.mode === 'expression'" type="button" class="rounded-md bg-primary-50 px-2 py-0.5 font-mono text-primary-700 dark:bg-dark-700 dark:text-primary-300" :title="t('admin.plugins.detail.insertUsage')" @click="insertUsage(row, String(name))">{{ `u(${JSON.stringify(name)})` }}</button>
             <code v-else>{{ name }}</code>
-            <span class="text-gray-500">{{ localized(field.description) || t(`admin.plugins.detail.${field.enum?.length ? 'string' : field.type || 'number'}`) }}{{ field.unit ? ` · ${localized(field.unitLabel) || t(`admin.plugins.detail.units.${field.unit}`)}` : '' }}{{ field.enum?.length ? ` · ${field.enum.join(' / ')}` : '' }}</span>
+            <span class="text-gray-500">{{ localized(field.description) || fieldTypeLabel(field) }}{{ fieldUnitLabel(field) ? ` · ${fieldUnitLabel(field)}` : '' }}{{ field.enum?.length ? ` · ${field.enum.join(' / ')}` : '' }}</span>
           </div>
         </div>
       </details>
@@ -54,16 +54,25 @@
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Select from '@/components/common/Select.vue'
-import { localizedPluginText, pluginUsageGroups, type NewAPIPluginVersion } from '../../../packages/newapi-ui/src'
+import {
+  localizedPluginText,
+  pluginUsageFieldTypeLabel,
+  pluginUsageGroupsForModel,
+  pluginUsageUnitLabel,
+  type NewAPIPluginVersion,
+  type UsageFieldSchema
+} from '../../../packages/newapi-ui/src'
 const props = defineProps<{ value?: unknown; pluginMeta?: NewAPIPluginVersion['meta'] }>()
 const { t, locale } = useI18n()
 const uid = useId()
 const localized = (value: Parameters<typeof localizedPluginText>[0]) => localizedPluginText(value, locale?.value ?? 'en')
+const translate = (key: string) => t(key)
+const concreteModels = computed(() => (props.pluginMeta?.models ?? []).filter(model => !model.includes('*')))
+const fieldTypeLabel = (field: UsageFieldSchema) => pluginUsageFieldTypeLabel(field, translate)
+const fieldUnitLabel = (field: UsageFieldSchema) => pluginUsageUnitLabel(field, translate, locale?.value ?? 'en')
 function usageGroups(model: string) {
   if (!props.pluginMeta) return []
-  const groups = pluginUsageGroups(props.pluginMeta)
-  if (model.trim() === '*') return groups
-  return groups.filter(group => group.models.some(value => value.toLowerCase() === model.trim().toLowerCase()))
+  return pluginUsageGroupsForModel(props.pluginMeta, model)
 }
 function insertUsage(row: Row, name: string) {
   const field = `u(${JSON.stringify(name)})`

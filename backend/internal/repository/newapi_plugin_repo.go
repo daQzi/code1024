@@ -176,7 +176,7 @@ func (r *newAPIPluginRepository) DeleteVersion(ctx context.Context, id int64, is
 	}
 	var accountCount, instanceCount, taskCount, credStateCount, credRevocationCount int64
 	if err = tx.QueryRowContext(ctx, `SELECT
- (SELECT count(*) FROM accounts WHERE deleted_at IS NULL AND credentials->>'newapi_plugin_version_id'=($1::bigint)::text),
+ (SELECT count(*) FROM accounts WHERE deleted_at IS NULL AND credentials ? 'newapi_plugin_version_id' AND credentials->>'newapi_plugin_version_id'=($1::bigint)::text),
  (SELECT count(*) FROM sub2api_request_plugin_instances WHERE plugin_version_id=$1),
  (SELECT count(*) FROM sub2api_generation_tasks WHERE plugin_version_id=$1),
  (SELECT count(*) FROM sub2api_plugin_credential_state WHERE plugin_version_id=$1),
@@ -251,8 +251,8 @@ func (r *newAPIPluginRepository) ListPluginAccountPricing(ctx context.Context, p
  COALESCE(a.credentials->'newapi_video_pricing', '{}'::jsonb)
  FROM accounts a
  JOIN sub2api_js_plugin_versions v ON a.credentials->>'newapi_plugin_version_id'=v.id::text
- WHERE a.deleted_at IS NULL AND v.plugin_key=$1
- ORDER BY a.priority, a.id`, pluginKey)
+ WHERE a.deleted_at IS NULL AND a.credentials ? 'newapi_plugin_version_id' AND v.plugin_key=$1
+ ORDER BY a.priority, a.id LIMIT 256`, pluginKey)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (r *newAPIPluginRepository) ListPluginAccountPricing(ctx context.Context, p
 		item.PricingRules = make(map[string]service.GenerationPriceRule)
 		if len(pricingRaw) > 0 {
 			if err = json.Unmarshal(pricingRaw, &item.PricingRules); err != nil {
-				return nil, err
+				item.PricingRules = make(map[string]service.GenerationPriceRule)
 			}
 		}
 		result = append(result, item)

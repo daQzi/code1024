@@ -183,6 +183,19 @@ func TestNewAPIPluginDryRunInstalledVersion(t *testing.T) {
 		_, err := svc.DryRunInstalledVersion(context.Background(), 22, "extractUsage", []json.RawMessage{json.RawMessage(`{}`)})
 		require.Error(t, err)
 	})
+
+	t.Run("returns clean error when worker pool is nil", func(t *testing.T) {
+		svc := &NewAPIPluginService{
+			repo: &pluginDeleteTestRepo{
+				version: &NewAPIPluginVersion{ID: 23, Key: "sandbox-fixture", Version: "1.0.0", SHA256: digest, Source: src},
+			},
+		}
+		_, err := svc.DryRunInstalledVersion(context.Background(), 23, "extractUsage", []json.RawMessage{json.RawMessage(`{}`)})
+		require.ErrorContains(t, err, "new API plugin service is disabled")
+
+		_, err = svc.DryRunPlugin(context.Background(), PluginPlaygroundInput{Source: src, Hook: "extractUsage", Args: []json.RawMessage{json.RawMessage(`{}`)}})
+		require.ErrorContains(t, err, "new API plugin service is disabled")
+	})
 }
 
 func TestNewAPIPluginListAccountPricing(t *testing.T) {

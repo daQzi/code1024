@@ -52,6 +52,26 @@ describe('Task expression pricing configuration', () => {
     wrapper.unmount()
   })
 
+  it('matches prefix-wildcard models and custom mapped aliases without exposing wildcard patterns in datalist', async () => {
+    const wrapper = mount(NewAPIVideoPricingField, {
+      global: { stubs: { Select: SelectStub } },
+      props: {
+        value: { 'cc-seedance-1-0-pro': { mode: 'expression', expression: '', maximum: '10' } },
+        pluginMeta: {
+          name: 'Official5',
+          models: ['cc-seedance-*', 'concrete-video'],
+          usageSchema: { seconds: { type: 'number', unit: 'second' } },
+          usageProfiles: [{ models: ['cc-seedance-*'], schema: { duration: { type: 'number', unit: 'second' } } }]
+        }
+      }
+    })
+    expect(wrapper.findAll('datalist option').map(option => option.attributes('value'))).toEqual(['concrete-video'])
+    expect(wrapper.find('[data-usage-reference]').text()).toContain('duration')
+    await wrapper.find('input[list]').setValue('custom-mapped-alias')
+    expect(wrapper.find('[data-usage-reference]').text()).toContain('seconds')
+    wrapper.unmount()
+  })
+
   function expression(value: Record<string, unknown> = {}) {
     return mount(NewAPIVideoPricingField, { global: { stubs: { Select: SelectStub } }, props: { value: { '*': { mode: 'expression', expression: 'u("seconds") * 0.2', maximum: '10', ...value } } } })
   }

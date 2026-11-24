@@ -80,7 +80,8 @@ const requiresExplicitVideoModels = computed(() => {
   if (!selected.value?.compatibility?.kinds.includes('task')) return false
   const meta = selected.value.meta
   const video = meta.protocols?.find(protocol => protocol.name === 'openai_video')
-  return (video?.models?.length ? video.models : meta.models)?.includes('*') ?? false
+  const models = video?.models?.length ? video.models : meta.models
+  return !!models?.length && models.every(model => model.includes('*'))
 })
 const requiresLogin = computed(() => !!selected.value?.compatibility?.kinds.some(kind => kind === 'provider' || kind === 'task') && !!selected.value?.capabilities.hooks?.includes('login'))
 const fields = computed(() => selected.value?.meta.channelConfig?.properties ?? {})

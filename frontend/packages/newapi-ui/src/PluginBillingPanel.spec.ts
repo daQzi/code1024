@@ -22,6 +22,40 @@ describe('plugin billing metadata and configured prices', () => {
     wrapper.unmount()
   })
 
+  it('distinguishes plain string fields from enums and falls back cleanly on custom units', async () => {
+    const pricing = vi.fn().mockResolvedValue([
+      { account_id: 9, account_name: 'Custom unit account', version: '1.0.0', version_id: 3, status: 'active', schedulable: true, pricing_rules: { '*': { mode: 'fixed', unit: 'minute', unit_price: '0.5' } } }
+    ])
+    const wrapper = mount(PluginBillingPanel, {
+      props: {
+        plugin: {
+          key: 'fixture',
+          meta: {
+            name: 'Fixture',
+            models: ['video'],
+            usageSchema: {
+              note: { type: 'string', unit: 'character' },
+              frames: { type: 'integer', unit: 'frame' }
+            }
+          }
+        },
+        client: { pricing } as unknown as PluginCenterClient,
+        locale: 'en',
+        t: key => key
+      }
+    })
+    await flushPromises()
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows[0]!.text()).toContain('admin.plugins.detail.text')
+    expect(rows[0]!.text()).toContain('character')
+    expect(rows[0]!.text()).not.toContain('admin.plugins.detail.units.')
+    expect(rows[1]!.text()).toContain('integer')
+    expect(rows[1]!.text()).toContain('frame')
+    expect(wrapper.text()).toContain('$0.5 / minute')
+    expect(wrapper.text()).not.toContain('admin.plugins.js.units.minute')
+    wrapper.unmount()
+  })
+
   it('uses model-specific profiles without applying default fields to profiled models', () => {
     expect(pluginUsageGroups(meta)).toEqual([
       { models: ['video'], schema: meta.usageSchema, examples: undefined },

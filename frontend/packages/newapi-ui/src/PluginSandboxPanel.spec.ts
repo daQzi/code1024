@@ -40,4 +40,32 @@ describe('installed plugin offline sandbox', () => {
     expect(wrapper.find('pre').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('renders an empty-state hint when no offline hooks exist and suppresses cancelled step-up runs', async () => {
+    const loginOnly = { ...plugin, capabilities: { provider: true, hooks: ['login', 'scheduled'] } } as NewAPIPluginVersion
+    const emptyWrapper = mount(PluginSandboxPanel, { props: { plugin: loginOnly, client: { dryRun: vi.fn() } as unknown as PluginCenterClient, t: key => key } })
+    expect(emptyWrapper.find('[role="status"]').text()).toContain('admin.plugins.detail.noSandboxHooks')
+    expect(emptyWrapper.find('button').exists()).toBe(false)
+    emptyWrapper.unmount()
+
+    const dryRun = vi.fn()
+    const cancelError = new Error('step-up-cancelled')
+    const cancelMutation = vi.fn()
+    const wrapper = mount(PluginSandboxPanel, {
+      props: {
+        plugin,
+        client: { dryRun } as unknown as PluginCenterClient,
+        t: key => key,
+        runMutation: () => Promise.reject(cancelError),
+        cancelMutation,
+        isCancelled: error => error === cancelError
+      }
+    })
+    expect(cancelMutation).not.toHaveBeenCalled()
+    await wrapper.find('button').trigger('click')
+    await flushPromises()
+    expect(dryRun).not.toHaveBeenCalled()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

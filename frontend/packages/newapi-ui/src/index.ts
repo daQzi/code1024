@@ -3,7 +3,14 @@ export { default as PluginBillingPanel } from './PluginBillingPanel.vue'
 export { default as PluginEndpointsPanel } from './PluginEndpointsPanel.vue'
 export { default as PluginSandboxPanel } from './PluginSandboxPanel.vue'
 export { default as PluginModelList } from './PluginModelList.vue'
-export { localizedPluginText, pluginUsageGroups } from './pluginDisplay'
+export {
+  localizedPluginText,
+  matchesPluginModelPattern,
+  pluginUsageFieldTypeLabel,
+  pluginUsageGroups,
+  pluginUsageGroupsForModel,
+  pluginUsageUnitLabel
+} from './pluginDisplay'
 export type * from './types'
 export { default as PluginRegistryPanel } from './PluginRegistryPanel.vue'
 export { default as PluginMarketplacePanel } from './PluginMarketplacePanel.vue'

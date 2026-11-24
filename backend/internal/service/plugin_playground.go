@@ -57,6 +57,9 @@ func PluginDeveloperTemplates(actor int64) ([]PluginDeveloperTemplate, error) {
 // It has no account/config lookup, HTTP fetch, task creation or billing path.
 // This is a hook-output probe, not proof of production host compatibility.
 func (s *NewAPIPluginService) DryRunPlugin(ctx context.Context, input PluginPlaygroundInput) (*PluginPlaygroundResult, error) {
+	if s == nil || s.pool == nil {
+		return nil, errors.New("new API plugin service is disabled")
+	}
 	if len(input.Source) == 0 || len(input.Source) > runner.MaxSourceBytes || len(input.Args) > 4 {
 		return nil, pluginInputError("Invalid playground source or argument count")
 	}

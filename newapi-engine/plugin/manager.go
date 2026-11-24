@@ -90,7 +90,13 @@ func (m *Manager) Install(ctx context.Context, source, builtinKey string, actor 
 	if option.Origin != "" {
 		version.Origin = option.Origin
 	}
-	if option.ExpectedKey != "" && option.ExpectedKey != version.Key || option.ExpectedVersion != "" && option.ExpectedVersion != version.Version {
+	if option.ExpectedKey != "" && option.ExpectedKey != version.Key {
+		if option.ExpectedVersion == "" && !strings.HasPrefix(option.Origin, "market:") && !strings.HasPrefix(option.Origin, "community:") {
+			return nil, errors.New("上传的新版本必须使用当前插件的 key")
+		}
+		return nil, errors.New("插件名称或版本与市场条目不匹配")
+	}
+	if option.ExpectedVersion != "" && option.ExpectedVersion != version.Version {
 		return nil, errors.New("插件名称或版本与市场条目不匹配")
 	}
 	if builtinKey == "" && !option.AllowBuiltinOverride {

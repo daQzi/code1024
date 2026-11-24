@@ -126,4 +126,60 @@ describe('standalone plugin UI', () => {
     expect(wrapper.text()).toContain('Credential cleanup')
     wrapper.unmount()
   })
+
+  it('scopes dialog errors away from the main page, resets orphaned detail tabs, and exposes table actions', async () => {
+    const richVersion: NewAPIPluginVersion = {
+      ...version,
+      meta: { ...version.meta, usageSchema: { seconds: { type: 'number', unit: 'second' } } }
+    }
+    const plainFallback: NewAPIPluginVersion = {
+      ...version,
+      id: 6,
+      version: '0.9.0',
+      capabilities: { task: false, provider: true, transform: false },
+      compatibility: { runnable: true, kinds: ['provider'], warnings: [], blockers: [] },
+      meta: { name: 'Independent video driver', models: ['video-fixture'] }
+    }
+    const client = {
+      ...fixture(),
+      list: vi.fn().mockResolvedValue({ plugins: [richVersion], builtins: [], factories: [], baseline: 'fixture' }),
+      versions: vi.fn().mockResolvedValue([richVersion, plainFallback]),
+      remove: vi.fn().mockRejectedValueOnce(new Error('Version is pinned by active account'))
+    }
+    const wrapper = mount(PluginCenter, {
+      props: { client, t: translate, locale: 'en', dialogComponent, editable: true, runMutation: action => action() }
+    })
+    await flushPromises()
+
+    await wrapper.findAll('button').find(button => button.attributes('aria-label') === 'admin.plugins.center.table')!.trigger('click')
+    expect(wrapper.find('thead').text()).toContain('admin.plugins.center.source')
+    expect(wrapper.find('thead').text()).not.toContain('admin.plugins.detail.source')
+
+    const rowDelete = wrapper.find('tbody').findAll('button').find(button => button.text() === 'admin.plugins.detail.deleteVersion')!
+    await rowDelete.trigger('click')
+    await wrapper.find('[data-confirm-delete]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Version is pinned by active account')
+
+    await wrapper.findAll('button').find(button => button.text() === 'common.cancel')!.trigger('click')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+
+    await wrapper.find('tbody [data-plugin-details]').trigger('click')
+    await flushPromises()
+    const billingTab = wrapper.find('[data-detail]').findAll('[role="tab"]').find(button => button.text() === 'admin.plugins.detail.billing')!
+    await billingTab.trigger('click')
+    expect(billingTab.attributes('aria-selected')).toBe('true')
+
+    client.remove.mockResolvedValueOnce({ deleted_id: 7, key: 'fixture', version: '1.0.0', removed_plugin: false })
+    client.list.mockResolvedValueOnce({ plugins: [plainFallback], builtins: [], factories: [], baseline: 'fixture' })
+    client.versions.mockResolvedValueOnce([plainFallback])
+    await wrapper.find('[data-detail]').findAll('button').find(button => button.text() === 'admin.plugins.detail.deleteVersion')!.trigger('click')
+    await wrapper.find('[data-confirm-delete]').trigger('click')
+    await flushPromises()
+
+    const activeTabs = wrapper.find('[data-detail]').findAll('[role="tab"]')
+    expect(activeTabs.some(button => button.text() === 'admin.plugins.detail.billing')).toBe(false)
+    expect(activeTabs[0]!.attributes('aria-selected')).toBe('true')
+    wrapper.unmount()
+  })
 })

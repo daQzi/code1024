@@ -96,7 +96,7 @@ func (s *NewAPIPluginService) DeleteVersion(ctx context.Context, id int64) (*Plu
 }
 
 func (s *NewAPIPluginService) DryRunInstalledVersion(ctx context.Context, id int64, hook string, args []json.RawMessage) (*PluginPlaygroundResult, error) {
-	if s == nil || s.repo == nil {
+	if s == nil || s.repo == nil || s.pool == nil {
 		return nil, errors.New("new API plugin service is disabled")
 	}
 	if id <= 0 {

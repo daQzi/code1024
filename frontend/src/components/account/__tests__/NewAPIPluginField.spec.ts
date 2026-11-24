@@ -16,6 +16,7 @@ vi.mock('@/api/admin/newapiPlugins', () => ({
     { id: 5, version: '1.0.0', enabled: true, meta: { name: 'Login Video Task' }, capabilities: { task: true, hooks: ['login', 'refresh', 'revoke', 'scheduled'] }, compatibility: { kinds: ['task'] } },
     { id: 6, version: '1.0.0', enabled: true, meta: { name: 'Generic Video', models: ['*'], description: { zh: '默认 multipart；仅在上游支持时选择 JSON。', en: 'Use multipart by default.' }, protocols: [{ name: 'openai_video' }], channelConfig: { type: 'object', properties: { submission_format: { type: 'string', enum: ['multipart', 'json'] } } } }, capabilities: { task: true }, compatibility: { kinds: ['task'] } },
     { id: 7, version: '1.0.0', enabled: true, meta: { name: 'Explicit Video', models: ['*'], protocols: [{ name: 'openai_video', models: ['known-video'] }] }, capabilities: { task: true }, compatibility: { kinds: ['task'] } },
+    { id: 9, version: '1.0.0', enabled: true, meta: { name: 'Prefix Wildcard Video', models: ['cc-seedance-*'], protocols: [{ name: 'openai_video' }] }, capabilities: { task: true }, compatibility: { kinds: ['task'] } },
   ] }),
 }))
 
@@ -54,6 +55,8 @@ describe('account protocol plugin selection', () => {
     expect(api.apply({ model_mapping: { 'my-video': 'vendor-movie' } }).newapi_plugin_config).toEqual({ submission_format: 'json' })
     await wrapper.find('select').setValue(7)
     expect(wrapper.text()).not.toContain('admin.plugins.js.genericVideoHint')
+    await wrapper.find('select').setValue(9)
+    expect(wrapper.text()).toContain('admin.plugins.js.genericVideoHint')
     await wrapper.find('select').setValue(0)
     expect(wrapper.text()).not.toContain('默认 multipart')
     wrapper.unmount()

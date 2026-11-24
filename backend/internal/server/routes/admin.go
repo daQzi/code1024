@@ -115,7 +115,7 @@ func RegisterAdminRoutes(
 		registerTLSFingerprintProfileRoutes(admin, h)
 
 		// 本地进程插件管理
-		registerPluginRoutes(admin, h, stepUpAuth)
+		registerPluginRoutes(admin, h, stepUpAuth, panelRateLimiter)
 
 		// API Key 管理
 		registerAdminAPIKeyRoutes(admin, h)
@@ -777,7 +777,7 @@ func registerTLSFingerprintProfileRoutes(admin *gin.RouterGroup, h *handler.Hand
 	}
 }
 
-func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware) {
+func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth middleware.StepUpAuthMiddleware, panelRateLimiter *middleware.PanelRateLimiter) {
 	processing := admin.Group("/request-processing")
 	processing.Use(middleware.RequestBodyLimit(2<<20, pkghttputil.NewBodyMemoryBudget(64<<20)))
 	processing.GET("", h.RequestPlugins.List)
@@ -806,7 +806,12 @@ func registerPluginRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAut
 	js.GET("/:key/pricing", h.Admin.NewAPIPlugin.PluginPricingSummary)
 	js.GET("/versions/:id/source", h.Admin.NewAPIPlugin.NewAPISource)
 	js.GET("/versions/:id/info", h.Admin.NewAPIPlugin.NewAPIVersionInfo)
-	js.POST("/versions/:id/dry-run", h.Admin.NewAPIPlugin.DryRunNewAPI)
+	js.POST("/versions/:id/dry-run",
+		panelRateLimiter.Heavy(),
+		middleware.RequestBodyLimit(2<<20, pkghttputil.NewBodyMemoryBudget(32<<20)),
+		gin.HandlerFunc(stepUpAuth),
+		h.Admin.NewAPIPlugin.DryRunNewAPI,
+	)
 	js.GET("/factories/:key/source", h.Admin.NewAPIPlugin.NewAPIFactorySource)
 	js.DELETE("/versions/:id", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.DeleteNewAPI)
 	js.POST("/accounts/:id/balance", gin.HandlerFunc(stepUpAuth), h.Admin.NewAPIPlugin.QueryNewAPIPluginBalance)
