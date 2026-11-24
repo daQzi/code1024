@@ -62,4 +62,25 @@ onMounted(() => { if (!appStore.publicSettingsLoaded) void appStore.fetchPublicS
   padding: 0;
   flex-shrink: 0;
 }
+
+.auth-panel {
+  animation: auth-panel-enter 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes auth-panel-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-panel {
+    animation: none;
+  }
+}
 </style>

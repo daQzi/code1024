@@ -486,5 +486,23 @@ export default {
     adminApiKeyForbidden: '管理 API Key 无法执行此操作，请使用已通过二次验证的管理员会话。'
   },
 
+  commandPalette: {
+    triggerLabel: '快速跳转或执行操作',
+    searchPlaceholder: '搜索页面或快捷操作...',
+    pagesGroup: '页面导航',
+    actionsGroup: '快捷操作',
+    emptyTitle: '没有找到匹配项',
+    emptyHint: '试试页面名称、路由路径或主题切换等关键词',
+    switchToLight: '切换到浅色模式',
+    switchToDark: '切换到深色模式',
+    collapseSidebar: '收起侧边栏',
+    expandSidebar: '展开侧边栏',
+    switchLocale: '切换语言：{name}',
+    replayTour: '重新播放引导教程',
+    hintNavigate: '选择',
+    hintConfirm: '打开',
+    hintClose: '关闭'
+  },
+
   // Dashboard
 }

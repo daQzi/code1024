@@ -88,4 +88,37 @@ describe('model catalog navigation', () => {
     await vi.advanceTimersByTimeAsync(15000)
     expect(getModelPlazaPerformanceSummaries).toHaveBeenCalledTimes(before + 1)
   })
+
+  it('copies model ID from card header button and reveals health tooltip on hover', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText }
+    })
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/model-plaza', component: { template: '<div />' } },
+      { path: '/model-plaza/models/:modelId', name: 'ModelPlazaDetail', component: { template: '<div />' } }
+    ] })
+    await router.push('/model-plaza')
+    const wrapper = mount(PlazaModelCatalog, {
+      props: { groups: [group(1, 'mdl_copy')] },
+      global: { plugins: [router], stubs: { Transition: { inheritAttrs: false, template: '<slot />' } } }
+    })
+    await flushPromises()
+
+    const copyBtn = wrapper.get('button[aria-label="modelPlaza.table.copyModelId"]')
+    await copyBtn.trigger('click')
+    await flushPromises()
+    expect(writeText).toHaveBeenCalledWith('vendor/model/video')
+    expect(copyBtn.classes()).toContain('is-copied')
+
+    const buckets = wrapper.findAll('[role="img"] span')
+    expect(buckets).toHaveLength(24)
+    await buckets[0]!.trigger('mouseenter')
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(true)
+
+    await wrapper.find('.health-bar').trigger('mouseleave')
+    expect(wrapper.find('[role="tooltip"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
 })

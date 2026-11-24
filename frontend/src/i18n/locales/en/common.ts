@@ -487,5 +487,23 @@ export default {
     adminApiKeyForbidden: 'Admin API keys cannot perform this operation. Use a two-factor verified admin session.'
   },
 
+  commandPalette: {
+    triggerLabel: 'Quick jump or run action',
+    searchPlaceholder: 'Search pages or quick actions...',
+    pagesGroup: 'Pages',
+    actionsGroup: 'Quick Actions',
+    emptyTitle: 'No matching results',
+    emptyHint: 'Try a page name, route path, or action keyword',
+    switchToLight: 'Switch to Light Mode',
+    switchToDark: 'Switch to Dark Mode',
+    collapseSidebar: 'Collapse Sidebar',
+    expandSidebar: 'Expand Sidebar',
+    switchLocale: 'Switch language: {name}',
+    replayTour: 'Replay Onboarding Tour',
+    hintNavigate: 'Select',
+    hintConfirm: 'Open',
+    hintClose: 'Close'
+  },
+
   // Dashboard
 }

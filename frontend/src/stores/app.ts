@@ -46,6 +46,34 @@ export const useAppStore = defineStore('app', () => {
 
   // Auto-incrementing ID for toasts
   let toastIdCounter = 0
+  const toastTimers = new Map<
+    string,
+    { timer: ReturnType<typeof setTimeout> | null; remainingMs: number; startedAt: number }
+  >()
+
+  function clearToastTimer(id: string): void {
+    const record = toastTimers.get(id)
+    if (record?.timer) {
+      clearTimeout(record.timer)
+    }
+    toastTimers.delete(id)
+  }
+
+  function scheduleToastDismiss(id: string, delayMs: number): void {
+    const safeDelay = Math.max(0, delayMs)
+    const existing = toastTimers.get(id)
+    if (existing?.timer) {
+      clearTimeout(existing.timer)
+    }
+    const timer = setTimeout(() => {
+      hideToast(id)
+    }, safeDelay)
+    toastTimers.set(id, {
+      timer,
+      remainingMs: safeDelay,
+      startedAt: Date.now()
+    })
+  }
 
   // ==================== Computed ====================
 
@@ -113,16 +141,15 @@ export const useAppStore = defineStore('app', () => {
       type,
       message,
       duration,
-      startTime: duration !== undefined ? Date.now() : undefined
+      startTime: duration !== undefined ? Date.now() : undefined,
+      paused: false
     }
 
     toasts.value.push(toast)
 
     // Auto-dismiss if duration is specified
     if (duration !== undefined) {
-      setTimeout(() => {
-        hideToast(id)
-      }, duration)
+      scheduleToastDismiss(id, duration)
     }
 
     return id
@@ -165,10 +192,44 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /**
+   * Pause auto-dismiss timer for a toast (e.g., on hover or focus)
+   */
+  function pauseToast(id: string): void {
+    const toast = toasts.value.find((t) => t.id === id)
+    const record = toastTimers.get(id)
+    if (!toast || !record || toast.paused) return
+
+    if (record.timer) {
+      clearTimeout(record.timer)
+      record.timer = null
+    }
+    const elapsed = Math.max(0, Date.now() - record.startedAt)
+    record.remainingMs = Math.max(0, record.remainingMs - elapsed)
+    toast.paused = true
+  }
+
+  /**
+   * Resume auto-dismiss timer for a paused toast
+   */
+  function resumeToast(id: string): void {
+    const toast = toasts.value.find((t) => t.id === id)
+    const record = toastTimers.get(id)
+    if (!toast || !record || !toast.paused) return
+
+    toast.paused = false
+    if (record.remainingMs <= 0) {
+      hideToast(id)
+      return
+    }
+    scheduleToastDismiss(id, record.remainingMs)
+  }
+
+  /**
    * Hide a specific toast by ID
    * @param id - Toast ID to hide
    */
   function hideToast(id: string): void {
+    clearToastTimer(id)
     const index = toasts.value.findIndex((t) => t.id === id)
     if (index !== -1) {
       toasts.value.splice(index, 1)
@@ -179,6 +240,12 @@ export const useAppStore = defineStore('app', () => {
    * Clear all toasts
    */
   function clearAllToasts(): void {
+    for (const record of toastTimers.values()) {
+      if (record.timer) {
+        clearTimeout(record.timer)
+      }
+    }
+    toastTimers.clear()
     toasts.value = []
   }
 
@@ -231,7 +298,7 @@ export const useAppStore = defineStore('app', () => {
     sidebarCollapsed.value = false
     loading.value = false
     loadingCount.value = 0
-    toasts.value = []
+    clearAllToasts()
   }
 
   // ==================== Version Management ====================
@@ -479,6 +546,8 @@ export const useAppStore = defineStore('app', () => {
     showError,
     showInfo,
     showWarning,
+    pauseToast,
+    resumeToast,
     hideToast,
     clearAllToasts,
     withLoading,

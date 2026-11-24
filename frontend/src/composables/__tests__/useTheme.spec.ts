@@ -127,4 +127,48 @@ describe('theme synchronization', () => {
     stop()
     expect(legacyMedia.removeListener).toHaveBeenCalledWith(change)
   })
+
+  it('uses document.startViewTransition on interactive theme changes when motion is allowed', () => {
+    const startViewTransition = vi.fn((cb: () => void) => {
+      cb()
+      return { ready: Promise.resolve(), finished: Promise.resolve() }
+    })
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      writable: true,
+      value: startViewTransition
+    })
+    try {
+      stop = initializeTheme()
+      setTheme('dark')
+      expect(startViewTransition).toHaveBeenCalledTimes(1)
+      expectTheme(true)
+    } finally {
+      delete (document as unknown as Record<string, unknown>).startViewTransition
+    }
+  })
+
+  it('skips view transition when prefers-reduced-motion is active', () => {
+    const startViewTransition = vi.fn((cb: () => void) => {
+      cb()
+      return { ready: Promise.resolve(), finished: Promise.resolve() }
+    })
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      writable: true,
+      value: startViewTransition
+    })
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      ...media,
+      matches: query === '(prefers-reduced-motion: reduce)'
+    }) as unknown as MediaQueryList)
+    try {
+      stop = initializeTheme()
+      setTheme('dark')
+      expect(startViewTransition).not.toHaveBeenCalled()
+      expectTheme(true)
+    } finally {
+      delete (document as unknown as Record<string, unknown>).startViewTransition
+    }
+  })
 })

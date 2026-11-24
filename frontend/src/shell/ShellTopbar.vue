@@ -19,6 +19,18 @@
 
     <!-- ---------------------------------------------------------- 右 -->
     <div class="topbar__trail">
+      <button
+        type="button"
+        class="topbar__cmd"
+        :aria-label="t('commandPalette.triggerLabel')"
+        :title="t('commandPalette.triggerLabel')"
+        @click="emit('open-command-palette')"
+      >
+        <Icon name="search" size="sm" aria-hidden="true" />
+        <span class="topbar__cmd-text">{{ t('common.search') }}</span>
+        <kbd class="topbar__cmd-kbd" aria-hidden="true">{{ shortcutHint }}</kbd>
+      </button>
+
       <AnnouncementBell v-if="user" />
 
       <a
@@ -174,7 +186,15 @@ import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
 const router = useRouter()
 const route = useRoute()
 const { t } = useI18n()
+const emit = defineEmits<{
+  (e: 'open-command-palette'): void
+}>()
 const appStore = useAppStore()
+
+const shortcutHint = computed(() => {
+  if (typeof navigator === 'undefined') return '⌘K'
+  return /mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent) ? '⌘K' : 'Ctrl K'
+})
 const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
 const onboardingStore = useOnboardingStore()
@@ -440,6 +460,61 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
 .topbar__link:hover {
   color: var(--ui-text);
   background-color: var(--ui-line);
+}
+
+.topbar__cmd {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border: 0;
+  border-radius: var(--ui-r-md);
+  background-color: rgb(var(--ui-glass-soft-rgb) / calc(var(--ui-glass-soft-alpha) + 0.16));
+  box-shadow: inset 0 0 0 1px var(--ui-line);
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font);
+  font-size: var(--ui-fs-xs);
+  font-weight: 540;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--ui-dur-fast) var(--ui-ease-out),
+    background-color var(--ui-dur-fast) var(--ui-ease-out),
+    box-shadow var(--ui-dur-fast) var(--ui-ease-out);
+}
+
+.topbar__cmd:hover {
+  color: var(--ui-text);
+  background-color: rgb(var(--ui-glass-strong-rgb) / calc(var(--ui-glass-strong-alpha) + 0.08));
+  box-shadow: inset 0 0 0 1px var(--ui-accent-ring);
+}
+
+.topbar__cmd-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-family: var(--ui-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ui-text-faint);
+  background-color: var(--ui-line-soft);
+  box-shadow: inset 0 0 0 1px var(--ui-line);
+}
+
+@media (max-width: 767px) {
+  .topbar__cmd {
+    width: 32px;
+    justify-content: center;
+    padding: 0;
+  }
+  .topbar__cmd-text,
+  .topbar__cmd-kbd {
+    display: none;
+  }
 }
 
 /* 余额胶囊 */

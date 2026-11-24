@@ -6,27 +6,31 @@
       aria-atomic="true"
     >
       <TransitionGroup
-        enter-active-class="transition ease-out duration-300"
-        enter-from-class="opacity-0 translate-x-full"
-        enter-to-class="opacity-100 translate-x-0"
-        leave-active-class="transition ease-in duration-200"
-        leave-from-class="opacity-100 translate-x-0"
-        leave-to-class="opacity-0 translate-x-full"
+        enter-active-class="toast-enter-active"
+        enter-from-class="toast-enter-from"
+        enter-to-class="toast-enter-to"
+        leave-active-class="toast-leave-active"
+        leave-from-class="toast-leave-from"
+        leave-to-class="toast-leave-to"
+        move-class="toast-move"
       >
         <div
           v-for="toast in toasts"
           :key="toast.id"
+          :role="toast.type === 'error' || toast.type === 'warning' ? 'alert' : 'status'"
           :class="[
-            'pointer-events-auto min-w-0 w-full overflow-hidden rounded-lg shadow-lg',
-            'bg-white dark:bg-dark-800',
-            'border-l-4',
-            getBorderColor(toast.type)
+            'toast-card pointer-events-auto min-w-0 w-full overflow-hidden rounded-2xl',
+            `toast-card--${toast.type}`
           ]"
+          @mouseenter="pauseToast(toast.id)"
+          @mouseleave="resumeToast(toast.id)"
+          @focusin="pauseToast(toast.id)"
+          @focusout="handleFocusOut($event, toast.id)"
         >
-          <div class="p-4">
+          <div class="px-4 py-3.5">
             <div class="flex items-start gap-3">
               <!-- Icon -->
-              <div class="mt-0.5 flex-shrink-0">
+              <div :class="['toast-icon-badge mt-0.5 flex-shrink-0', getIconBadgeClass(toast.type)]">
                 <Icon
                   :name="getToastIconName(toast.type)"
                   size="md"
@@ -37,15 +41,13 @@
 
               <!-- Content -->
               <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                <p v-if="toast.title" class="text-sm font-semibold text-gray-900 dark:text-white">
+                <p v-if="toast.title" class="toast-title text-sm font-semibold">
                   {{ toast.title }}
                 </p>
                 <p
                   :class="[
                     'text-sm leading-relaxed',
-                    toast.title
-                      ? 'mt-1 text-gray-600 dark:text-gray-300'
-                      : 'text-gray-900 dark:text-white'
+                    toast.title ? 'toast-message--sub mt-1' : 'toast-message'
                   ]"
                 >
                   {{ toast.message }}
@@ -54,8 +56,9 @@
 
               <!-- Close button -->
               <button
+                type="button"
                 @click="removeToast(toast.id)"
-                class="-m-1 flex-shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+                class="toast-close -m-1 flex-shrink-0 rounded-lg p-1.5 transition-colors"
                 aria-label="Close notification"
               >
                 <Icon name="x" size="sm" />
@@ -64,10 +67,13 @@
           </div>
 
           <!-- Progress bar -->
-          <div v-if="toast.duration" class="h-1 bg-gray-100 dark:bg-dark-700">
+          <div v-if="toast.duration" class="toast-progress-track h-1">
             <div
               :class="['h-full toast-progress', getProgressBarColor(toast.type)]"
-              :style="{ animationDuration: `${toast.duration}ms` }"
+              :style="{
+                animationDuration: `${toast.duration}ms`,
+                animationPlayState: toast.paused ? 'paused' : 'running'
+              }"
             ></div>
           </div>
         </div>
@@ -109,24 +115,39 @@ const getIconColor = (type: string): string => {
   return colors[type] || colors.info
 }
 
-const getBorderColor = (type: string): string => {
-  const colors: Record<string, string> = {
-    success: 'border-green-500',
-    error: 'border-red-500',
-    warning: 'border-yellow-500',
-    info: 'border-blue-500'
+const getIconBadgeClass = (type: string): string => {
+  const classes: Record<string, string> = {
+    success: 'bg-emerald-500/12 dark:bg-emerald-400/15',
+    error: 'bg-red-500/12 dark:bg-red-400/15',
+    warning: 'bg-amber-500/15 dark:bg-amber-400/15',
+    info: 'bg-blue-500/12 dark:bg-blue-400/15'
   }
-  return colors[type] || colors.info
+  return classes[type] || classes.info
 }
 
 const getProgressBarColor = (type: string): string => {
   const colors: Record<string, string> = {
-    success: 'bg-green-500',
+    success: 'bg-emerald-500',
     error: 'bg-red-500',
-    warning: 'bg-yellow-500',
+    warning: 'bg-amber-500',
     info: 'bg-blue-500'
   }
   return colors[type] || colors.info
+}
+
+const pauseToast = (id: string) => {
+  appStore.pauseToast(id)
+}
+
+const resumeToast = (id: string) => {
+  appStore.resumeToast(id)
+}
+
+const handleFocusOut = (event: FocusEvent, id: string) => {
+  const container = event.currentTarget as HTMLElement | null
+  const nextTarget = event.relatedTarget as Node | null
+  if (container && nextTarget && container.contains(nextTarget)) return
+  appStore.resumeToast(id)
 }
 
 const removeToast = (id: string) => {
@@ -135,8 +156,78 @@ const removeToast = (id: string) => {
 </script>
 
 <style scoped>
+.toast-card {
+  position: relative;
+  background-color: rgb(var(--ui-glass-strong-rgb, 255 255 255) / calc(var(--ui-glass-strong-alpha, 0.74) + 0.14));
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  box-shadow:
+    inset 0 1px 1px var(--ui-edge-strong, rgb(255 255 255 / 0.85)),
+    0 0 0 1px var(--ui-hairline, rgb(15 23 42 / 0.12)),
+    var(--ui-shadow-3, 0 14px 34px -12px rgb(15 23 42 / 0.2));
+}
+
+.toast-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3.5px;
+  background-color: var(--ui-info, #2563eb);
+}
+
+.toast-card--success::before {
+  background-color: var(--ui-success, #059669);
+}
+
+.toast-card--error::before {
+  background-color: var(--ui-danger, #dc2626);
+}
+
+.toast-card--warning::before {
+  background-color: var(--ui-warning, #d97706);
+}
+
+.toast-card--info::before {
+  background-color: var(--ui-info, #2563eb);
+}
+
+.toast-icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+}
+
+.toast-title,
+.toast-message {
+  color: var(--ui-text, #0b1220);
+}
+
+.toast-message--sub {
+  color: var(--ui-text-muted, #4a5b73);
+}
+
+.toast-close {
+  color: var(--ui-text-faint, #6b7d95);
+}
+
+.toast-close:hover {
+  color: var(--ui-text, #0b1220);
+  background-color: var(--ui-line, rgb(15 23 42 / 0.08));
+}
+
+.toast-progress-track {
+  background-color: var(--ui-line-soft, rgb(15 23 42 / 0.06));
+}
+
 .toast-progress {
   width: 100%;
+  transform-origin: left center;
+  will-change: transform;
   animation-name: toast-progress-shrink;
   animation-timing-function: linear;
   animation-fill-mode: forwards;
@@ -144,10 +235,50 @@ const removeToast = (id: string) => {
 
 @keyframes toast-progress-shrink {
   from {
-    width: 100%;
+    transform: scaleX(1);
   }
   to {
-    width: 0%;
+    transform: scaleX(0);
+  }
+}
+
+.toast-enter-active {
+  transition:
+    opacity 240ms var(--ui-ease-out, cubic-bezier(0.16, 1, 0.3, 1)),
+    transform 260ms var(--ui-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+.toast-leave-active {
+  transition:
+    opacity 180ms ease-in,
+    transform 180ms ease-in;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translate3d(24px, 0, 0) scale(0.96);
+}
+
+.toast-enter-to,
+.toast-leave-from {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.toast-move {
+  transition: transform 220ms var(--ui-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter-active,
+  .toast-leave-active,
+  .toast-move {
+    transition-duration: 1ms;
+  }
+  .toast-enter-from,
+  .toast-leave-to {
+    transform: none;
   }
 }
 </style>

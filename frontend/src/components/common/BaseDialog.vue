@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <Transition name="modal">
+    <Transition :name="placement === 'right' ? 'drawer-right' : 'modal'">
       <div
         v-if="show"
         class="modal-overlay"
@@ -13,7 +13,12 @@
         @click.self="handleClose"
       >
         <!-- Modal panel -->
-        <div ref="dialogRef" :class="['modal-content', widthClasses, { '!ml-auto !mr-0 !h-[100dvh] !max-h-[100dvh] !rounded-none': placement === 'right' }]" @click.stop>
+        <div
+          ref="dialogRef"
+          tabindex="-1"
+          :class="['modal-content', widthClasses, { '!ml-auto !mr-0 !h-[100dvh] !max-h-[100dvh] !rounded-none': placement === 'right' }]"
+          @click.stop
+        >
           <!-- Header -->
           <div class="modal-header">
             <h3 :id="dialogId" class="modal-title">
@@ -111,9 +116,57 @@ const handleClose = () => {
   }
 }
 
-const handleEscape = (event: KeyboardEvent) => {
-  if (props.show && props.closeOnEscape && event.key === 'Escape' && !event.defaultPrevented && !event.isComposing && isTopmost.value) {
-    emit('close')
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'area[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  'iframe',
+  '[contenteditable="true"]',
+  '[tabindex]:not([tabindex="-1"])'
+].join(', ')
+
+const getFocusableElements = (container: HTMLElement | null): HTMLElement[] => {
+  if (!container) return []
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((el) => {
+    if (el.hidden || el.getAttribute('aria-hidden') === 'true') return false
+    const style = window.getComputedStyle(el)
+    return style.display !== 'none' && style.visibility !== 'hidden'
+  })
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (!props.show || !isTopmost.value || event.isComposing) return
+
+  if (event.key === 'Escape') {
+    if (props.closeOnEscape && !event.defaultPrevented) {
+      emit('close')
+    }
+    return
+  }
+
+  if (event.key === 'Tab' && dialogRef.value) {
+    const focusable = getFocusableElements(dialogRef.value)
+    if (focusable.length === 0) {
+      event.preventDefault()
+      dialogRef.value.focus()
+      return
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const active = document.activeElement as HTMLElement | null
+
+    if (event.shiftKey) {
+      if (!active || !dialogRef.value.contains(active) || active === first) {
+        event.preventDefault()
+        last.focus()
+      }
+    } else if (!active || !dialogRef.value.contains(active) || active === last) {
+      event.preventDefault()
+      first.focus()
+    }
   }
 }
 
@@ -130,10 +183,8 @@ watch(
         modalBodyRef.value.scrollTop = 0
       }
       if (dialogRef.value) {
-        const firstFocusable = dialogRef.value.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        )
-        firstFocusable?.focus()
+        const focusable = getFocusableElements(dialogRef.value)
+        ;(focusable[0] ?? dialogRef.value).focus()
       }
     } else {
       // 恢复之前的焦点
@@ -147,10 +198,10 @@ watch(
 )
 
 onMounted(() => {
-  document.addEventListener('keydown', handleEscape)
+  document.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('keydown', handleEscape)
+  document.removeEventListener('keydown', handleKeydown)
 })
 </script>

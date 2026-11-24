@@ -185,6 +185,27 @@ describe('useAppStore', () => {
       expect(id1).not.toBe(id2)
       expect(id2).not.toBe(id3)
     })
+
+    it('pauseToast 和 resumeToast 按剩余时间暂停并恢复自动消失', () => {
+      const store = useAppStore()
+      const id = store.showSuccess('悬停暂停测试', 3000)
+
+      vi.advanceTimersByTime(1000)
+      store.pauseToast(id)
+      expect(store.toasts[0]?.paused).toBe(true)
+
+      vi.advanceTimersByTime(5000)
+      expect(store.toasts).toHaveLength(1)
+
+      store.resumeToast(id)
+      expect(store.toasts[0]?.paused).toBe(false)
+
+      vi.advanceTimersByTime(1999)
+      expect(store.toasts).toHaveLength(1)
+
+      vi.advanceTimersByTime(1)
+      expect(store.toasts).toHaveLength(0)
+    })
   })
 
   // --- 侧边栏 ---

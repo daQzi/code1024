@@ -2,6 +2,15 @@ import { readonly, ref } from 'vue'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 
+type ViewTransitionLike = {
+  ready?: Promise<unknown>
+  finished?: Promise<unknown>
+}
+
+type DocumentWithViewTransition = Document & {
+  startViewTransition?: (callback: () => void) => ViewTransitionLike
+}
+
 const preference = ref<ThemePreference>('system')
 const isDark = ref(false)
 let media: MediaQueryList | undefined
@@ -16,13 +25,46 @@ function storedPreference(): ThemePreference {
   }
 }
 
+function resolveIsDark(): boolean {
+  return preference.value === 'dark' || (preference.value === 'system' && !!media?.matches)
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false
+}
+
 function applyTheme() {
-  const dark = preference.value === 'dark' || (preference.value === 'system' && !!media?.matches)
+  const dark = resolveIsDark()
   isDark.value = dark
   // Both selector forms are used by the application. Updating only the class
   // leaves the old data-theme selector active until the next page load.
   document.documentElement.classList.toggle('dark', dark)
   document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+}
+
+function applyThemeWithTransition() {
+  const doc = document as DocumentWithViewTransition
+  const canTransition =
+    typeof doc.startViewTransition === 'function' &&
+    document.visibilityState !== 'hidden' &&
+    !prefersReducedMotion()
+
+  if (!canTransition) {
+    applyTheme()
+    return
+  }
+
+  try {
+    const transition = doc.startViewTransition!(() => {
+      applyTheme()
+    })
+    transition?.ready?.catch(() => {})
+    transition?.finished?.catch(() => {})
+  } catch {
+    applyTheme()
+  }
 }
 
 function syncFromStorage() {
@@ -58,9 +100,15 @@ export function initializeTheme(): () => void {
 }
 
 export function setTheme(next: ThemePreference) {
+  const wasInitialized = initialized
   if (!initialized) initializeTheme()
   preference.value = next
-  applyTheme()
+  const shouldTransition = wasInitialized && resolveIsDark() !== isDark.value
+  if (shouldTransition) {
+    applyThemeWithTransition()
+  } else {
+    applyTheme()
+  }
   try {
     // Absence of an override is the existing application's system mode.
     if (next === 'system') localStorage.removeItem('theme')

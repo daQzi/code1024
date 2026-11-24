@@ -55,7 +55,7 @@
     </div>
 
     <!-- ---------------------------------------------------------- 导航 -->
-    <nav ref="navRef" class="rail__nav ui-scroll">
+    <nav ref="navRef" class="rail__nav ui-scroll" @scroll.passive="hideTooltip">
       <div v-for="section in sections" :key="section.key" class="rail__section">
         <p v-if="section.title && (!collapsed || mobileOpen)" class="rail__section-title">
           {{ section.title }}
@@ -73,9 +73,13 @@
                   isGroupActive(item) && (!isGroupExpanded(item) || (collapsed && !mobileOpen)),
                 'is-parent': true,
               }"
-              :title="collapsed && !mobileOpen ? item.label : undefined"
+              :aria-label="collapsed && !mobileOpen ? item.label : undefined"
               :aria-expanded="!collapsed || mobileOpen ? isGroupExpanded(item) : false"
               @click="handleGroupClick(item)"
+              @mouseenter="showTooltip($event, item.label)"
+              @mouseleave="hideTooltip"
+              @focus="showTooltip($event, item.label)"
+              @blur="hideTooltip"
             >
               <span class="rail__icon">
                 <span
@@ -96,20 +100,25 @@
             </button>
 
             <div
-              v-if="(!collapsed || mobileOpen) && isGroupExpanded(item)"
-              class="rail__children"
+              v-if="!collapsed || mobileOpen"
+              class="rail__children-wrap"
+              :class="{ 'is-open': isGroupExpanded(item) }"
+              :aria-hidden="!isGroupExpanded(item)"
             >
-              <RouterLink
-                v-for="child in item.children"
-                :key="child.path"
-                :to="child.path"
-                class="rail__child"
-                :class="{ 'is-active': isActive(child.path) }"
-                @click="handleMenuItemClick(child.path)"
-              >
-                <span class="rail__child-dot" />
-                <span class="rail__child-label">{{ child.label }}</span>
-              </RouterLink>
+              <div class="rail__children">
+                <RouterLink
+                  v-for="child in item.children"
+                  :key="child.path"
+                  :to="child.path"
+                  class="rail__child"
+                  :class="{ 'is-active': isActive(child.path) }"
+                  :tabindex="isGroupExpanded(item) ? 0 : -1"
+                  @click="handleMenuItemClick(child.path)"
+                >
+                  <span class="rail__child-dot" />
+                  <span class="rail__child-label">{{ child.label }}</span>
+                </RouterLink>
+              </div>
             </div>
           </template>
 
@@ -119,7 +128,7 @@
             :to="item.path"
             class="rail__item"
             :class="{ 'is-active': isActive(item.path) }"
-            :title="collapsed && !mobileOpen ? item.label : undefined"
+            :aria-label="collapsed && !mobileOpen ? item.label : undefined"
             :data-tour="item.path === '/keys' ? 'sidebar-my-keys' : undefined"
             :id="
               item.path === '/admin/accounts'
@@ -131,6 +140,10 @@
                     : undefined
             "
             @click="handleMenuItemClick(item.path)"
+            @mouseenter="showTooltip($event, item.label)"
+            @mouseleave="hideTooltip"
+            @focus="showTooltip($event, item.label)"
+            @blur="hideTooltip"
           >
             <span class="rail__icon">
               <span
@@ -156,6 +169,10 @@
         class="rail__item rail__item--quiet"
         :title="isDark ? t('nav.lightMode') : t('nav.darkMode')"
         @click="toggleTheme"
+        @mouseenter="showTooltip($event, isDark ? t('nav.lightMode') : t('nav.darkMode'))"
+        @mouseleave="hideTooltip"
+        @focus="showTooltip($event, isDark ? t('nav.lightMode') : t('nav.darkMode'))"
+        @blur="hideTooltip"
       >
         <span class="rail__icon">
           <Icon :name="isDark ? 'sun' : 'moon'" size="md" />
@@ -169,8 +186,12 @@
         v-if="!mobileOpen"
         type="button"
         class="rail__item rail__item--quiet"
-        :title="collapsed ? t('nav.expand') : t('nav.collapse')"
+        :aria-label="collapsed ? t('nav.expand') : t('nav.collapse')"
         @click="toggleCollapse"
+        @mouseenter="showTooltip($event, collapsed ? t('nav.expand') : t('nav.collapse'))"
+        @mouseleave="hideTooltip"
+        @focus="showTooltip($event, collapsed ? t('nav.expand') : t('nav.collapse'))"
+        @blur="hideTooltip"
       >
         <span class="rail__icon">
           <Icon :name="collapsed ? 'chevronRight' : 'chevronLeft'" size="md" />
@@ -179,10 +200,23 @@
       </button>
     </div>
   </aside>
+
+  <Teleport to="body">
+    <Transition name="rail-tip">
+      <div
+        v-if="tooltip"
+        role="tooltip"
+        class="rail-tip"
+        :style="{ top: `${tooltip.top}px`, left: `${tooltip.left}px` }"
+      >
+        {{ tooltip.label }}
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from '@/composables/useTheme'
 import { useAppStore } from '@/stores'
@@ -220,13 +254,47 @@ const navRef = ref<HTMLElement | null>(null)
 
 const { isDark, toggleTheme } = useTheme()
 
+const tooltip = ref<{ label: string; top: number; left: number } | null>(null)
+let pointerRafId: number | null = null
+let pendingPointer: { x: number; y: number } | null = null
+
 function toggleCollapse() {
+  hideTooltip()
   appStore.toggleSidebar()
 }
 
 function closeMobile() {
   appStore.setMobileOpen(false)
 }
+
+function showTooltip(ev: Event, label: string) {
+  if (!collapsed.value || mobileOpen.value || !label) {
+    tooltip.value = null
+    return
+  }
+  const target = ev.currentTarget as HTMLElement | null
+  if (!target) return
+  const rect = target.getBoundingClientRect()
+  tooltip.value = {
+    label,
+    top: rect.top + rect.height / 2,
+    left: rect.right + 12,
+  }
+}
+
+function hideTooltip() {
+  tooltip.value = null
+}
+
+function handleKeydown(ev: KeyboardEvent) {
+  if (mobileOpen.value && ev.key === 'Escape' && !ev.defaultPrevented && !ev.isComposing) {
+    closeMobile()
+  }
+}
+
+watch([collapsed, mobileOpen], () => {
+  hideTooltip()
+})
 
 /**
  * Icon.vue 的 name prop 是 90 个字面量的联合类型，而导航项由数据驱动（string）。
@@ -238,15 +306,23 @@ function asIconName(name: string | null | undefined) {
 }
 
 function trackPointer(ev: PointerEvent) {
-  const el = railRef.value
-  if (!el) return
-  const rect = el.getBoundingClientRect()
-  if (!rect.width || !rect.height) return
-  el.style.setProperty('--ui-mx', `${((ev.clientX - rect.left) / rect.width) * 100}%`)
-  el.style.setProperty('--ui-my', `${((ev.clientY - rect.top) / rect.height) * 100}%`)
+  pendingPointer = { x: ev.clientX, y: ev.clientY }
+  if (pointerRafId !== null) return
+  pointerRafId = window.requestAnimationFrame(() => {
+    pointerRafId = null
+    const el = railRef.value
+    const point = pendingPointer
+    pendingPointer = null
+    if (!el || !point) return
+    const rect = el.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+    el.style.setProperty('--ui-mx', `${((point.x - rect.left) / rect.width) * 100}%`)
+    el.style.setProperty('--ui-my', `${((point.y - rect.top) / rect.height) * 100}%`)
+  })
 }
 
 onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
   if (appStore.sidebarScrollTop > 0 && navRef.value) {
     void nextTick(() => {
       if (navRef.value) navRef.value.scrollTop = appStore.sidebarScrollTop
@@ -255,6 +331,12 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  if (pointerRafId !== null) {
+    window.cancelAnimationFrame(pointerRafId)
+    pointerRafId = null
+  }
+  hideTooltip()
   if (navRef.value) appStore.sidebarScrollTop = navRef.value.scrollTop
 })
 </script>
@@ -605,13 +687,34 @@ html[data-theme='dark'] .rail::after {
 }
 
 /* ------------------------------------------------------------------ 子项 */
+.rail__children-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--ui-dur-base) var(--ui-ease-out),
+    opacity var(--ui-dur-fast) var(--ui-ease-out);
+}
+
+.rail__children-wrap.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
 .rail__children {
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  margin: 2px 0 4px;
+  margin: 0;
   padding-left: 30px;
   position: relative;
+  transition: margin var(--ui-dur-base) var(--ui-ease-out);
+}
+
+.rail__children-wrap.is-open > .rail__children {
+  margin: 2px 0 4px;
 }
 
 .rail__children::before {
@@ -710,8 +813,47 @@ html[data-theme='dark'] .rail::after {
   }
 }
 
+.rail-tip {
+  position: fixed;
+  z-index: 90;
+  transform: translateY(-50%);
+  padding: 6px 11px;
+  border-radius: var(--ui-r-md);
+  font-family: var(--ui-font);
+  font-size: var(--ui-fs-xs);
+  font-weight: 560;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--ui-text);
+  background-color: rgb(var(--ui-glass-strong-rgb) / calc(var(--ui-glass-strong-alpha) + 0.2));
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  box-shadow:
+    inset 0 1px 1px var(--ui-edge-strong),
+    0 0 0 1px var(--ui-hairline),
+    var(--ui-shadow-3);
+  pointer-events: none;
+}
+
+.rail-tip-enter-active,
+.rail-tip-leave-active {
+  transition:
+    opacity var(--ui-dur-fast) var(--ui-ease-out),
+    transform var(--ui-dur-fast) var(--ui-ease-out);
+}
+
+.rail-tip-enter-from,
+.rail-tip-leave-to {
+  opacity: 0;
+  transform: translate3d(-4px, -50%, 0);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .rail {
+  .rail,
+  .rail__children-wrap,
+  .rail__children,
+  .rail-tip-enter-active,
+  .rail-tip-leave-active {
     transition: none;
   }
 }

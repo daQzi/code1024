@@ -5,29 +5,39 @@
     <ShellRail />
 
     <div class="shell__body" :class="{ 'shell__body--rail-collapsed': collapsed }">
-      <ShellTopbar />
+      <ShellTopbar @open-command-palette="commandPaletteOpen = true" />
 
       <main ref="viewportRef" class="shell__viewport ui-scroll">
-        <div class="shell__content">
+        <div
+          class="shell__content"
+          :class="{ 'shell__content--entering': contentEntering }"
+          @animationend="contentEntering = false"
+        >
           <slot />
         </div>
       </main>
     </div>
+
+    <CommandPalette v-model:open="commandPaletteOpen" />
   </div>
 </template>
 
 <script setup lang="ts">
 import '@/styles/onboarding.css'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useOnboardingTour } from '@/composables/useOnboardingTour'
+import CommandPalette from './CommandPalette.vue'
 import ShellBackdrop from './ShellBackdrop.vue'
 import ShellRail from './ShellRail.vue'
 import ShellTopbar from './ShellTopbar.vue'
 
 const route = useRoute()
 const viewportRef = ref<HTMLElement | null>(null)
+const commandPaletteOpen = ref(false)
+const contentEntering = ref(true)
+let enterRafId: number | null = null
 
 // 内层滚动容器不会触发 router 的 scrollBehavior（那只管 window），
 // 所以换页后必须自己把内容区拉回顶部，否则新页面会停在上一页的滚动位置。
@@ -40,6 +50,18 @@ watch(
     el.style.scrollBehavior = 'auto'
     el.scrollTop = 0
     el.style.scrollBehavior = prev
+  }
+)
+
+watch(
+  () => route.path,
+  () => {
+    contentEntering.value = false
+    if (enterRafId !== null) window.cancelAnimationFrame(enterRafId)
+    enterRafId = window.requestAnimationFrame(() => {
+      enterRafId = null
+      contentEntering.value = true
+    })
   }
 )
 
@@ -57,6 +79,13 @@ const { replayTour } = useOnboardingTour({
 
 onMounted(() => {
   onboardingStore.setReplayCallback(replayTour)
+})
+
+onBeforeUnmount(() => {
+  if (enterRafId !== null) {
+    window.cancelAnimationFrame(enterRafId)
+    enterRafId = null
+  }
 })
 
 defineExpose({ replayTour })
@@ -116,6 +145,21 @@ defineExpose({ replayTour })
   padding-bottom: var(--ui-s-8);
 }
 
+.shell__content--entering {
+  animation: shell-content-enter 180ms var(--ui-ease-out);
+}
+
+@keyframes shell-content-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Table pages use the actual space below the floating toolbar. */
 .shell__content:has(> .table-page-layout) {
   height: 100%;
@@ -141,6 +185,9 @@ defineExpose({ replayTour })
   }
   .shell__viewport {
     scroll-behavior: auto;
+  }
+  .shell__content--entering {
+    animation: none;
   }
 }
 </style>

@@ -3,12 +3,12 @@
     <template v-if="loading">
       <div v-for="i in 5" :key="i" class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-900">
         <div class="space-y-3">
-          <div v-for="column in dataColumns" :key="column.key" class="flex justify-between">
-            <div class="h-4 w-20 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
-            <div class="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+          <div v-for="(column, colIndex) in dataColumns" :key="column.key" class="flex items-center justify-between gap-4">
+            <UiSkeleton :width="76" :height="14" />
+            <UiSkeleton :width="getSkeletonWidth(i, colIndex, true)" :height="14" />
           </div>
           <div v-if="hasActionsColumn" class="border-t border-gray-200 pt-3 dark:border-dark-700">
-            <div class="h-8 w-full animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+            <UiSkeleton width="100%" :height="32" radius="var(--ui-r-md)" />
           </div>
         </div>
       </div>
@@ -170,12 +170,10 @@
         <!-- Loading skeleton -->
         <tr v-if="loading" v-for="i in 5" :key="i">
           <td v-if="selectable" class="w-11 min-w-11 px-3 py-4">
-            <div class="mx-auto h-4 w-4 animate-pulse rounded bg-gray-200 dark:bg-dark-700"></div>
+            <UiSkeleton :width="16" :height="16" radius="4px" class="mx-auto" />
           </td>
-          <td v-for="column in columns" :key="column.key" :class="['whitespace-nowrap py-4', getAdaptivePaddingClass()]">
-            <div class="animate-pulse">
-              <div class="h-4 w-3/4 rounded bg-gray-200 dark:bg-dark-700"></div>
-            </div>
+          <td v-for="(column, colIndex) in columns" :key="column.key" :class="['whitespace-nowrap py-4', getAdaptivePaddingClass()]">
+            <UiSkeleton :width="getSkeletonWidth(i, colIndex)" :height="15" />
           </td>
         </tr>
 
@@ -268,6 +266,15 @@ import { useVirtualizer, observeElementRect as observeElementRectDefault } from 
 import { useI18n } from 'vue-i18n'
 import type { Column } from './types'
 import Icon from '@/components/icons/Icon.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+
+const DESKTOP_SKELETON_WIDTHS = ['64%', '78%', '52%', '84%', '68%', '58%']
+const MOBILE_SKELETON_WIDTHS = ['112px', '136px', '96px', '148px', '120px']
+
+const getSkeletonWidth = (rowIndex: number, colIndex: number, mobile = false): string => {
+  const palette = mobile ? MOBILE_SKELETON_WIDTHS : DESKTOP_SKELETON_WIDTHS
+  return palette[(rowIndex * 3 + colIndex) % palette.length]
+}
 
 const { t } = useI18n()
 
