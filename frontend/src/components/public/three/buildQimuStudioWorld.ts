@@ -72,10 +72,10 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
 
   // Brushed architectural chassis & gold optical accents
   const stageMat = new THREE.MeshStandardMaterial({
-    color: 0x0e0c18,
-    metalness: 0.82,
-    roughness: 0.34,
-    envMapIntensity: 0.62,
+    color: 0x100e16,
+    metalness: 0.72,
+    roughness: 0.42,
+    envMapIntensity: 0.45,
   })
   const goldTrimMat = new THREE.MeshStandardMaterial({
     color: 0xfbbf24,
@@ -331,7 +331,7 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
     { pos: [4.1, 2.38, 1.45] as const, rotY: -0.52, phase: 1.3 },
     { pos: [5.45, 2.08, -0.35] as const, rotY: -0.78, phase: 2.6 },
   ]
-  const posterHolders: { holder: THREE.Group; baseY: number; phase: number }[] = []
+  const posterHolders: { holder: THREE.Group; baseX: number; baseY: number; baseZ: number; baseRotY: number; phase: number }[] = []
 
   posterSlots.forEach((slot, idx) => {
     const holder = new THREE.Group()
@@ -353,7 +353,14 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
 
     holder.add(frame, art, topAccent)
     group.add(holder)
-    posterHolders.push({ holder, baseY: slot.pos[1], phase: slot.phase })
+    posterHolders.push({
+      holder,
+      baseX: slot.pos[0],
+      baseY: slot.pos[1],
+      baseZ: slot.pos[2],
+      baseRotY: slot.rotY,
+      phase: slot.phase,
+    })
   })
 
   // 5. Twin Sweeping Overhead Cinema Filaments (Gold + Violet) with 3 Orbiting Spark Beads Each
@@ -572,9 +579,23 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
       Math.min(1, safeDt * 6),
     )
 
-    // Gentle hover drift on poster cards
-    for (const p of posterHolders) {
-      p.holder.position.y = p.baseY + Math.sin(elapsed * 0.95 + p.phase) * 0.08
+    // Folio Books-inspired interactive wave ripple on 3 design posters
+    const targetFocusIdx = THREE.MathUtils.clamp(
+      (pointerX * 0.5 + 0.5) * (posterHolders.length - 1),
+      0,
+      posterHolders.length - 1,
+    )
+    for (let i = 0; i < posterHolders.length; i++) {
+      const p = posterHolders[i]
+      const dist = Math.abs(i - targetFocusIdx)
+      const wave = Math.exp(-dist * dist * 1.4) * (0.35 + focusWeight * 0.65)
+      const desiredY = p.baseY + Math.sin(elapsed * 0.95 + p.phase) * 0.06 + wave * 0.3
+      const desiredZ = p.baseZ + wave * 0.22
+      const desiredRotY = p.baseRotY + wave * 0.16
+      const waveLerp = Math.min(1, safeDt * 7)
+      p.holder.position.y = THREE.MathUtils.lerp(p.holder.position.y, desiredY, waveLerp)
+      p.holder.position.z = THREE.MathUtils.lerp(p.holder.position.z, desiredZ, waveLerp)
+      p.holder.rotation.y = THREE.MathUtils.lerp(p.holder.rotation.y, desiredRotY, waveLerp)
     }
 
     // Update filament shader & 3 traveling spark beads along each curve
@@ -592,7 +613,7 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
       }
     }
 
-    stageMat.color.setHex(themeT > 0.5 ? 0xe7e5e4 : 0x110e1c)
+    stageMat.color.setHex(themeT > 0.5 ? 0xece9e4 : 0x100e16)
     imaxBezelMat.color.setHex(themeT > 0.5 ? 0xd6d3d1 : 0x161224)
     goldTrimMat.emissiveIntensity = THREE.MathUtils.lerp(0.92, 0.38, themeT)
     imaxGlowMat.opacity = THREE.MathUtils.lerp(0.42, 0.16, themeT) * (0.85 + 0.15 * focusWeight)

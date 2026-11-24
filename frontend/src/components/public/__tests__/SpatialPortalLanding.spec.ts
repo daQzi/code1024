@@ -225,4 +225,25 @@ describe('SpatialPortalCanvas & ReferenceLanding', () => {
     await wrapper.get('.rl-nav-links a[href="#act-finale"]').trigger('click')
     expect(window.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'auto' }))
   })
+
+  it('renders crisp AICode naming without relay suffix', async () => {
+    const wrapper = mount(ReferenceLanding, {
+      global: {
+        plugins: [i18n],
+        stubs: {
+          RouterLink: RouterLinkStub,
+          SpatialPortalCanvas: { template: '<div />' },
+          PublicLocaleSwitcher: { template: '<div />' },
+          Icon: { template: '<span />' },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const aicodePortal = wrapper.get('[data-testid="portal-aicode"]')
+    expect(aicodePortal.text()).toContain('AICode')
+    expect(aicodePortal.text()).toContain('进入 AICode')
+    expect(aicodePortal.text()).not.toContain('中转站')
+  })
 })

@@ -118,6 +118,9 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
   let pointerY = 0
   let smoothedPointerX = 0
   let smoothedPointerY = 0
+  let prevPointerX = 0
+  let prevPointerY = 0
+  let smoothedPointerSpeed = 0
 
   env.applyTheme(smoothedThemeT)
 
@@ -189,6 +192,13 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
 
     smoothedPointerX = THREE.MathUtils.lerp(smoothedPointerX, pointerX, Math.min(1, dt * 5.5))
     smoothedPointerY = THREE.MathUtils.lerp(smoothedPointerY, pointerY, Math.min(1, dt * 5.5))
+    const instSpeed =
+      dt > 0.0005
+        ? Math.min(2.5, (Math.hypot(smoothedPointerX - prevPointerX, smoothedPointerY - prevPointerY) / dt) * 0.65)
+        : 0
+    smoothedPointerSpeed = reducedMotion ? 0 : THREE.MathUtils.lerp(smoothedPointerSpeed, instSpeed, Math.min(1, dt * 7))
+    prevPointerX = smoothedPointerX
+    prevPointerY = smoothedPointerY
 
     const curveT = mapProgressToCurveT(smoothedProgress)
     camPosCurve.getPoint(curveT, basePos)
@@ -230,8 +240,8 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
     const qimuActive = smoothedProgress > 0.4 || smoothedProgress < 0.18
 
     env.applyTheme(smoothedThemeT)
-    env.update?.(elapsed, smoothedHoverBias)
-    opticalCore.update(elapsed, dt, smoothedHoverBias, smoothedThemeT)
+    env.update?.(elapsed, smoothedHoverBias, smoothedPointerX, smoothedPointerY)
+    opticalCore.update(elapsed, dt, smoothedHoverBias, smoothedThemeT, smoothedPointerX, smoothedPointerY, smoothedPointerSpeed)
     aiCodeWorld.update(elapsed, dt, aiFocusWeight, smoothedThemeT, aiActive)
     qimuWorld.update(elapsed, dt, smoothedPointerX, smoothedPointerY, qimuFocusWeight, smoothedThemeT, qimuActive)
 

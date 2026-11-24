@@ -3,7 +3,7 @@ import { createSeamlessNoiseTexture } from './proceduralTextures'
 
 export interface StudioEnvironmentHandle {
   applyTheme: (themeT: number) => void
-  update?: (elapsed: number, hoverBias: number) => void
+  update?: (elapsed: number, hoverBias: number, pointerX?: number, pointerY?: number) => void
   dispose: () => void
 }
 
@@ -42,13 +42,13 @@ function createStudioPmrem(renderer: THREE.WebGLRenderer): {
   }
 
   // Zenith white-champagne specular strip
-  addLightCard(0xf8fafc, 2.6, [0, 14, 0], [Math.PI / 2, 0, 0], [28, 12, 1])
-  // Left AICode cyan/indigo studio key card
-  addLightCard(0x22d3ee, 2.4, [-16, 5, -4], [0, Math.PI / 2.2, 0], [18, 11, 1])
-  // Right Qimu amber-gold cinema key card
-  addLightCard(0xf59e0b, 2.4, [16, 5, -4], [0, -Math.PI / 2.2, 0], [18, 11, 1])
-  // Violet cosmic crown rim
-  addLightCard(0xa855f7, 1.5, [0, 8, -18], [0, 0, 0], [26, 8, 1])
+  addLightCard(0xf8fafc, 2.2, [0, 14, 0], [Math.PI / 2, 0, 0], [28, 12, 1])
+  // Left AICode teal studio key card
+  addLightCard(0x38e8d5, 1.9, [-16, 5, -4], [0, Math.PI / 2.2, 0], [18, 11, 1])
+  // Right Qimu champagne-gold cinema key card
+  addLightCard(0xf0c27b, 1.9, [16, 5, -4], [0, -Math.PI / 2.2, 0], [18, 11, 1])
+  // Neutral champagne-platinum cosmic crown rim (replaces violet wash on plinths)
+  addLightCard(0xe2e8f0, 1.3, [0, 8, -18], [0, 0, 0], [26, 8, 1])
 
   const renderTarget = pmrem.fromScene(envScene, 0.04)
   for (const geo of geometries) geo.dispose()
@@ -151,6 +151,7 @@ export function createStudioEnvironment(
       uTime: { value: 0 },
       uThemeT: { value: 0 },
       uHoverBias: { value: 0 },
+      uPointer: { value: new THREE.Vector2(0, 0) },
       uNoiseTex: { value: noiseTex },
     },
     vertexShader: /* glsl */ `
@@ -165,6 +166,7 @@ export function createStudioEnvironment(
       uniform float uTime;
       uniform float uThemeT;
       uniform float uHoverBias;
+      uniform vec2 uPointer;
       uniform sampler2D uNoiseTex;
       varying vec3 vWorldDir;
 
@@ -193,31 +195,49 @@ export function createStudioEnvironment(
         float biasShift = clamp(uHoverBias * 0.35, -0.35, 0.35);
         float splitMix = clamp(sideRight + biasShift * 0.45, 0.0, 1.0);
 
-        // Dark Cosmic palette: deep obsidian-navy zenith + vivid cyan/indigo/gold/violet aurora
-        vec3 darkZenith = vec3(0.010, 0.018, 0.048);
-        vec3 darkHorizon = vec3(0.024, 0.044, 0.105);
+        // Dark Obsidian palette: crisp obsidian zenith + architectural teal left & warm champagne right silk
+        vec3 darkZenith = vec3(0.008, 0.014, 0.032);
+        vec3 darkHorizon = vec3(0.018, 0.034, 0.072);
         vec3 darkBase = mix(darkHorizon, darkZenith, smoothstep(-0.02, 0.65, horizon));
 
-        vec3 cyanAurora = vec3(0.04, 0.84, 0.98);
-        vec3 indigoAurora = vec3(0.32, 0.38, 0.98);
-        vec3 goldAurora = vec3(0.98, 0.68, 0.16);
-        vec3 violetAurora = vec3(0.78, 0.32, 0.94);
+        vec3 tealAurora = vec3(0.10, 0.84, 0.78);
+        vec3 slateBlueAurora = vec3(0.24, 0.44, 0.88);
+        vec3 champagneAurora = vec3(0.95, 0.72, 0.34);
+        vec3 warmSilkAurora = vec3(0.86, 0.56, 0.28);
 
-        vec3 leftTint = mix(cyanAurora, indigoAurora, n2.b * 0.62);
-        vec3 rightTint = mix(goldAurora, violetAurora, n3.b * 0.65);
+        vec3 leftTint = mix(tealAurora, slateBlueAurora, n2.b * 0.55);
+        vec3 rightTint = mix(champagneAurora, warmSilkAurora, n3.b * 0.55);
         vec3 auroraColor = mix(leftTint, rightTint, splitMix);
 
-        float auroraEnergy = (curtain1 * bandLow * 0.85 + curtain2 * bandZenith * 0.62) * (0.58 + 0.42 * verticalStreaks);
-        // Subtle cosmic horizon halo centered behind (-Z)
+        float auroraEnergy = (curtain1 * bandLow * 0.82 + curtain2 * bandZenith * 0.58) * (0.58 + 0.42 * verticalStreaks);
         float centerHalo = exp(-angleX * angleX * 2.6) * exp(-max(dir.y - 0.06, 0.0) * 5.2);
-        vec3 darkCol = darkBase + auroraColor * auroraEnergy * 0.82 + mix(vec3(0.14, 0.52, 0.95), vec3(0.95, 0.62, 0.20), splitMix) * centerHalo * 0.42;
+        float dither = (n3.r - 0.5) * 0.012;
+        vec3 darkCol = darkBase + auroraColor * auroraEnergy * 0.78 + mix(vec3(0.14, 0.72, 0.76), vec3(0.94, 0.70, 0.34), splitMix) * centerHalo * 0.36 + vec3(dither);
 
-        // Light Alabaster Studio palette: pearlescent cool-champagne sky silk + iridescent aurora wisps
-        vec3 lightZenith = vec3(0.91, 0.94, 0.99);
-        vec3 lightHorizon = vec3(0.97, 0.97, 0.98);
-        vec3 lightBase = mix(lightHorizon, lightZenith, smoothstep(-0.02, 0.7, horizon));
-        vec3 lightTint = mix(vec3(0.32, 0.76, 0.94), vec3(0.95, 0.72, 0.36), splitMix);
-        vec3 lightCol = mix(lightBase, lightTint, clamp(auroraEnergy * 0.32 + centerHalo * 0.14, 0.0, 0.42));
+        // Light Mode: MotionSites 31-deg Fluted (Reeded) Glass + Marble Swirl + Pointer Chroma Blob
+        vec2 screenP = vec2(atan(dir.x, -dir.z) * 1.15, dir.y * 1.15);
+        float angle = 0.541;
+        float ca = cos(angle);
+        float sa = sin(angle);
+        vec2 rotP = vec2(ca * screenP.x - sa * screenP.y, sa * screenP.x + ca * screenP.y);
+        float fluteCurve = sin(rotP.x * 18.0 * 3.14159);
+        vec2 fluteShift = vec2(ca, sa) * fluteCurve * 0.035;
+
+        vec2 lightUvR = baseUv * 1.35 + fluteShift * 1.12 + vec2(uTime * 0.014, -uTime * 0.010);
+        vec2 lightUvB = baseUv * 1.35 + fluteShift * 0.88 + vec2(uTime * 0.014, -uTime * 0.010);
+        float swirlR = texture2D(uNoiseTex, lightUvR).r;
+        float swirlG = texture2D(uNoiseTex, (lightUvR + lightUvB) * 0.5).g;
+        float swirlB = texture2D(uNoiseTex, lightUvB).b;
+        vec3 marble = mix(vec3(0.925, 0.945, 0.978), vec3(0.985, 0.988, 0.996), vec3(swirlR, swirlG, swirlB));
+
+        vec2 pAim = vec2(uPointer.x * 0.55, uPointer.y * 0.25 + 0.12);
+        vec2 chromaDelta = vec2(atan(dir.x, -dir.z), dir.y) + fluteShift * 0.65 - pAim;
+        float pointerBlob = exp(-dot(chromaDelta, chromaDelta) * 2.8);
+        vec3 chromaCol = mix(vec3(0.22, 0.82, 0.80), vec3(0.94, 0.72, 0.36), splitMix);
+
+        float ridgeHighlight = pow(max(0.0, fluteCurve), 4.0) * 0.085;
+        vec3 lightBase = mix(vec3(0.955, 0.962, 0.982), marble, smoothstep(-0.08, 0.65, horizon));
+        vec3 lightCol = mix(lightBase, chromaCol, clamp(pointerBlob * 0.26 + auroraEnergy * 0.14 + centerHalo * 0.08, 0.0, 0.38)) + vec3(ridgeHighlight) + vec3(dither * 0.5);
 
         vec3 finalCol = mix(darkCol, lightCol, uThemeT);
         gl_FragColor = vec4(finalCol, 1.0);
@@ -389,13 +409,13 @@ export function createStudioEnvironment(
         vec3 nB = texture2D(uNoiseTex, xz * 0.036 + (nA.rg - 0.5) * 0.3 + vec2(-uTime * 0.015, uTime * 0.028)).rgb;
 
         float sideMix = smoothstep(-18.0, 18.0, xz.x + uHoverBias * 9.0);
-        vec3 cyanCol = vec3(0.08, 0.84, 0.98);
-        vec3 indigoCol = vec3(0.38, 0.42, 0.98);
-        vec3 goldCol = vec3(0.98, 0.70, 0.22);
-        vec3 magentaCol = vec3(0.84, 0.34, 0.88);
+        vec3 tealCol = vec3(0.14, 0.88, 0.82);
+        vec3 slateBlueCol = vec3(0.28, 0.48, 0.92);
+        vec3 champagneCol = vec3(0.96, 0.76, 0.38);
+        vec3 warmGoldCol = vec3(0.88, 0.58, 0.26);
 
-        vec3 leftFloorCol = mix(cyanCol, indigoCol, nA.b * 0.65);
-        vec3 rightFloorCol = mix(goldCol, magentaCol, nB.b * 0.6);
+        vec3 leftFloorCol = mix(tealCol, slateBlueCol, nA.b * 0.55);
+        vec3 rightFloorCol = mix(champagneCol, warmGoldCol, nB.b * 0.55);
         vec3 auraTint = mix(leftFloorCol, rightFloorCol, sideMix);
 
         // Mirror specular reflection from horizon & side worlds
@@ -429,13 +449,13 @@ export function createStudioEnvironment(
         // Foreground-center quiet zone for crisp scroll cue legibility (z > 10.5 && |x| < 4.5)
         float fgQuiet = smoothstep(9.0, 13.5, xz.y) * (1.0 - smoothstep(2.2, 5.8, abs(xz.x)));
 
-        vec3 darkObsidian = vec3(0.010, 0.016, 0.038);
+        vec3 darkObsidian = vec3(0.008, 0.013, 0.028);
         vec3 darkCol = darkObsidian;
-        darkCol += auraTint * (auroraReflect * 0.24 + mirrorBand * 0.28);
-        darkCol += auraTint * (gridLine * (0.30 - 0.14 * fgQuiet) + macroLine * 0.42);
-        darkCol += mix(vec3(0.55, 0.96, 1.0), vec3(1.0, 0.86, 0.46), sideMix) * (channelPulse * 0.95 * (1.0 - 0.45 * fgQuiet));
-        darkCol += mix(vec3(0.32, 0.88, 1.0), vec3(1.0, 0.78, 0.32), sideMix) * (shockRing * (0.36 + 0.75 * gridLine));
-        darkCol = mix(darkCol, vec3(0.010, 0.015, 0.036), fgQuiet * 0.42);
+        darkCol += auraTint * (auroraReflect * 0.20 + mirrorBand * 0.24);
+        darkCol += auraTint * (gridLine * (0.26 - 0.12 * fgQuiet) + macroLine * 0.36);
+        darkCol += mix(vec3(0.45, 0.94, 0.92), vec3(0.98, 0.86, 0.52), sideMix) * (channelPulse * 0.82 * (1.0 - 0.45 * fgQuiet));
+        darkCol += mix(vec3(0.28, 0.88, 0.86), vec3(0.98, 0.78, 0.36), sideMix) * (shockRing * (0.30 + 0.68 * gridLine));
+        darkCol = mix(darkCol, vec3(0.007, 0.011, 0.024), fgQuiet * 0.45);
 
         // Light mode: polished champagne-alabaster studio glass floor with crisp slate-cyan/gold grid
         vec3 lightGlass = vec3(0.93, 0.95, 0.985);
@@ -477,9 +497,10 @@ export function createStudioEnvironment(
     qimuRim.intensity = THREE.MathUtils.lerp(1.65, 1.15, currentThemeT)
   }
 
-  const update = (elapsed: number, hoverBias: number) => {
+  const update = (elapsed: number, hoverBias: number, pointerX = 0, pointerY = 0) => {
     skyMat.uniforms.uTime.value = elapsed
     skyMat.uniforms.uHoverBias.value = hoverBias
+    skyMat.uniforms.uPointer.value.set(pointerX, pointerY)
     starMat.uniforms.uTime.value = elapsed
     ridgeMat.uniforms.uTime.value = elapsed
     ridgeMat.uniforms.uHoverBias.value = hoverBias

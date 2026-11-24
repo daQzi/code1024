@@ -9,6 +9,8 @@
         :aria-label="t('referenceLanding.portal.canvasLabel')"
       />
 
+      <div class="sp-film-grain" aria-hidden="true" />
+      <div class="sp-arch-guides" aria-hidden="true" />
       <div class="rl-reading-progress" :style="{ '--rl-progress': String(scrollProgress) }" aria-hidden="true" />
       <a class="rl-skip" href="#home-main">{{ t('glass.nav.skip') }}</a>
 
@@ -160,10 +162,20 @@
             <div class="sp-portal-lower rl-container">
               <div class="sp-hero-brand">
                 <p class="rl-sr-only">{{ t('referenceLanding.portal.tagline') }}</p>
+                <span class="sp-kicker">
+                  <span class="sp-kicker-index">01 / 04</span>
+                  <span class="sp-kicker-sep" aria-hidden="true">·</span>
+                  <span class="sp-kicker-label">{{ t('referenceLanding.portal.tagline') }}</span>
+                </span>
                 <h1 id="home-title">{{ siteName }}</h1>
               </div>
 
-              <div class="sp-split-portal">
+              <div
+                ref="splitPortalRef"
+                class="sp-split-portal"
+                @pointermove="onSplitPortalPointerMove"
+                @pointerleave="onSplitPortalPointerLeave"
+              >
                 <article
                   class="sp-split-cell sp-split-cell--aicode"
                   data-testid="portal-aicode"
@@ -179,7 +191,10 @@
                   </div>
                   <div class="sp-dock-actions">
                     <router-link :to="entryPath" class="glass-button sp-cta-aicode">
-                      <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                      <span class="sp-roll">
+                        <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                        <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                      </span>
                       <Icon name="arrowRight" size="sm" aria-hidden="true" />
                     </router-link>
                     <button
@@ -217,7 +232,10 @@
                       rel="noopener noreferrer"
                       class="glass-button sp-cta-qimu"
                     >
-                      <span>{{ qimuLabel }}</span>
+                      <span class="sp-roll">
+                        <span class="sp-roll-main">{{ qimuLabel }}</span>
+                        <span class="sp-roll-hover" aria-hidden="true">{{ qimuLabel }}</span>
+                      </span>
                       <Icon name="externalLink" size="sm" aria-hidden="true" />
                     </a>
                   </div>
@@ -249,10 +267,14 @@
                     <h2>{{ t('referenceLanding.portal.aicodeTitle') }}</h2>
                     <span class="sp-dock-tags">{{ t('referenceLanding.portal.aicodeTag') }}</span>
                   </div>
+                  <span class="sp-stage-index">02 / 04</span>
                 </div>
                 <div class="sp-dock-actions">
                   <router-link :to="entryPath" class="glass-button sp-cta-aicode">
-                    <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                    <span class="sp-roll">
+                      <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                      <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                    </span>
                     <Icon name="arrowRight" size="sm" aria-hidden="true" />
                   </router-link>
                   <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="glass-button">
@@ -288,6 +310,7 @@
                     <h2>{{ t('referenceLanding.portal.qimuTitle') }}</h2>
                     <span class="sp-dock-tags">{{ t('referenceLanding.portal.qimuTag') }}</span>
                   </div>
+                  <span class="sp-stage-index">03 / 04</span>
                 </div>
                 <div class="sp-dock-actions">
                   <a
@@ -296,7 +319,10 @@
                     rel="noopener noreferrer"
                     class="glass-button sp-cta-qimu"
                   >
-                    <span>{{ qimuLabel }}</span>
+                    <span class="sp-roll">
+                      <span class="sp-roll-main">{{ qimuLabel }}</span>
+                      <span class="sp-roll-hover" aria-hidden="true">{{ qimuLabel }}</span>
+                    </span>
                     <Icon name="externalLink" size="sm" aria-hidden="true" />
                   </a>
                 </div>
@@ -312,7 +338,10 @@
           >
             <div class="sp-finale-portals">
               <router-link :to="entryPath" class="glass-button rl-button sp-cta-aicode">
-                <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                <span class="sp-roll">
+                  <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                  <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                </span>
                 <Icon name="arrowRight" size="md" aria-hidden="true" />
               </router-link>
               <a
@@ -321,7 +350,10 @@
                 rel="noopener noreferrer"
                 class="glass-button rl-button sp-cta-qimu"
               >
-                <span>{{ qimuLabel }}</span>
+                <span class="sp-roll">
+                  <span class="sp-roll-main">{{ qimuLabel }}</span>
+                  <span class="sp-roll-hover" aria-hidden="true">{{ qimuLabel }}</span>
+                </span>
                 <Icon name="externalLink" size="md" aria-hidden="true" />
               </a>
             </div>
@@ -394,6 +426,25 @@ function togglePortalTheme() {
 const landingRoot = ref<HTMLElement | null>(null)
 const headerRef = ref<HTMLElement | null>(null)
 const trackRef = ref<HTMLElement | null>(null)
+const splitPortalRef = ref<HTMLElement | null>(null)
+
+function onSplitPortalPointerMove(event: PointerEvent) {
+  const el = splitPortalRef.value
+  if (!el || reducedMotion.value) return
+  const rect = el.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return
+  const x = Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100))
+  const y = Math.min(100, Math.max(0, ((event.clientY - rect.top) / rect.height) * 100))
+  el.style.setProperty('--sp-mx', `${x.toFixed(1)}%`)
+  el.style.setProperty('--sp-my', `${y.toFixed(1)}%`)
+}
+
+function onSplitPortalPointerLeave() {
+  const el = splitPortalRef.value
+  if (!el) return
+  el.style.setProperty('--sp-mx', '50%')
+  el.style.setProperty('--sp-my', '0%')
+}
 
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Code1024')
 const siteLogo = computed(() =>

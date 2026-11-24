@@ -53,10 +53,10 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
 
   // Architectural brushed chassis materials (zero transmission, instant single-pass MSAA)
   const chassisMat = new THREE.MeshStandardMaterial({
-    color: 0x090f1d,
-    metalness: 0.82,
-    roughness: 0.34,
-    envMapIntensity: 0.62,
+    color: 0x0a0f1a,
+    metalness: 0.72,
+    roughness: 0.42,
+    envMapIntensity: 0.45,
   })
   const trimCyanMat = new THREE.MeshStandardMaterial({
     color: 0x22d3ee,
@@ -422,7 +422,7 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
     wingLeft.position.y = 2.2 + Math.sin(elapsed * 1.15) * 0.09
     wingRight.position.y = 2.2 + Math.cos(elapsed * 1.15) * 0.09
 
-    const themeChassis = themeT > 0.5 ? 0xe2e8f0 : 0x0b1222
+    const themeChassis = themeT > 0.5 ? 0xe8edf5 : 0x0a0f1a
     chassisMat.color.setHex(themeChassis)
     mainCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xcbd5e1 : 0x0e172a)
     leftCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xcbd5e1 : 0x0e172a)

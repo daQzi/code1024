@@ -12,7 +12,7 @@ export default {
         qimu: 'Qimu',
         panorama: 'Panorama',
       },
-      aicodeTitle: 'AICode Gateway',
+      aicodeTitle: 'AICode',
       aicodeTag: 'API · CLI · Multimodal',
       aicodeAction: 'Enter AICode',
       consoleAction: 'Open console',

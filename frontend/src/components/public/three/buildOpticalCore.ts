@@ -3,7 +3,15 @@ import { createSoftGlowTexture } from './proceduralTextures'
 
 export interface OpticalCoreHandle {
   group: THREE.Group
-  update: (elapsed: number, dt: number, hoverBias: number, themeT: number) => void
+  update: (
+    elapsed: number,
+    dt: number,
+    hoverBias: number,
+    themeT: number,
+    pointerX?: number,
+    pointerY?: number,
+    pointerSpeed?: number,
+  ) => void
   dispose: () => void
 }
 
@@ -34,10 +42,10 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
   const pupilGeo = new THREE.SphereGeometry(1.58, 48, 32)
   geometries.push(pupilGeo)
   const pupilMat = new THREE.MeshStandardMaterial({
-    color: 0x070d1f,
-    metalness: 0.92,
-    roughness: 0.14,
-    envMapIntensity: 1.85,
+    color: 0x060b18,
+    metalness: 0.9,
+    roughness: 0.12,
+    envMapIntensity: 1.95,
   })
   materials.push(pupilMat)
   const pupilMesh = new THREE.Mesh(pupilGeo, pupilMat)
@@ -80,11 +88,11 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         float rim = pow(1.0 - ndotv, 3.2);
         float swirl = sin(vLocalPos.x * 3.4 - uTime * 2.1 + sin(vLocalPos.y * 2.6 + uTime * 1.3)) * 0.5 + 0.5;
         float sideMix = clamp((vLocalPos.x * 0.35 + 0.5) + uHoverBias * 0.25, 0.0, 1.0);
-        vec3 cyanRim = vec3(0.14, 0.88, 1.0);
-        vec3 goldRim = vec3(1.0, 0.72, 0.22);
-        vec3 rimCol = mix(cyanRim, goldRim, sideMix);
-        float alpha = rim * (0.55 + 0.38 * swirl) * (1.0 - 0.52 * uThemeT);
-        gl_FragColor = vec4(rimCol * 1.1, alpha);
+        vec3 tealRim = vec3(0.18, 0.88, 0.84);
+        vec3 champagneRim = vec3(0.96, 0.76, 0.42);
+        vec3 rimCol = mix(tealRim, champagneRim, sideMix);
+        float alpha = rim * (0.58 + 0.35 * swirl) * mix(1.0, 0.72, uThemeT);
+        gl_FragColor = vec4(rimCol * 1.05, alpha);
       }
     `,
   })
@@ -92,7 +100,7 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
   const coronaMesh = new THREE.Mesh(coronaGeo, coronaMat)
   corePivot.add(coronaMesh)
 
-  // 2. Radiant 12-Shaft Volumetric God-Ray Eclipse Vortex (smoothly filling sky behind core)
+  // 2. Silky Silver-Teal & Warm Champagne 12-Shaft Volumetric God-Ray Vortex
   const godRayGeo = new THREE.PlaneGeometry(26, 26, 1, 1)
   geometries.push(godRayGeo)
   const godRayMat = new THREE.ShaderMaterial({
@@ -130,22 +138,21 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         // 12 primary god-ray shafts + 7 secondary counter-rotating shafts
         float rayA = pow(max(0.0, cos(angle * 12.0 + uTime * 0.26 + sin(r * 4.5 - uTime * 0.4) * 0.35)), 4.0);
         float rayB = pow(max(0.0, cos(angle * 7.0 - uTime * 0.19 + 1.2)), 3.0);
-        float ringGlow = exp(-abs(r - 0.165) * 24.0) * 0.92;
-        float haloGlow = exp(-max(r - 0.14, 0.0) * 4.2) * 0.56;
+        float ringGlow = exp(-abs(r - 0.165) * 24.0) * 0.78;
+        float haloGlow = exp(-max(r - 0.14, 0.0) * 4.2) * 0.48;
 
         float sideSplit = smoothstep(-0.65, 0.65, p.x + uHoverBias * 0.35);
-        vec3 cyanCol = vec3(0.08, 0.82, 1.0);
-        vec3 indigoCol = vec3(0.42, 0.38, 0.98);
-        vec3 goldCol = vec3(1.0, 0.72, 0.22);
-        vec3 violetCol = vec3(0.82, 0.34, 0.95);
+        vec3 tealCol = vec3(0.16, 0.84, 0.80);
+        vec3 platinumCol = vec3(0.84, 0.89, 0.96);
+        vec3 champagneCol = vec3(0.95, 0.76, 0.42);
 
-        vec3 leftCol = mix(cyanCol, indigoCol, rayB * 0.55);
-        vec3 rightCol = mix(goldCol, violetCol, rayB * 0.55);
+        vec3 leftCol = mix(tealCol, platinumCol, rayB * 0.52);
+        vec3 rightCol = mix(champagneCol, platinumCol, rayB * 0.48);
         vec3 rayCol = mix(leftCol, rightCol, sideSplit);
 
-        float intensity = (haloGlow + ringGlow + (rayA * 0.62 + rayB * 0.34) * smoothstep(0.95, 0.15, r)) * eclipseMask * edgeFade;
-        float themeGain = mix(0.88, 0.36, uThemeT);
-        gl_FragColor = vec4(rayCol * intensity * themeGain, clamp(intensity * themeGain, 0.0, 1.0));
+        float intensity = (haloGlow + ringGlow + (rayA * 0.52 + rayB * 0.28) * smoothstep(0.95, 0.15, r)) * eclipseMask * edgeFade;
+        float themeGain = mix(0.68, 0.28, uThemeT);
+        gl_FragColor = vec4(rayCol * intensity * themeGain, clamp(intensity * themeGain, 0.0, 0.92));
       }
     `,
   })
@@ -157,9 +164,9 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
   // Secondary luminous sprite glow behind pupil for rich softness
   const haloSpriteMat = new THREE.SpriteMaterial({
     map: softGlowTex,
-    color: 0x38bdf8,
+    color: 0x38e8d5,
     transparent: true,
-    opacity: 0.38,
+    opacity: 0.32,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   })
@@ -169,13 +176,13 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
   haloSprite.position.z = -0.35
   corePivot.add(haloSprite)
 
-  // 3. Five Tilted Precision Orbital Gyroscope Rings
+  // 3. Five Tilted Luxury Metal Gyroscope Rings (platinum, titanium, teal, champagne, pearl)
   const ringConfigs = [
-    { radius: 3.4, tube: 0.042, color: 0x22d3ee, emissive: 0x0891b2, tilt: [0.42, 0.18, 0.12], speed: [0.22, 0.34, 0.08] },
-    { radius: 4.3, tube: 0.036, color: 0xfbbf24, emissive: 0xb45309, tilt: [-0.36, 0.44, -0.22], speed: [-0.16, 0.28, 0.14] },
-    { radius: 5.4, tube: 0.032, color: 0x818cf8, emissive: 0x4338ca, tilt: [0.78, -0.25, 0.35], speed: [0.12, -0.22, 0.18] },
-    { radius: 6.7, tube: 0.028, color: 0xf472b6, emissive: 0x9d174d, tilt: [-0.68, -0.42, -0.18], speed: [-0.09, 0.18, -0.15] },
-    { radius: 8.2, tube: 0.024, color: 0xe2e8f0, emissive: 0x38bdf8, tilt: [0.22, 0.72, -0.48], speed: [0.06, -0.14, 0.11] },
+    { radius: 3.4, tube: 0.038, color: 0xe2e8f0, emissive: 0x334155, tilt: [0.42, 0.18, 0.12], speed: [0.22, 0.34, 0.08] },
+    { radius: 4.3, tube: 0.032, color: 0xf0c27b, emissive: 0x92611a, tilt: [-0.36, 0.44, -0.22], speed: [-0.16, 0.28, 0.14] },
+    { radius: 5.4, tube: 0.028, color: 0x94a3b8, emissive: 0x1e293b, tilt: [0.78, -0.25, 0.35], speed: [0.12, -0.22, 0.18] },
+    { radius: 6.7, tube: 0.024, color: 0x38e8d5, emissive: 0x0f766e, tilt: [-0.68, -0.42, -0.18], speed: [-0.09, 0.18, -0.15] },
+    { radius: 8.2, tube: 0.022, color: 0xcbd5e1, emissive: 0x475569, tilt: [0.22, 0.72, -0.48], speed: [0.06, -0.14, 0.11] },
   ] as const
 
   const ringMeshes: THREE.Mesh[] = []
@@ -187,11 +194,11 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
     const rMat = new THREE.MeshStandardMaterial({
       color: cfg.color,
       emissive: cfg.emissive,
-      emissiveIntensity: 0.85,
-      metalness: 0.88,
-      roughness: 0.18,
+      emissiveIntensity: 0.58,
+      metalness: 0.9,
+      roughness: 0.16,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.9,
     })
     materials.push(rMat)
     ringMats.push(rMat)
@@ -207,10 +214,10 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
   geometries.push(nodeGeo)
   const nodeMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
-    emissive: 0x38bdf8,
-    emissiveIntensity: 1.15,
-    metalness: 0.85,
-    roughness: 0.12,
+    emissive: 0x38e8d5,
+    emissiveIntensity: 0.82,
+    metalness: 0.88,
+    roughness: 0.14,
   })
   materials.push(nodeMat)
   const nodeInstanced = new THREE.InstancedMesh(nodeGeo, nodeMat, nodeCount)
@@ -221,8 +228,8 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
   const tmpColor = new THREE.Color()
   for (let i = 0; i < nodeCount; i++) {
     const ringIndex = i % ringConfigs.length
-    const isWarm = ringIndex === 1 || ringIndex === 3
-    tmpColor.setHex(isWarm ? (i % 2 === 0 ? 0xfbbf24 : 0xf472b6) : i % 2 === 0 ? 0x22d3ee : 0x818cf8)
+    const isWarm = ringIndex === 1 || ringIndex === 4
+    tmpColor.setHex(isWarm ? (i % 2 === 0 ? 0xf0c27b : 0xf8fafc) : i % 2 === 0 ? 0x38e8d5 : 0xe2e8f0)
     nodeInstanced.setColorAt(i, tmpColor)
     nodeSeeds.push({
       ringIndex,
@@ -255,12 +262,12 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         new THREE.Vector3(14, 9.6, -9.8),
         new THREE.Vector3(26, 13.0, -4.0),
       ],
-      radius: 0.105,
+      radius: 0.095,
       speed: 0.34,
       phase: 0.0,
       waveAmp: 0.42,
-      colLeft: new THREE.Color(0x22d3ee),
-      colRight: new THREE.Color(0xfbbf24),
+      colLeft: new THREE.Color(0x38e8d5),
+      colRight: new THREE.Color(0xf0c27b),
     },
     // Mid-left foreground sweep curving gracefully past lower-center toward mid-right
     {
@@ -271,12 +278,12 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         new THREE.Vector3(12, 1.5, -1.0),
         new THREE.Vector3(25, 2.5, 6.5),
       ],
-      radius: 0.092,
+      radius: 0.085,
       speed: 0.42,
       phase: 1.4,
       waveAmp: 0.36,
-      colLeft: new THREE.Color(0x6366f1),
-      colRight: new THREE.Color(0xf472b6),
+      colLeft: new THREE.Color(0x94a3b8),
+      colRight: new THREE.Color(0xf0c27b),
     },
     // High diagonal top-left foreground -> Eclipse heart -> deep far-right sky
     {
@@ -287,12 +294,12 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         new THREE.Vector3(11.5, 5.4, -11.2),
         new THREE.Vector3(26, 9.2, -13.8),
       ],
-      radius: 0.085,
+      radius: 0.08,
       speed: 0.38,
       phase: 2.7,
       waveAmp: 0.48,
-      colLeft: new THREE.Color(0x38bdf8),
-      colRight: new THREE.Color(0xf59e0b),
+      colLeft: new THREE.Color(0xe2e8f0),
+      colRight: new THREE.Color(0xf0c27b),
     },
     // Counter-diagonal deep left sky -> Eclipse heart -> right foreground
     {
@@ -303,12 +310,12 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         new THREE.Vector3(11.5, 6.9, -4.2),
         new THREE.Vector3(24, 11.8, 3.4),
       ],
-      radius: 0.085,
+      radius: 0.08,
       speed: 0.36,
       phase: 3.9,
       waveAmp: 0.48,
-      colLeft: new THREE.Color(0x818cf8),
-      colRight: new THREE.Color(0xfbbf24),
+      colLeft: new THREE.Color(0x38e8d5),
+      colRight: new THREE.Color(0xe2e8f0),
     },
     // Lower sweeping galactic bridge linking AICode & Qimu worlds cleanly in front
     {
@@ -319,12 +326,12 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         new THREE.Vector3(13, 3.9, 1.6),
         new THREE.Vector3(24, 5.0, 8.4),
       ],
-      radius: 0.075,
+      radius: 0.072,
       speed: 0.46,
       phase: 5.1,
       waveAmp: 0.34,
-      colLeft: new THREE.Color(0x06b6d4),
-      colRight: new THREE.Color(0xe879f9),
+      colLeft: new THREE.Color(0x38e8d5),
+      colRight: new THREE.Color(0xf0c27b),
     },
     // Crown cosmic halo arc hovering in upper zenith across entire viewport width
     {
@@ -335,12 +342,12 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         new THREE.Vector3(12, 11.2, -12.8),
         new THREE.Vector3(25, 13.4, -8.5),
       ],
-      radius: 0.078,
+      radius: 0.074,
       speed: 0.29,
       phase: 0.85,
       waveAmp: 0.52,
-      colLeft: new THREE.Color(0x22d3ee),
-      colRight: new THREE.Color(0xf59e0b),
+      colLeft: new THREE.Color(0xcbd5e1),
+      colRight: new THREE.Color(0xf0c27b),
     },
   ]
 
@@ -404,8 +411,8 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
           vec3 hotWhite = vec3(0.96, 0.98, 1.0);
           vec3 finalCol = mix(baseCol, hotWhite, clamp(pulseA * 0.65 + pulseB * 0.35, 0.0, 0.85));
 
-          float silkAlpha = (0.24 + pulseA * 0.68 + pulseB * 0.36) * endFade;
-          float themeScale = mix(0.88, 0.32, uThemeT);
+          float silkAlpha = (0.18 + pulseA * 0.56 + pulseB * 0.28) * endFade;
+          float themeScale = mix(0.84, 0.28, uThemeT);
           gl_FragColor = vec4(finalCol * silkAlpha * themeScale, clamp(silkAlpha * themeScale, 0.0, 1.0));
         }
       `,
@@ -463,14 +470,19 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
       uTime: { value: 0 },
       uThemeT: { value: 0 },
       uHoverBias: { value: 0 },
+      uPointerPos: { value: new THREE.Vector3(0, 4.35, -1.5) },
+      uPointerSpeed: { value: 0 },
       uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 1.25) },
     },
     vertexShader: /* glsl */ `
       attribute vec4 aParam;
       uniform float uTime;
+      uniform vec3 uPointerPos;
+      uniform float uPointerSpeed;
       uniform float uPixelRatio;
       varying float vTint;
       varying float vAlpha;
+      varying float vWake;
 
       void main() {
         vec3 pos = position;
@@ -479,11 +491,21 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         pos.y += cos(t * 0.92 + pos.x * 0.09) * 0.42;
         pos.z += sin(t * 0.61) * 0.45;
 
+        // AXON-inspired cursor fluid wake & radial particle dispersion on GPU
+        vec2 dPtr = pos.xy - uPointerPos.xy;
+        float dist2 = dot(dPtr, dPtr) + 0.35;
+        float influence = exp(-dist2 * 0.045) * (0.85 + clamp(uPointerSpeed, 0.0, 2.5) * 2.2);
+        vec2 dir2 = normalize(dPtr + vec2(0.0001));
+        vec2 swirl = vec2(-dir2.y, dir2.x);
+        pos.xy += (dir2 * 1.45 + swirl * 1.25) * influence;
+        pos.z += sin(dist2 * 0.5 - uTime * 2.2) * 0.75 * influence;
+
         vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
         float dist = max(3.0, -mvPosition.z);
-        gl_PointSize = clamp(aParam.x * uPixelRatio * (20.0 / dist), 1.8, 12.0);
+        vWake = clamp(influence * 0.65, 0.0, 1.0);
+        gl_PointSize = clamp(aParam.x * (1.0 + vWake * 0.35) * uPixelRatio * (20.0 / dist), 1.8, 12.5);
         vTint = aParam.w;
-        vAlpha = smoothstep(52.0, 12.0, dist) * (0.58 + 0.42 * sin(t * 1.4));
+        vAlpha = smoothstep(52.0, 12.0, dist) * (0.58 + 0.42 * sin(t * 1.4)) * (1.0 + vWake * 0.45);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -492,6 +514,7 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
       uniform float uHoverBias;
       varying float vTint;
       varying float vAlpha;
+      varying float vWake;
 
       void main() {
         vec2 c = gl_PointCoord - vec2(0.5);
@@ -499,13 +522,14 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
         if (r2 > 0.25) discard;
 
         float bokeh = smoothstep(0.25, 0.02, r2);
-        vec3 cyanDot = vec3(0.16, 0.88, 1.0);
-        vec3 goldDot = vec3(1.0, 0.76, 0.28);
-        vec3 violetDot = vec3(0.76, 0.42, 0.98);
-        vec3 baseCol = mix(mix(cyanDot, violetDot, 0.28), goldDot, clamp(vTint + uHoverBias * 0.15, 0.0, 1.0));
+        vec3 tealDot = vec3(0.22, 0.90, 0.84);
+        vec3 champagneDot = vec3(0.96, 0.78, 0.46);
+        vec3 pearlDot = vec3(0.88, 0.92, 0.98);
+        vec3 baseCol = mix(mix(tealDot, pearlDot, 0.24), champagneDot, clamp(vTint + uHoverBias * 0.15, 0.0, 1.0));
+        vec3 col = mix(baseCol, vec3(0.98, 0.99, 1.0), vWake * 0.65);
 
-        float themeScale = mix(0.82, 0.28, uThemeT);
-        gl_FragColor = vec4(baseCol, vAlpha * bokeh * themeScale);
+        float themeScale = mix(0.82, 0.26, uThemeT);
+        gl_FragColor = vec4(col, vAlpha * bokeh * themeScale);
       }
     `,
   })
@@ -518,7 +542,15 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
   const localPos = new THREE.Vector3()
   const ringQuat = new THREE.Quaternion()
 
-  const update = (elapsed: number, dt: number, hoverBias: number, themeT: number) => {
+  const update = (
+    elapsed: number,
+    dt: number,
+    hoverBias: number,
+    themeT: number,
+    pointerX = 0,
+    pointerY = 0,
+    pointerSpeed = 0,
+  ) => {
     const safeDt = Math.min(dt, 0.05)
 
     coronaMat.uniforms.uTime.value = elapsed
@@ -529,8 +561,8 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
     godRayMat.uniforms.uHoverBias.value = hoverBias
     godRayMat.uniforms.uThemeT.value = themeT
 
-    haloSpriteMat.opacity = THREE.MathUtils.lerp(0.38, 0.12, themeT)
-    haloSpriteMat.color.setHex(hoverBias < -0.25 ? 0x22d3ee : hoverBias > 0.25 ? 0xf59e0b : 0x6366f1)
+    haloSpriteMat.opacity = THREE.MathUtils.lerp(0.32, 0.10, themeT)
+    haloSpriteMat.color.setHex(hoverBias < -0.25 ? 0x38e8d5 : hoverBias > 0.25 ? 0xf0c27b : 0xcbd5e1)
 
     for (let i = 0; i < ringMeshes.length; i++) {
       const cfg = ringConfigs[i]
@@ -538,7 +570,7 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
       mesh.rotation.x += cfg.speed[0] * safeDt
       mesh.rotation.y += cfg.speed[1] * safeDt
       mesh.rotation.z += cfg.speed[2] * safeDt
-      ringMats[i].emissiveIntensity = THREE.MathUtils.lerp(0.85, 0.42, themeT)
+      ringMats[i].emissiveIntensity = THREE.MathUtils.lerp(0.58, 0.28, themeT)
     }
 
     // Orbit 48 crystal nodes cleanly along each ring's rotated plane
@@ -571,6 +603,8 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
     particleMat.uniforms.uTime.value = elapsed
     particleMat.uniforms.uThemeT.value = themeT
     particleMat.uniforms.uHoverBias.value = hoverBias
+    particleMat.uniforms.uPointerPos.value.set(pointerX * 16.0, 4.35 + pointerY * 7.5, -1.5)
+    particleMat.uniforms.uPointerSpeed.value = pointerSpeed
 
     corePivot.position.y = coreCenter.y + Math.sin(elapsed * 0.72) * 0.16
     corePivot.rotation.y = THREE.MathUtils.lerp(corePivot.rotation.y, -hoverBias * 0.18, Math.min(1, safeDt * 4))
