@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { createSoftGlowTexture } from './proceduralTextures'
 
 export interface OpticalCoreHandle {
   group: THREE.Group
@@ -6,29 +7,104 @@ export interface OpticalCoreHandle {
   dispose: () => void
 }
 
+interface OrbitNodeSeed {
+  ringIndex: number
+  baseAngle: number
+  speed: number
+  scale: number
+  radialOffset: number
+}
+
 export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
   const group = new THREE.Group()
-  const disposables: Array<{ dispose: () => void }> = []
+  const coreCenter = new THREE.Vector3(0, 4.35, -8.0)
 
-  // =========================================================================
-  // 1. Central Gravitational Eclipse Singularity & Optical Corona (y = 4.45, z = -9.5)
-  // =========================================================================
-  const eclipsePivot = new THREE.Group()
-  eclipsePivot.position.set(0, 4.45, -9.5)
-  group.add(eclipsePivot)
+  const geometries: THREE.BufferGeometry[] = []
+  const materials: THREE.Material[] = []
+  const textures: THREE.Texture[] = []
 
-  const eclipseUniforms = {
-    uTime: { value: 0 },
-    uBias: { value: 0 },
-    uTheme: { value: 0 },
-  }
+  const softGlowTex = createSoftGlowTexture()
+  textures.push(softGlowTex)
 
-  const eclipseGeo = new THREE.PlaneGeometry(15.5, 15.5)
-  const eclipseMat = new THREE.ShaderMaterial({
-    uniforms: eclipseUniforms,
+  const corePivot = new THREE.Group()
+  corePivot.position.copy(coreCenter)
+  group.add(corePivot)
+
+  // 1. Central Jewel-like Obsidian Event Horizon Pupil + Fresnel Photon Shell
+  const pupilGeo = new THREE.SphereGeometry(1.58, 48, 32)
+  geometries.push(pupilGeo)
+  const pupilMat = new THREE.MeshStandardMaterial({
+    color: 0x070d1f,
+    metalness: 0.92,
+    roughness: 0.14,
+    envMapIntensity: 1.85,
+  })
+  materials.push(pupilMat)
+  const pupilMesh = new THREE.Mesh(pupilGeo, pupilMat)
+  corePivot.add(pupilMesh)
+
+  const coronaGeo = new THREE.SphereGeometry(1.86, 48, 32)
+  geometries.push(coronaGeo)
+  const coronaMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.FrontSide,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uHoverBias: { value: 0 },
+      uThemeT: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vNormalW;
+      varying vec3 vViewDir;
+      varying vec3 vLocalPos;
+      void main() {
+        vLocalPos = position;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vNormalW = normalize(mat3(modelMatrix) * normal);
+        vViewDir = normalize(cameraPosition - wp.xyz);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform float uHoverBias;
+      uniform float uThemeT;
+      varying vec3 vNormalW;
+      varying vec3 vViewDir;
+      varying vec3 vLocalPos;
+
+      void main() {
+        float ndotv = max(dot(normalize(vNormalW), normalize(vViewDir)), 0.0);
+        float rim = pow(1.0 - ndotv, 3.2);
+        float swirl = sin(vLocalPos.x * 3.4 - uTime * 2.1 + sin(vLocalPos.y * 2.6 + uTime * 1.3)) * 0.5 + 0.5;
+        float sideMix = clamp((vLocalPos.x * 0.35 + 0.5) + uHoverBias * 0.25, 0.0, 1.0);
+        vec3 cyanRim = vec3(0.14, 0.88, 1.0);
+        vec3 goldRim = vec3(1.0, 0.72, 0.22);
+        vec3 rimCol = mix(cyanRim, goldRim, sideMix);
+        float alpha = rim * (0.55 + 0.38 * swirl) * (1.0 - 0.52 * uThemeT);
+        gl_FragColor = vec4(rimCol * 1.1, alpha);
+      }
+    `,
+  })
+  materials.push(coronaMat)
+  const coronaMesh = new THREE.Mesh(coronaGeo, coronaMat)
+  corePivot.add(coronaMesh)
+
+  // 2. Radiant 12-Shaft Volumetric God-Ray Eclipse Vortex (smoothly filling sky behind core)
+  const godRayGeo = new THREE.PlaneGeometry(26, 26, 1, 1)
+  geometries.push(godRayGeo)
+  const godRayMat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     fog: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uHoverBias: { value: 0 },
+      uThemeT: { value: 0 },
+    },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main() {
@@ -38,241 +114,478 @@ export function buildOpticalCore(highTier: boolean): OpticalCoreHandle {
     `,
     fragmentShader: /* glsl */ `
       uniform float uTime;
-      uniform float uBias;
-      uniform float uTheme;
+      uniform float uHoverBias;
+      uniform float uThemeT;
       varying vec2 vUv;
 
       void main() {
-        vec2 p = vUv * 2.0 - 1.0;
+        vec2 p = (vUv - 0.5) * 2.0; // -1..1
         float r = length(p);
-        if (r > 0.99) discard;
+        float angle = atan(p.y, p.x);
 
-        float angle = (r > 0.0005) ? atan(p.y, p.x) : 0.0;
-        float wingMix = clamp(0.5 + uBias * 0.42 + p.x * 0.65, 0.0, 1.0);
+        // Preserve dark crystal pupil interior (r < 0.135 stays unlit)
+        float eclipseMask = smoothstep(0.115, 0.175, r);
+        float edgeFade = smoothstep(1.0, 0.24, r);
 
-        vec3 cyanHue = vec3(0.22, 0.91, 0.84);
-        vec3 champagneHue = vec3(0.94, 0.76, 0.48);
-        vec3 lavenderHue = vec3(0.76, 0.68, 0.98);
-        vec3 sideGlow = mix(cyanHue, mix(champagneHue, lavenderHue, 0.28), wingMix);
+        // 12 primary god-ray shafts + 7 secondary counter-rotating shafts
+        float rayA = pow(max(0.0, cos(angle * 12.0 + uTime * 0.26 + sin(r * 4.5 - uTime * 0.4) * 0.35)), 4.0);
+        float rayB = pow(max(0.0, cos(angle * 7.0 - uTime * 0.19 + 1.2)), 3.0);
+        float ringGlow = exp(-abs(r - 0.165) * 24.0) * 0.92;
+        float haloGlow = exp(-max(r - 0.14, 0.0) * 4.2) * 0.56;
 
-        // Razor-crisp optical eclipse event rim at r = 0.258 with deep obsidian interior shadow
-        float rimR = 0.258;
-        float dRim = r - rimR;
-        float outsideCore = smoothstep(rimR - 0.008, rimR + 0.008, r);
-        float coreMask = 1.0 - outsideCore;
+        float sideSplit = smoothstep(-0.65, 0.65, p.x + uHoverBias * 0.35);
+        vec3 cyanCol = vec3(0.08, 0.82, 1.0);
+        vec3 indigoCol = vec3(0.42, 0.38, 0.98);
+        vec3 goldCol = vec3(1.0, 0.72, 0.22);
+        vec3 violetCol = vec3(0.82, 0.34, 0.95);
 
-        // Ultra-crisp photon ring focused outside event horizon
-        float brightRing = exp(-abs(dRim) * 145.0) * 1.65 + exp(-max(0.0, dRim) * 34.0) * 0.46;
+        vec3 leftCol = mix(cyanCol, indigoCol, rayB * 0.55);
+        vec3 rightCol = mix(goldCol, violetCol, rayB * 0.55);
+        vec3 rayCol = mix(leftCol, rightCol, sideSplit);
 
-        // Delicate asymmetric orbital corona wisps (pure outside rimR)
-        float wispA = 0.5 + 0.5 * sin(angle * 3.0 - uTime * 0.55 + sin(r * 14.0 - uTime * 0.8));
-        float wispB = 0.5 + 0.5 * cos(angle * 5.0 + uTime * 0.38 - r * 10.0);
-        float wispMod = 0.58 + 0.42 * (wispA * 0.65 + wispB * 0.35);
-
-        float outerCorona = outsideCore * exp(-max(0.0, r - rimR) * 7.2) * wispMod;
-        float haloWash = outsideCore * exp(-max(0.0, r - rimR) * 4.4);
-
-        // Razor-thin anamorphic optical streak clipped cleanly outside dark eclipse core
-        float outsideStreak = smoothstep(rimR * 0.88, rimR * 1.12, r);
-        float streakHoriz = outsideStreak * exp(-abs(p.y) * 68.0) * exp(-abs(p.x) * 2.2) * 0.72;
-        float wideHoriz = outsideStreak * exp(-abs(p.y) * 22.0) * exp(-abs(p.x) * 2.8) * 0.16;
-
-        vec3 coreInterior = mix(vec3(0.004, 0.007, 0.015), vec3(0.07, 0.10, 0.17), uTheme);
-        vec3 rimWhiteHot = mix(vec3(0.95, 0.97, 1.0), sideGlow, 0.34);
-
-        vec3 coronaLight = rimWhiteHot * brightRing * (0.82 + 0.22 * wispA)
-          + sideGlow * (outerCorona * 0.88 + haloWash * 0.32)
-          + mix(vec3(0.94, 0.96, 1.0), sideGlow, 0.38) * (streakHoriz + wideHoriz);
-
-        vec3 col = mix(coronaLight, coreInterior, coreMask * 0.92);
-
-        float edgeFade = smoothstep(0.99, 0.62, r);
-        float darkAlpha = clamp(
-          coreMask * 0.98 + brightRing * 0.86 + outerCorona * 0.66 + haloWash * 0.28 + (streakHoriz + wideHoriz) * 0.55,
-          0.0,
-          0.99
-        );
-        float lightAlpha = clamp(
-          coreMask * 0.92 + brightRing * 0.72 + outerCorona * 0.42 + streakHoriz * 0.35,
-          0.0,
-          0.94
-        );
-
-        float alpha = mix(darkAlpha, lightAlpha, uTheme) * edgeFade;
-        gl_FragColor = vec4(col * mix(1.0, 0.9, uTheme), alpha);
+        float intensity = (haloGlow + ringGlow + (rayA * 0.62 + rayB * 0.34) * smoothstep(0.95, 0.15, r)) * eclipseMask * edgeFade;
+        float themeGain = mix(0.88, 0.36, uThemeT);
+        gl_FragColor = vec4(rayCol * intensity * themeGain, clamp(intensity * themeGain, 0.0, 1.0));
       }
     `,
   })
-  const eclipsePlane = new THREE.Mesh(eclipseGeo, eclipseMat)
-  eclipsePivot.add(eclipsePlane)
-  disposables.push(eclipseGeo, eclipseMat)
+  materials.push(godRayMat)
+  const godRayMesh = new THREE.Mesh(godRayGeo, godRayMat)
+  godRayMesh.position.z = -0.18
+  corePivot.add(godRayMesh)
 
-  // =========================================================================
-  // 2. Three Whisper-Thin Watchmaker Orbital Hairline Rings
-  // =========================================================================
-  const platinumMat = new THREE.MeshStandardMaterial({
-    color: 0xe2e8f0,
-    metalness: 0.95,
-    roughness: 0.18,
-    envMapIntensity: 1.5,
-  })
-  const champagneGoldMat = new THREE.MeshStandardMaterial({
-    color: 0xf0c27b,
-    metalness: 0.95,
-    roughness: 0.19,
-    envMapIntensity: 1.55,
-  })
-  const silverSteelMat = new THREE.MeshStandardMaterial({
-    color: 0x94a3b8,
-    metalness: 0.94,
-    roughness: 0.22,
-    envMapIntensity: 1.45,
-  })
-  disposables.push(platinumMat, champagneGoldMat, silverSteelMat)
-
-  const ring1Geo = new THREE.TorusGeometry(4.3, 0.024, 12, 120)
-  const ring1 = new THREE.Mesh(ring1Geo, platinumMat)
-  ring1.rotation.set(0.32, 0.22, 0.14)
-  eclipsePivot.add(ring1)
-
-  const ring2Geo = new THREE.TorusGeometry(5.35, 0.02, 12, 128)
-  const ring2 = new THREE.Mesh(ring2Geo, champagneGoldMat)
-  ring2.rotation.set(-0.46, 0.34, -0.22)
-  eclipsePivot.add(ring2)
-
-  const ring3Geo = new THREE.TorusGeometry(6.6, 0.015, 12, 136)
-  const ring3 = new THREE.Mesh(ring3Geo, silverSteelMat)
-  ring3.rotation.set(0.18, -0.38, 0.42)
-  eclipsePivot.add(ring3)
-  disposables.push(ring1Geo, ring2Geo, ring3Geo)
-
-  // =========================================================================
-  // 3. 3,600-Particle GPU Macro Silk Flow-Field Universe (1 draw call, analytical bokeh)
-  // =========================================================================
-  const flowCount = highTier ? 3600 : 1400
-  const flowBasePos = new Float32Array(flowCount * 3)
-  const flowParams = new Float32Array(flowCount * 3) // [ribbonIndex, ribbonU, seed]
-
-  for (let i = 0; i < flowCount; i++) {
-    const ribbon = i % 5
-    const u = ((Math.floor(i / 5) + ((i * 0.6180339) % 1) * 0.85) / Math.max(1, flowCount / 5))
-    const seed = ((Math.sin(i * 43.173) * 43758.5453) % 1 + 1) % 1
-
-    // Map u in [0, 1] across macro 56m span from x=-28 (AICode) -> 0 (Eclipse) -> x=+28 (Qimu)
-    const x = (u - 0.5) * 56.0
-    const centerProximity = Math.exp(-Math.pow(x / 10.5, 2))
-    const ribbonPhase = (ribbon - 2) * 0.85
-    const baseY = 3.8 + Math.sin(u * Math.PI * 2.0 + ribbonPhase) * (1.7 + ribbon * 0.22) + centerProximity * 0.75
-    const baseZ =
-      -9.2 +
-      Math.cos(u * Math.PI * 2.0 - ribbonPhase) * 3.8 +
-      (seed - 0.5) * 2.6 -
-      Math.pow(Math.abs(x) / 28, 1.5) * 2.2
-
-    flowBasePos[i * 3] = x
-    flowBasePos[i * 3 + 1] = Math.max(0.55, baseY)
-    flowBasePos[i * 3 + 2] = baseZ
-
-    flowParams[i * 3] = ribbon
-    flowParams[i * 3 + 1] = u
-    flowParams[i * 3 + 2] = seed
-  }
-
-  const flowGeo = new THREE.BufferGeometry()
-  flowGeo.setAttribute('position', new THREE.BufferAttribute(flowBasePos, 3))
-  flowGeo.setAttribute('aParam', new THREE.BufferAttribute(flowParams, 3))
-
-  const flowUniforms = {
-    uTime: { value: 0 },
-    uBias: { value: 0 },
-    uTheme: { value: 0 },
-  }
-  const flowMat = new THREE.ShaderMaterial({
-    uniforms: flowUniforms,
+  // Secondary luminous sprite glow behind pupil for rich softness
+  const haloSpriteMat = new THREE.SpriteMaterial({
+    map: softGlowTex,
+    color: 0x38bdf8,
     transparent: true,
+    opacity: 0.38,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
+  })
+  materials.push(haloSpriteMat)
+  const haloSprite = new THREE.Sprite(haloSpriteMat)
+  haloSprite.scale.set(16.5, 16.5, 1)
+  haloSprite.position.z = -0.35
+  corePivot.add(haloSprite)
+
+  // 3. Five Tilted Precision Orbital Gyroscope Rings
+  const ringConfigs = [
+    { radius: 3.4, tube: 0.042, color: 0x22d3ee, emissive: 0x0891b2, tilt: [0.42, 0.18, 0.12], speed: [0.22, 0.34, 0.08] },
+    { radius: 4.3, tube: 0.036, color: 0xfbbf24, emissive: 0xb45309, tilt: [-0.36, 0.44, -0.22], speed: [-0.16, 0.28, 0.14] },
+    { radius: 5.4, tube: 0.032, color: 0x818cf8, emissive: 0x4338ca, tilt: [0.78, -0.25, 0.35], speed: [0.12, -0.22, 0.18] },
+    { radius: 6.7, tube: 0.028, color: 0xf472b6, emissive: 0x9d174d, tilt: [-0.68, -0.42, -0.18], speed: [-0.09, 0.18, -0.15] },
+    { radius: 8.2, tube: 0.024, color: 0xe2e8f0, emissive: 0x38bdf8, tilt: [0.22, 0.72, -0.48], speed: [0.06, -0.14, 0.11] },
+  ] as const
+
+  const ringMeshes: THREE.Mesh[] = []
+  const ringMats: THREE.MeshStandardMaterial[] = []
+
+  ringConfigs.forEach((cfg) => {
+    const rGeo = new THREE.TorusGeometry(cfg.radius, cfg.tube, 12, highTier ? 128 : 80)
+    geometries.push(rGeo)
+    const rMat = new THREE.MeshStandardMaterial({
+      color: cfg.color,
+      emissive: cfg.emissive,
+      emissiveIntensity: 0.85,
+      metalness: 0.88,
+      roughness: 0.18,
+      transparent: true,
+      opacity: 0.92,
+    })
+    materials.push(rMat)
+    ringMats.push(rMat)
+    const mesh = new THREE.Mesh(rGeo, rMat)
+    mesh.rotation.set(cfg.tilt[0], cfg.tilt[1], cfg.tilt[2])
+    corePivot.add(mesh)
+    ringMeshes.push(mesh)
+  })
+
+  // 4. 48 Orbiting Crystalline Nodes (InstancedMesh attached across all 5 gyroscope rings)
+  const nodeCount = 48
+  const nodeGeo = new THREE.OctahedronGeometry(0.14, 0)
+  geometries.push(nodeGeo)
+  const nodeMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0x38bdf8,
+    emissiveIntensity: 1.15,
+    metalness: 0.85,
+    roughness: 0.12,
+  })
+  materials.push(nodeMat)
+  const nodeInstanced = new THREE.InstancedMesh(nodeGeo, nodeMat, nodeCount)
+  nodeInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+  corePivot.add(nodeInstanced)
+
+  const nodeSeeds: OrbitNodeSeed[] = []
+  const tmpColor = new THREE.Color()
+  for (let i = 0; i < nodeCount; i++) {
+    const ringIndex = i % ringConfigs.length
+    const isWarm = ringIndex === 1 || ringIndex === 3
+    tmpColor.setHex(isWarm ? (i % 2 === 0 ? 0xfbbf24 : 0xf472b6) : i % 2 === 0 ? 0x22d3ee : 0x818cf8)
+    nodeInstanced.setColorAt(i, tmpColor)
+    nodeSeeds.push({
+      ringIndex,
+      baseAngle: (i / nodeCount) * Math.PI * 2 * 2.3,
+      speed: (ringIndex % 2 === 0 ? 1 : -1) * (0.28 + (i % 5) * 0.08),
+      scale: 0.72 + ((i * 7) % 10) * 0.08,
+      radialOffset: ((i % 3) - 1) * 0.12,
+    })
+  }
+  if (nodeInstanced.instanceColor) nodeInstanced.instanceColor.needsUpdate = true
+
+  // 5. 6 Full-Viewport 3D Flowing Energy-Silk Plasma Ribbons (Corner-to-Corner spanning x in [-26, 26], z in [-14, 9])
+  interface RibbonSpec {
+    points: THREE.Vector3[]
+    radius: number
+    speed: number
+    phase: number
+    waveAmp: number
+    colLeft: THREE.Color
+    colRight: THREE.Color
+  }
+
+  const ribbonSpecs: RibbonSpec[] = [
+    // Upper-left high sweep down into Eclipse crown and soaring top-right
+    {
+      points: [
+        new THREE.Vector3(-26, 12.6, -4.5),
+        new THREE.Vector3(-14, 9.2, -9.5),
+        new THREE.Vector3(0, 6.2, -8.2),
+        new THREE.Vector3(14, 9.6, -9.8),
+        new THREE.Vector3(26, 13.0, -4.0),
+      ],
+      radius: 0.105,
+      speed: 0.34,
+      phase: 0.0,
+      waveAmp: 0.42,
+      colLeft: new THREE.Color(0x22d3ee),
+      colRight: new THREE.Color(0xfbbf24),
+    },
+    // Mid-left foreground sweep curving gracefully past lower-center toward mid-right
+    {
+      points: [
+        new THREE.Vector3(-25, 2.2, 6.8),
+        new THREE.Vector3(-12, 1.4, -1.2),
+        new THREE.Vector3(0, 2.3, -6.8),
+        new THREE.Vector3(12, 1.5, -1.0),
+        new THREE.Vector3(25, 2.5, 6.5),
+      ],
+      radius: 0.092,
+      speed: 0.42,
+      phase: 1.4,
+      waveAmp: 0.36,
+      colLeft: new THREE.Color(0x6366f1),
+      colRight: new THREE.Color(0xf472b6),
+    },
+    // High diagonal top-left foreground -> Eclipse heart -> deep far-right sky
+    {
+      points: [
+        new THREE.Vector3(-24, 11.4, 3.2),
+        new THREE.Vector3(-11, 6.8, -4.8),
+        new THREE.Vector3(0, 4.4, -8.1),
+        new THREE.Vector3(11.5, 5.4, -11.2),
+        new THREE.Vector3(26, 9.2, -13.8),
+      ],
+      radius: 0.085,
+      speed: 0.38,
+      phase: 2.7,
+      waveAmp: 0.48,
+      colLeft: new THREE.Color(0x38bdf8),
+      colRight: new THREE.Color(0xf59e0b),
+    },
+    // Counter-diagonal deep left sky -> Eclipse heart -> right foreground
+    {
+      points: [
+        new THREE.Vector3(-26, 9.4, -13.5),
+        new THREE.Vector3(-11.5, 5.4, -10.8),
+        new THREE.Vector3(0, 4.2, -7.8),
+        new THREE.Vector3(11.5, 6.9, -4.2),
+        new THREE.Vector3(24, 11.8, 3.4),
+      ],
+      radius: 0.085,
+      speed: 0.36,
+      phase: 3.9,
+      waveAmp: 0.48,
+      colLeft: new THREE.Color(0x818cf8),
+      colRight: new THREE.Color(0xfbbf24),
+    },
+    // Lower sweeping galactic bridge linking AICode & Qimu worlds cleanly in front
+    {
+      points: [
+        new THREE.Vector3(-24, 4.8, 8.2),
+        new THREE.Vector3(-13, 3.8, 1.5),
+        new THREE.Vector3(0, 5.2, -5.8),
+        new THREE.Vector3(13, 3.9, 1.6),
+        new THREE.Vector3(24, 5.0, 8.4),
+      ],
+      radius: 0.075,
+      speed: 0.46,
+      phase: 5.1,
+      waveAmp: 0.34,
+      colLeft: new THREE.Color(0x06b6d4),
+      colRight: new THREE.Color(0xe879f9),
+    },
+    // Crown cosmic halo arc hovering in upper zenith across entire viewport width
+    {
+      points: [
+        new THREE.Vector3(-25, 13.4, -8.5),
+        new THREE.Vector3(-12, 11.2, -12.8),
+        new THREE.Vector3(0, 9.8, -10.2),
+        new THREE.Vector3(12, 11.2, -12.8),
+        new THREE.Vector3(25, 13.4, -8.5),
+      ],
+      radius: 0.078,
+      speed: 0.29,
+      phase: 0.85,
+      waveAmp: 0.52,
+      colLeft: new THREE.Color(0x22d3ee),
+      colRight: new THREE.Color(0xf59e0b),
+    },
+  ]
+
+  const ribbonMats: THREE.ShaderMaterial[] = []
+  ribbonSpecs.forEach((spec) => {
+    const curve = new THREE.CatmullRomCurve3(spec.points)
+    const rGeo = new THREE.TubeGeometry(curve, highTier ? 128 : 80, spec.radius, 6, false)
+    geometries.push(rGeo)
+
+    const rMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      fog: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uTime: { value: 0 },
+        uSpeed: { value: spec.speed },
+        uPhase: { value: spec.phase },
+        uWaveAmp: { value: spec.waveAmp },
+        uThemeT: { value: 0 },
+        uHoverBias: { value: 0 },
+        uColLeft: { value: spec.colLeft },
+        uColRight: { value: spec.colRight },
+      },
+      vertexShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uPhase;
+        uniform float uWaveAmp;
+        varying vec2 vUv;
+        varying float vWorldX;
+
+        void main() {
+          vUv = uv;
+          vec3 pos = position;
+          float s = uv.x * 6.28318 * 2.0 + uTime * 0.9 + uPhase;
+          pos.y += sin(s) * uWaveAmp;
+          pos.z += cos(s * 0.75 + 0.9) * (uWaveAmp * 0.75);
+          vec4 wp = modelMatrix * vec4(pos, 1.0);
+          vWorldX = wp.x;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform float uSpeed;
+        uniform float uPhase;
+        uniform float uThemeT;
+        uniform float uHoverBias;
+        uniform vec3 uColLeft;
+        uniform vec3 uColRight;
+        varying vec2 vUv;
+        varying float vWorldX;
+
+        void main() {
+          float endFade = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
+          float pulseA = pow(max(0.0, sin(vUv.x * 16.0 - uTime * (uSpeed * 10.0) + uPhase)), 5.0);
+          float pulseB = pow(max(0.0, sin(vUv.x * 9.0 + uTime * (uSpeed * 7.0) + uPhase * 1.7)), 4.0);
+
+          float sideMix = smoothstep(-14.0, 14.0, vWorldX + uHoverBias * 8.0);
+          vec3 baseCol = mix(uColLeft, uColRight, sideMix);
+          vec3 hotWhite = vec3(0.96, 0.98, 1.0);
+          vec3 finalCol = mix(baseCol, hotWhite, clamp(pulseA * 0.65 + pulseB * 0.35, 0.0, 0.85));
+
+          float silkAlpha = (0.24 + pulseA * 0.68 + pulseB * 0.36) * endFade;
+          float themeScale = mix(0.88, 0.32, uThemeT);
+          gl_FragColor = vec4(finalCol * silkAlpha * themeScale, clamp(silkAlpha * themeScale, 0.0, 1.0));
+        }
+      `,
+    })
+    materials.push(rMat)
+    ribbonMats.push(rMat)
+    const mesh = new THREE.Mesh(rGeo, rMat)
+    group.add(mesh)
+  })
+
+  // 6. Full-Viewport 5,000 / 2,000 GPU-Advected Star-River & Foreground Bokeh Particles
+  const particleCount = highTier ? 5000 : 2000
+  const pPositions = new Float32Array(particleCount * 3)
+  const pParams = new Float32Array(particleCount * 4) // size, speed, phase, colorMix
+
+  for (let i = 0; i < particleCount; i++) {
+    const h1 = Math.abs(Math.sin(i * 12.9898 + 1.2) * 43758.5453) % 1
+    const h2 = Math.abs(Math.sin(i * 78.233 + 3.7) * 43758.5453) % 1
+    const h3 = Math.abs(Math.sin(i * 45.164 + 7.1) * 43758.5453) % 1
+
+    const isStreamParticle = i < particleCount * 0.45
+    if (isStreamParticle) {
+      // Spiral river linking left world (-14), center eclipse (0), and right world (+14)
+      const streamT = (h1 - 0.5) * 2.0 // -1..1
+      const arm = i % 2 === 0 ? 1 : -1
+      const spreadR = 0.6 + h2 * 4.2
+      const angle = streamT * 4.2 + arm * Math.PI
+      pPositions[i * 3] = streamT * 24.0 + Math.cos(angle) * spreadR * 0.45
+      pPositions[i * 3 + 1] = 3.8 + Math.sin(angle * 0.8) * spreadR * 0.65 + (h3 - 0.5) * 3.8
+      pPositions[i * 3 + 2] = -7.8 + Math.sin(streamT * 2.4) * 5.2 + (h2 - 0.5) * 8.5
+    } else {
+      // Full-viewport wide cosmic bokeh field (foreground -> deep background)
+      pPositions[i * 3] = (h1 - 0.5) * 56.0 // -28..28
+      pPositions[i * 3 + 1] = 0.25 + Math.pow(h2, 1.15) * 15.5 // 0.25..15.75
+      pPositions[i * 3 + 2] = -36.0 + h3 * 47.0 // -36..+11
+    }
+
+    pParams[i * 4] = 2.2 + ((i * 19) % 13) * 0.38 // 2.2..6.76 px base
+    pParams[i * 4 + 1] = 0.25 + ((i * 11) % 7) * 0.11
+    pParams[i * 4 + 2] = (i * 0.73) % (Math.PI * 2)
+    pParams[i * 4 + 3] = pPositions[i * 3] >= 0 ? 0.65 + (i % 4) * 0.1 : (i % 4) * 0.1
+  }
+
+  const particleGeo = new THREE.BufferGeometry()
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3))
+  particleGeo.setAttribute('aParam', new THREE.BufferAttribute(pParams, 4))
+  geometries.push(particleGeo)
+
+  const particleMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    fog: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uThemeT: { value: 0 },
+      uHoverBias: { value: 0 },
+      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 1.25) },
+    },
     vertexShader: /* glsl */ `
-      attribute vec3 aParam;
+      attribute vec4 aParam;
       uniform float uTime;
-      uniform float uBias;
-      varying float vXNorm;
-      varying float vSeed;
+      uniform float uPixelRatio;
+      varying float vTint;
+      varying float vAlpha;
 
       void main() {
-        float ribbon = aParam.x;
-        float u = aParam.y;
-        float seed = aParam.z;
+        vec3 pos = position;
+        float t = uTime * aParam.y + aParam.z;
+        pos.x += sin(t * 0.75 + pos.z * 0.08) * 0.55;
+        pos.y += cos(t * 0.92 + pos.x * 0.09) * 0.42;
+        pos.z += sin(t * 0.61) * 0.45;
 
-        // Smooth GPU harmonic silk wave sweep across 56m horizon
-        vec3 p = position;
-        float wave = sin(u * 9.0 - uTime * (0.42 + ribbon * 0.04) + ribbon * 1.3);
-        float swell = cos(u * 5.0 + uTime * 0.28 - seed * 6.2831);
-        p.y += wave * (0.55 + seed * 0.35);
-        p.z += swell * 0.85;
-        p.x += sin(uTime * 0.22 + seed * 6.2831) * 0.35;
-
-        vXNorm = clamp(p.x / 24.0, -1.0, 1.0);
-        vSeed = seed;
-
-        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
-        float depthSize = 32.0 / max(1.0, -mvPosition.z);
-        gl_PointSize = clamp(depthSize * (0.8 + seed * 0.72), 2.0, 5.6);
+        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+        float dist = max(3.0, -mvPosition.z);
+        gl_PointSize = clamp(aParam.x * uPixelRatio * (20.0 / dist), 1.8, 12.0);
+        vTint = aParam.w;
+        vAlpha = smoothstep(52.0, 12.0, dist) * (0.58 + 0.42 * sin(t * 1.4));
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform float uBias;
-      uniform float uTheme;
-      varying float vXNorm;
-      varying float vSeed;
+      uniform float uThemeT;
+      uniform float uHoverBias;
+      varying float vTint;
+      varying float vAlpha;
 
       void main() {
-        vec2 c = gl_PointCoord - 0.5;
-        float d2 = dot(c, c);
-        if (d2 > 0.25) discard;
-        float mask = smoothstep(0.25, 0.02, d2);
+        vec2 c = gl_PointCoord - vec2(0.5);
+        float r2 = dot(c, c);
+        if (r2 > 0.25) discard;
 
-        vec3 cyan = vec3(0.22, 0.91, 0.84);
-        vec3 platinum = vec3(0.88, 0.92, 0.98);
-        vec3 champagne = vec3(0.94, 0.76, 0.48);
-        vec3 lavender = vec3(0.76, 0.68, 0.98);
+        float bokeh = smoothstep(0.25, 0.02, r2);
+        vec3 cyanDot = vec3(0.16, 0.88, 1.0);
+        vec3 goldDot = vec3(1.0, 0.76, 0.28);
+        vec3 violetDot = vec3(0.76, 0.42, 0.98);
+        vec3 baseCol = mix(mix(cyanDot, violetDot, 0.28), goldDot, clamp(vTint + uHoverBias * 0.15, 0.0, 1.0));
 
-        float t = clamp(vXNorm * 0.5 + 0.5 + uBias * 0.16, 0.0, 1.0);
-        vec3 col = t < 0.5
-          ? mix(cyan, platinum, t * 2.0)
-          : mix(platinum, mix(champagne, lavender, step(0.62, vSeed)), (t - 0.5) * 2.0);
-
-        float alpha = mask * mix(0.82, 0.34, uTheme) * (0.55 + vSeed * 0.45);
-        gl_FragColor = vec4(col, alpha);
+        float themeScale = mix(0.82, 0.28, uThemeT);
+        gl_FragColor = vec4(baseCol, vAlpha * bokeh * themeScale);
       }
     `,
   })
-  const flowPoints = new THREE.Points(flowGeo, flowMat)
-  group.add(flowPoints)
-  disposables.push(flowGeo, flowMat)
+  materials.push(particleMat)
+  const particleCloud = new THREE.Points(particleGeo, particleMat)
+  group.add(particleCloud)
 
-  const update = (elapsed: number, _dt: number, hoverBias: number, themeT: number) => {
-    eclipseUniforms.uTime.value = elapsed
-    eclipseUniforms.uBias.value = hoverBias
-    eclipseUniforms.uTheme.value = themeT
+  // Reusable math temporaries for zero-GC per-frame InstancedMesh updates
+  const dummyObj = new THREE.Object3D()
+  const localPos = new THREE.Vector3()
+  const ringQuat = new THREE.Quaternion()
 
-    flowUniforms.uTime.value = elapsed
-    flowUniforms.uBias.value = hoverBias
-    flowUniforms.uTheme.value = themeT
+  const update = (elapsed: number, dt: number, hoverBias: number, themeT: number) => {
+    const safeDt = Math.min(dt, 0.05)
 
-    ring1.rotation.z = 0.14 + elapsed * 0.045
-    ring1.rotation.y = 0.22 + hoverBias * 0.14
-    ring2.rotation.x = -0.46 + Math.sin(elapsed * 0.18) * 0.06
-    ring2.rotation.z = -0.22 - elapsed * 0.032
-    ring3.rotation.y = -0.38 - elapsed * 0.025 + hoverBias * 0.1
+    coronaMat.uniforms.uTime.value = elapsed
+    coronaMat.uniforms.uHoverBias.value = hoverBias
+    coronaMat.uniforms.uThemeT.value = themeT
+
+    godRayMat.uniforms.uTime.value = elapsed
+    godRayMat.uniforms.uHoverBias.value = hoverBias
+    godRayMat.uniforms.uThemeT.value = themeT
+
+    haloSpriteMat.opacity = THREE.MathUtils.lerp(0.38, 0.12, themeT)
+    haloSpriteMat.color.setHex(hoverBias < -0.25 ? 0x22d3ee : hoverBias > 0.25 ? 0xf59e0b : 0x6366f1)
+
+    for (let i = 0; i < ringMeshes.length; i++) {
+      const cfg = ringConfigs[i]
+      const mesh = ringMeshes[i]
+      mesh.rotation.x += cfg.speed[0] * safeDt
+      mesh.rotation.y += cfg.speed[1] * safeDt
+      mesh.rotation.z += cfg.speed[2] * safeDt
+      ringMats[i].emissiveIntensity = THREE.MathUtils.lerp(0.85, 0.42, themeT)
+    }
+
+    // Orbit 48 crystal nodes cleanly along each ring's rotated plane
+    for (let i = 0; i < nodeCount; i++) {
+      const seed = nodeSeeds[i]
+      const cfg = ringConfigs[seed.ringIndex]
+      const ringMesh = ringMeshes[seed.ringIndex]
+      const angle = seed.baseAngle + elapsed * seed.speed
+      const r = cfg.radius + seed.radialOffset
+      localPos.set(Math.cos(angle) * r, Math.sin(angle) * r, 0)
+      ringQuat.copy(ringMesh.quaternion)
+      localPos.applyQuaternion(ringQuat)
+
+      dummyObj.position.copy(localPos)
+      dummyObj.rotation.set(elapsed * 0.9 + seed.baseAngle, elapsed * 1.2, 0)
+      const pulse = seed.scale * (0.9 + 0.16 * Math.sin(elapsed * 2.5 + seed.baseAngle))
+      dummyObj.scale.setScalar(pulse)
+      dummyObj.updateMatrix()
+      nodeInstanced.setMatrixAt(i, dummyObj.matrix)
+    }
+    nodeInstanced.instanceMatrix.needsUpdate = true
+    nodeMat.emissiveIntensity = THREE.MathUtils.lerp(1.15, 0.5, themeT)
+
+    for (const rMat of ribbonMats) {
+      rMat.uniforms.uTime.value = elapsed
+      rMat.uniforms.uThemeT.value = themeT
+      rMat.uniforms.uHoverBias.value = hoverBias
+    }
+
+    particleMat.uniforms.uTime.value = elapsed
+    particleMat.uniforms.uThemeT.value = themeT
+    particleMat.uniforms.uHoverBias.value = hoverBias
+
+    corePivot.position.y = coreCenter.y + Math.sin(elapsed * 0.72) * 0.16
+    corePivot.rotation.y = THREE.MathUtils.lerp(corePivot.rotation.y, -hoverBias * 0.18, Math.min(1, safeDt * 4))
+  }
+
+  const dispose = () => {
+    for (const geo of geometries) geo.dispose()
+    for (const mat of materials) mat.dispose()
+    for (const tex of textures) tex.dispose()
+    group.clear()
   }
 
   return {
     group,
     update,
-    dispose: () => {
-      disposables.forEach((d) => d.dispose())
-    },
+    dispose,
   }
 }

@@ -1,8 +1,8 @@
 import * as THREE from 'three'
-import { buildAiCodeWorld } from './buildAiCodeWorld'
-import { buildOpticalCore } from './buildOpticalCore'
-import { buildQimuStudioWorld } from './buildQimuStudioWorld'
 import { createStudioEnvironment } from './studioEnvironment'
+import { buildOpticalCore } from './buildOpticalCore'
+import { buildAiCodeWorld } from './buildAiCodeWorld'
+import { buildQimuStudioWorld } from './buildQimuStudioWorld'
 
 export type PortalHoverSide = 'aicode' | 'qimu' | null
 
@@ -21,22 +21,23 @@ export interface PortalEngineController {
   dispose: () => void
 }
 
-const PROGRESS_STOPS: ReadonlyArray<[number, number]> = [
-  [0.0, 0.0],
+// Scroll progress milestones aligned to ReferenceLanding 4-Act stops
+const PROGRESS_STOPS: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
   [0.35, 0.25],
   [0.53, 0.5],
   [0.72, 0.75],
   [1.0, 1.0],
 ]
 
-function mapProgressToKnotT(progress: number): number {
-  const p = Math.max(0, Math.min(1, progress))
-  for (let i = 0; i < PROGRESS_STOPS.length - 1; i++) {
-    const [p0, k0] = PROGRESS_STOPS[i]
-    const [p1, k1] = PROGRESS_STOPS[i + 1]
+function mapProgressToCurveT(progress: number): number {
+  const p = THREE.MathUtils.clamp(progress, 0, 1)
+  for (let i = 1; i < PROGRESS_STOPS.length; i++) {
+    const [p0, t0] = PROGRESS_STOPS[i - 1]
+    const [p1, t1] = PROGRESS_STOPS[i]
     if (p <= p1) {
-      const local = (p - p0) / Math.max(1e-5, p1 - p0)
-      return k0 + local * (k1 - k0)
+      const span = Math.max(0.0001, p1 - p0)
+      return THREE.MathUtils.lerp(t0, t1, (p - p0) / span)
     }
   }
   return 1
@@ -44,267 +45,240 @@ function mapProgressToKnotT(progress: number): number {
 
 export function createPortalEngine(options: PortalEngineOptions): PortalEngineController {
   const { canvas } = options
-  let currentWidth = Math.max(1, canvas.clientWidth || window.innerWidth)
-  let currentHeight = Math.max(1, canvas.clientHeight || window.innerHeight)
 
-  const isMobileViewport = currentWidth < 768
-  const highTier = !isMobileViewport
+  const isMobileViewport = typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4
+  const highTier = !isMobileViewport && cores >= 4
 
-  let currentDpr = Math.min(window.devicePixelRatio || 1, highTier ? 1.25 : 1.0)
-  let dprSteppedDown = currentDpr <= 1.0
-  let frameCount = 0
-  let emaDt = 0.016
+  const maxDprCap = isMobileViewport ? 1.0 : 1.25
+  let targetDpr = Math.min(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, maxDprCap)
 
-  // Single-pass hardware MSAA renderer with stencil disabled for peak fill-rate & 60-120fps headroom
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
-    powerPreference: 'high-performance',
     alpha: false,
-    stencil: false,
     depth: true,
+    stencil: false,
+    powerPreference: 'high-performance',
   })
-  renderer.setPixelRatio(currentDpr)
-  renderer.setSize(currentWidth, currentHeight, false)
-  renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = options.initialDark ? 1.08 : 1.0
   renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1.04
+  renderer.setPixelRatio(targetDpr)
+
+  const initW = Math.max(1, canvas.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1440))
+  const initH = Math.max(1, canvas.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 900))
+  renderer.setSize(initW, initH, false)
 
   const scene = new THREE.Scene()
-  let baseFov = currentWidth / currentHeight < 1.0 ? 50 : 44
-  const camera = new THREE.PerspectiveCamera(baseFov, currentWidth / currentHeight, 0.1, 260)
-  camera.position.set(0, 3.2, 16.5)
+  const aspect0 = initW / initH
+  const camera = new THREE.PerspectiveCamera(aspect0 < 1 ? 52 : 46, aspect0, 0.25, 280)
 
-  // Macro Cosmic-Cinema Horizon spatial spline
-  const cameraPosCurve = new THREE.CatmullRomCurve3(
+  // Symmetric Act 1..Act 4 camera & target spline aligned to x = +-11.2 worlds
+  const camPosCurve = new THREE.CatmullRomCurve3(
     [
-      new THREE.Vector3(0, 3.2, 16.5), // Act 1: Macro Eclipse & Mirror Ocean Panorama
-      new THREE.Vector3(-8.2, 3.1, 4.6), // Act 2: AICode Spatial Smoked-Glass Gallery
-      new THREE.Vector3(0, 4.2, 4.2), // Mid Horizon Sweep
-      new THREE.Vector3(7.1, 3.25, 7.6), // Act 3: Qimu IMAX, Manju & Editorial Gallery
-      new THREE.Vector3(0, 8.8, 25.5), // Act 4: Grand Dual-Horizon Panorama Finale
+      new THREE.Vector3(0, 3.3, 14.8), // Act 1: Panoramic split portal
+      new THREE.Vector3(-5.2, 3.2, 4.6), // Act 2: AICode world closeup (world at -11.2, 0, -7.2)
+      new THREE.Vector3(0, 4.0, 3.8), // Mid transition past central optical core
+      new THREE.Vector3(4.9, 3.25, 6.2), // Act 3: Qimu studio closeup (world at +11.2, 0, -7.2)
+      new THREE.Vector3(0, 7.8, 22.8), // Act 4: Elevated grand panoramic overview
     ],
     false,
-    'catmullrom',
-    0.45,
+    'centripetal',
   )
 
-  const cameraLookCurve = new THREE.CatmullRomCurve3(
+  const camLookCurve = new THREE.CatmullRomCurve3(
     [
-      new THREE.Vector3(0, 3.8, -8.5), // Act 1 LookAt
-      new THREE.Vector3(-14.5, 3.0, -7.8), // Act 2 LookAt
-      new THREE.Vector3(2.8, 3.4, -8.5), // Mid Sweep LookAt
-      new THREE.Vector3(14.5, 2.95, -7.2), // Act 3 LookAt
-      new THREE.Vector3(0, 3.2, -8.5), // Act 4 LookAt
+      new THREE.Vector3(0, 3.8, -7.8),
+      new THREE.Vector3(-11.2, 3.1, -6.5),
+      new THREE.Vector3(2.4, 3.5, -7.6),
+      new THREE.Vector3(11.2, 3.05, -6.4),
+      new THREE.Vector3(0, 3.5, -7.4),
     ],
     false,
-    'catmullrom',
-    0.45,
+    'centripetal',
   )
 
-  const studioEnv = createStudioEnvironment(scene, renderer, highTier)
+  const env = createStudioEnvironment(scene, renderer, highTier)
   const opticalCore = buildOpticalCore(highTier)
-  scene.add(opticalCore.group)
-
   const aiCodeWorld = buildAiCodeWorld(highTier)
-  scene.add(aiCodeWorld.group)
-
   const qimuWorld = buildQimuStudioWorld(renderer, highTier)
-  scene.add(qimuWorld.group)
+
+  scene.add(opticalCore.group, aiCodeWorld.group, qimuWorld.group)
 
   let targetProgress = 0
   let smoothedProgress = 0
-  let hoverSide: PortalHoverSide = null
-  let hoverBias = 0
   let targetThemeT = options.initialDark ? 0 : 1
-  let currentThemeT = targetThemeT
-  let pointerTargetX = 0
-  let pointerTargetY = 0
+  let smoothedThemeT = targetThemeT
+  let hoverSide: PortalHoverSide = null
+  let smoothedHoverBias = 0
+  let reducedMotion = options.reducedMotion
+
   let pointerX = 0
   let pointerY = 0
-  let reducedMotion = options.reducedMotion
+  let smoothedPointerX = 0
+  let smoothedPointerY = 0
+
+  env.applyTheme(smoothedThemeT)
+
+  const basePos = new THREE.Vector3()
+  const baseLook = new THREE.Vector3()
+  const finalPos = new THREE.Vector3()
+  const finalLook = new THREE.Vector3()
+
+  let rafId: number | null = null
   let disposed = false
-  let paused = typeof document !== 'undefined' && document.hidden
-  let rafId = 0
-
+  let lastTimestamp = typeof performance !== 'undefined' ? performance.now() : 0
   let elapsed = 0
-  let lastNow = performance.now()
+  let emaDt = 1 / 60
+  let lastDprAdjustAt = 0
 
-  const camPosVec = new THREE.Vector3()
-  const camLookVec = new THREE.Vector3()
-
-  const onPointerMove = (e: PointerEvent) => {
-    if (e.pointerType === 'touch' || reducedMotion) return
-    const w = window.innerWidth || 1
-    const h = window.innerHeight || 1
-    pointerTargetX = (e.clientX / w - 0.5) * 2
-    pointerTargetY = -(e.clientY / h - 0.5) * 2
+  const handlePointerMove = (e: PointerEvent) => {
+    const w = typeof window !== 'undefined' ? window.innerWidth || 1440 : 1440
+    const h = typeof window !== 'undefined' ? window.innerHeight || 900 : 900
+    pointerX = THREE.MathUtils.clamp((e.clientX / w) * 2 - 1, -1, 1)
+    pointerY = THREE.MathUtils.clamp(-((e.clientY / h) * 2 - 1), -1, 1)
   }
 
-  const onPointerLeave = () => {
-    pointerTargetX = 0
-    pointerTargetY = 0
-  }
-
-  const onVisibilityChange = () => {
-    paused = document.hidden
-    if (!paused && !disposed) {
-      lastNow = performance.now()
-      scheduleFrame()
+  const handleVisibilityChange = () => {
+    if (typeof document !== 'undefined' && !document.hidden) {
+      lastTimestamp = performance.now()
     }
   }
 
-  window.addEventListener('pointermove', onPointerMove, { passive: true })
-  window.addEventListener('pointerleave', onPointerLeave, { passive: true })
-  document.addEventListener('visibilitychange', onVisibilityChange)
-
-  const renderFrame = (dt: number) => {
-    const smoothRate = reducedMotion ? 1 : Math.min(1, dt * 6.5)
-
-    smoothedProgress += (targetProgress - smoothedProgress) * (reducedMotion ? 1 : Math.min(1, dt * 7.5))
-    const targetBias = hoverSide === 'aicode' ? -1 : hoverSide === 'qimu' ? 1 : 0
-    hoverBias += (targetBias - hoverBias) * smoothRate
-    currentThemeT += (targetThemeT - currentThemeT) * smoothRate
-
-    pointerX += (pointerTargetX - pointerX) * (reducedMotion ? 0 : Math.min(1, dt * 5.0))
-    pointerY += (pointerTargetY - pointerY) * (reducedMotion ? 0 : Math.min(1, dt * 5.0))
-
-    studioEnv.applyTheme(currentThemeT)
-    studioEnv.update?.(elapsed, hoverBias)
-    renderer.toneMappingExposure = THREE.MathUtils.lerp(1.08, 1.0, currentThemeT)
-
-    const knotT = mapProgressToKnotT(smoothedProgress)
-    cameraPosCurve.getPoint(knotT, camPosVec)
-    cameraLookCurve.getPoint(knotT, camLookVec)
-
-    const heroWeight = Math.max(0, 1 - smoothedProgress / 0.22)
-    camPosVec.x += hoverBias * 1.45 * heroWeight + pointerX * (reducedMotion ? 0 : 0.42)
-    camPosVec.y += pointerY * (reducedMotion ? 0 : 0.22)
-    camLookVec.x += hoverBias * 2.4 * heroWeight + pointerX * (reducedMotion ? 0 : 0.28)
-    camLookVec.y += pointerY * (reducedMotion ? 0 : 0.14)
-
-    const targetFov = baseFov - Math.abs(hoverBias) * 1.8 * heroWeight
-    if (Math.abs(camera.fov - targetFov) > 0.02) {
-      camera.fov += (targetFov - camera.fov) * smoothRate
-      camera.updateProjectionMatrix()
-    }
-
-    camera.position.copy(camPosVec)
-    camera.lookAt(camLookVec)
-
-    const aicodeFocus = Math.max(0, 1 - Math.abs(smoothedProgress - 0.35) / 0.25)
-    const qimuFocus = Math.max(0, 1 - Math.abs(smoothedProgress - 0.72) / 0.25)
-    const isAct2Near = smoothedProgress > 0.12 && smoothedProgress < 0.62
-    const isAct3Near = smoothedProgress > 0.45 && smoothedProgress < 0.96
-
-    opticalCore.update(elapsed, dt, hoverBias, currentThemeT)
-    aiCodeWorld.update(elapsed, dt, aicodeFocus, currentThemeT, isAct2Near)
-    qimuWorld.update(elapsed, dt, pointerX, pointerY, qimuFocus, currentThemeT, isAct3Near)
-
-    renderer.render(scene, camera)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pointermove', handlePointerMove, { passive: true })
+  }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange)
   }
 
-  const loop = (now: number) => {
-    rafId = 0
-    if (disposed || paused) return
-    const rawDt = (now - lastNow) / 1000
-    lastNow = now
+  const renderFrame = (now: number) => {
+    if (disposed) return
+    rafId = window.requestAnimationFrame(renderFrame)
 
-    // Adaptive DPR governor during warmup frames 15..60
-    frameCount++
-    if (!dprSteppedDown && frameCount >= 5 && rawDt > 0 && rawDt < 0.25) {
-      emaDt = emaDt * 0.85 + rawDt * 0.15
-      if (frameCount >= 15 && frameCount <= 60 && emaDt > 0.02 && currentDpr > 1.0) {
-        currentDpr = 1.0
-        dprSteppedDown = true
-        renderer.setPixelRatio(1.0)
-        renderer.setSize(currentWidth, currentHeight, false)
+    if (typeof document !== 'undefined' && document.hidden) {
+      lastTimestamp = now
+      return
+    }
+
+    const rawDt = Math.max(0.001, (now - lastTimestamp) * 0.001)
+    lastTimestamp = now
+    const dt = Math.min(rawDt, 0.05)
+
+    // Adaptive resolution governor: keep locked 60-120 FPS without frame-churn
+    if (rawDt < 0.15) {
+      emaDt = emaDt * 0.92 + rawDt * 0.08
+      if (emaDt > 0.02 && targetDpr > 0.85 && now - lastDprAdjustAt > 2000) {
+        targetDpr = Math.max(0.85, Number((targetDpr - 0.15).toFixed(2)))
+        renderer.setPixelRatio(targetDpr)
+        lastDprAdjustAt = now
       }
     }
 
-    const dt = Math.min(0.05, Math.max(0.001, rawDt))
     if (!reducedMotion) {
       elapsed += dt
     }
-    renderFrame(dt)
-    if (!reducedMotion) {
-      scheduleFrame()
-    }
+
+    const lerpRate = reducedMotion ? 1 : Math.min(1, dt * 6.5)
+    smoothedProgress = THREE.MathUtils.lerp(smoothedProgress, targetProgress, lerpRate)
+    smoothedThemeT = THREE.MathUtils.lerp(smoothedThemeT, targetThemeT, Math.min(1, dt * 5.2))
+
+    const targetHoverBias = hoverSide === 'aicode' ? -1 : hoverSide === 'qimu' ? 1 : 0
+    smoothedHoverBias = THREE.MathUtils.lerp(smoothedHoverBias, targetHoverBias, Math.min(1, dt * 4.8))
+
+    smoothedPointerX = THREE.MathUtils.lerp(smoothedPointerX, pointerX, Math.min(1, dt * 5.5))
+    smoothedPointerY = THREE.MathUtils.lerp(smoothedPointerY, pointerY, Math.min(1, dt * 5.5))
+
+    const curveT = mapProgressToCurveT(smoothedProgress)
+    camPosCurve.getPoint(curveT, basePos)
+    camLookCurve.getPoint(curveT, baseLook)
+
+    // Hover focus pull & gentle spatial parallax
+    const parallaxScale = reducedMotion ? 0 : 1
+    const idleX = Math.sin(elapsed * 0.42) * 0.14 * parallaxScale
+    const idleY = Math.cos(elapsed * 0.56) * 0.08 * parallaxScale
+
+    finalPos.copy(basePos)
+    finalPos.x += smoothedHoverBias * 1.45 + smoothedPointerX * 0.48 * parallaxScale + idleX
+    finalPos.y += smoothedPointerY * 0.24 * parallaxScale + idleY
+    finalPos.z -= Math.abs(smoothedHoverBias) * 1.15
+
+    finalLook.copy(baseLook)
+    finalLook.x += smoothedHoverBias * 2.2 + smoothedPointerX * 0.35 * parallaxScale
+    finalLook.y += smoothedPointerY * 0.18 * parallaxScale
+
+    camera.position.copy(finalPos)
+    camera.lookAt(finalLook)
+
+    // Keep AI/Qimu focus weights normalized for subtle stage reactivity
+    const aiFocusWeight = THREE.MathUtils.clamp(
+      (smoothedHoverBias < 0 ? -smoothedHoverBias * 0.65 : 0) +
+        (1.0 - Math.min(1, Math.abs(smoothedProgress - 0.35) / 0.28)),
+      0,
+      1,
+    )
+    const qimuFocusWeight = THREE.MathUtils.clamp(
+      (smoothedHoverBias > 0 ? smoothedHoverBias * 0.65 : 0) +
+        (1.0 - Math.min(1, Math.abs(smoothedProgress - 0.72) / 0.28)),
+      0,
+      1,
+    )
+
+    // Gate off-act 6Hz texture canvas updates when camera zooms exclusively into the other side
+    const aiActive = smoothedProgress < 0.68 || smoothedProgress > 0.88
+    const qimuActive = smoothedProgress > 0.4 || smoothedProgress < 0.18
+
+    env.applyTheme(smoothedThemeT)
+    env.update?.(elapsed, smoothedHoverBias)
+    opticalCore.update(elapsed, dt, smoothedHoverBias, smoothedThemeT)
+    aiCodeWorld.update(elapsed, dt, aiFocusWeight, smoothedThemeT, aiActive)
+    qimuWorld.update(elapsed, dt, smoothedPointerX, smoothedPointerY, qimuFocusWeight, smoothedThemeT, qimuActive)
+
+    renderer.toneMappingExposure = THREE.MathUtils.lerp(1.06, 1.0, smoothedThemeT)
+    renderer.render(scene, camera)
   }
 
-  function scheduleFrame() {
-    if (rafId || disposed || paused) return
-    rafId = window.requestAnimationFrame(loop)
-  }
-
-  renderFrame(0.016)
-  if (!reducedMotion) {
-    scheduleFrame()
-  }
+  rafId = window.requestAnimationFrame(renderFrame)
 
   return {
     setProgress(progress: number) {
-      targetProgress = Math.max(0, Math.min(1, progress))
-      if (reducedMotion && !disposed) {
-        renderFrame(0.016)
-      }
+      targetProgress = THREE.MathUtils.clamp(progress, 0, 1)
     },
     setHoverSide(side: PortalHoverSide) {
       hoverSide = side
-      if (reducedMotion && !disposed) {
-        renderFrame(0.016)
-      }
     },
     setDark(dark: boolean) {
       targetThemeT = dark ? 0 : 1
-      if (reducedMotion && !disposed) {
-        renderFrame(0.016)
-      }
     },
-    setReducedMotion(reduced: boolean) {
-      reducedMotion = reduced
-      if (reduced) {
-        if (rafId) {
-          window.cancelAnimationFrame(rafId)
-          rafId = 0
-        }
-        renderFrame(0.016)
-      } else {
-        lastNow = performance.now()
-        scheduleFrame()
-      }
+    setReducedMotion(value: boolean) {
+      reducedMotion = value
     },
-    resize(nextW: number, nextH: number) {
-      currentWidth = Math.max(1, nextW)
-      currentHeight = Math.max(1, nextH)
-      const aspect = currentWidth / currentHeight
-      baseFov = aspect < 1.0 ? 50 : 44
+    resize(width: number, height: number) {
+      const safeW = Math.max(1, width)
+      const safeH = Math.max(1, height)
+      const aspect = safeW / safeH
       camera.aspect = aspect
+      camera.fov = aspect < 1 ? 52 : 46
       camera.updateProjectionMatrix()
-      if (!dprSteppedDown) {
-        currentDpr = Math.min(window.devicePixelRatio || 1, currentWidth < 768 ? 1.0 : 1.25)
-        renderer.setPixelRatio(currentDpr)
-      }
-      renderer.setSize(currentWidth, currentHeight, false)
-      if (reducedMotion && !disposed) {
-        renderFrame(0.016)
-      }
+      renderer.setSize(safeW, safeH, false)
     },
     dispose() {
-      if (disposed) return
       disposed = true
-      if (rafId) {
+      if (rafId !== null) {
         window.cancelAnimationFrame(rafId)
-        rafId = 0
+        rafId = null
       }
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerleave', onPointerLeave)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('pointermove', handlePointerMove)
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
       opticalCore.dispose()
       aiCodeWorld.dispose()
       qimuWorld.dispose()
-      studioEnv.dispose()
+      env.dispose()
       renderer.dispose()
     },
   }

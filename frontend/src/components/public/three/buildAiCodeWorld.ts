@@ -8,325 +8,440 @@ import {
 
 export interface AiCodeWorldHandle {
   group: THREE.Group
-  update: (
-    elapsed: number,
-    dt: number,
-    focusWeight: number,
-    themeT: number,
-    active?: boolean,
-  ) => void
+  update: (elapsed: number, dt: number, focusWeight: number, themeT: number, active?: boolean) => void
   dispose: () => void
 }
 
-function createCurvedRailGeometry(radius: number, tube: number, spanRad: number): THREE.TorusGeometry {
-  const geo = new THREE.TorusGeometry(radius, tube, 8, 44, spanRad)
-  // Shift arc [0, spanRad] to center around -PI/2, then map XY plane -> XZ plane around -Z
-  geo.rotateZ(-Math.PI / 2 - spanRad / 2)
-  geo.rotateX(Math.PI / 2)
+function createCurvedScreenGeometry(
+  width: number,
+  height: number,
+  curveDepth: number,
+  widthSegments = 28,
+): THREE.BufferGeometry {
+  const geo = new THREE.PlaneGeometry(width, height, widthSegments, 1)
+  const pos = geo.attributes.position as THREE.BufferAttribute
+  const halfW = width * 0.5
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i)
+    const normX = halfW > 0 ? x / halfW : 0
+    // Concave cylindrical wrap toward viewer (+Z at outer edges)
+    const z = normX * normX * curveDepth
+    pos.setZ(i, z)
+  }
+  pos.needsUpdate = true
+  geo.computeVertexNormals()
   return geo
 }
 
 export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
   const group = new THREE.Group()
-  group.position.set(-14.5, 0, -8.5)
-  group.rotation.y = 0.44
+  // Positioned closer (-11.2) so both Act 1 panoramic split and Act 2 hero closeup fill viewport richly
+  group.position.set(-11.2, 0, -7.2)
+  group.rotation.y = 0.5
 
-  const disposables: Array<{ dispose: () => void }> = []
-  const softGlow = createSoftGlowTexture()
-  const codeScreen = createLiveCodeScreen()
+  const geometries: THREE.BufferGeometry[] = []
+  const materials: THREE.Material[] = []
+  const textures: THREE.Texture[] = []
+
+  const softGlowTex = createSoftGlowTexture()
+  textures.push(softGlowTex)
+
+  const liveCode = createLiveCodeScreen()
   const routingTex = createRoutingMatrixTexture()
   const protocolTex = createProtocolHubTexture()
-  disposables.push(softGlow, codeScreen, routingTex, protocolTex)
+  textures.push(routingTex, protocolTex)
 
-  const railPlatinumMat = new THREE.MeshStandardMaterial({
-    color: 0xcbd5e1,
-    metalness: 0.94,
-    roughness: 0.2,
-    envMapIntensity: 1.5,
-  })
-  const darkSpireMat = new THREE.MeshStandardMaterial({
-    color: 0x09111f,
-    metalness: 0.88,
+  // Architectural brushed chassis materials (zero transmission, instant single-pass MSAA)
+  const chassisMat = new THREE.MeshStandardMaterial({
+    color: 0x090f1d,
+    metalness: 0.82,
     roughness: 0.34,
-    envMapIntensity: 1.25,
+    envMapIntensity: 0.62,
   })
-  const titaniumMat = new THREE.MeshStandardMaterial({
-    color: 0x94a3b8,
-    metalness: 0.95,
+  const trimCyanMat = new THREE.MeshStandardMaterial({
+    color: 0x22d3ee,
+    emissive: 0x06b6d4,
+    emissiveIntensity: 0.95,
+    metalness: 0.72,
     roughness: 0.2,
-    envMapIntensity: 1.5,
   })
-  disposables.push(railPlatinumMat, darkSpireMat, titaniumMat)
+  materials.push(chassisMat, trimCyanMat)
 
-  // =========================================================================
-  // 1. Three Sweeping Curved Frameless Architectural Smoked-Glass Monoliths
-  // =========================================================================
-  const arcPivot = new THREE.Group()
-  arcPivot.position.set(0, 3.38, 7.2)
-  group.add(arcPivot)
+  // 1. Stepped Illuminated Base Plinth & Circular Holodeck Platform
+  const plinthOuterGeo = new THREE.CylinderGeometry(4.6, 5.1, 0.24, 48)
+  const plinthInnerGeo = new THREE.CylinderGeometry(3.4, 3.7, 0.2, 48)
+  const plinthRingGeo = new THREE.TorusGeometry(4.35, 0.038, 10, 72)
+  geometries.push(plinthOuterGeo, plinthInnerGeo, plinthRingGeo)
 
-  const arcRadius = 9.2
+  const plinthOuter = new THREE.Mesh(plinthOuterGeo, chassisMat)
+  plinthOuter.position.set(0, 0.12, 0.4)
+  const plinthInner = new THREE.Mesh(plinthInnerGeo, chassisMat)
+  plinthInner.position.set(0, 0.34, 0.4)
+  const plinthRing = new THREE.Mesh(plinthRingGeo, trimCyanMat)
+  plinthRing.rotation.x = Math.PI / 2
+  plinthRing.position.set(0, 0.26, 0.4)
+  group.add(plinthOuter, plinthInner, plinthRing)
 
-  const addCurvedPanel = (
-    widthMeters: number,
-    heightMeters: number,
-    yawAngle: number,
-    texture: THREE.Texture,
-    opacity = 0.96,
-  ) => {
-    const holder = new THREE.Group()
-    holder.rotation.y = yawAngle
-    arcPivot.add(holder)
-
-    const span = widthMeters / arcRadius
-    const screenGeo = new THREE.CylinderGeometry(
-      arcRadius,
-      arcRadius,
-      heightMeters,
-      36,
-      1,
-      true,
-      Math.PI - span / 2,
-      span,
-    )
-    screenGeo.scale(-1, 1, 1)
-    const screenMat = new THREE.MeshBasicMaterial({
-      map: texture,
-      side: THREE.FrontSide,
-      transparent: true,
-      opacity,
-    })
-    const screenMesh = new THREE.Mesh(screenGeo, screenMat)
-    holder.add(screenMesh)
-
-    const railGeo = createCurvedRailGeometry(arcRadius - 0.02, 0.014, span + 0.01)
-    const topRail = new THREE.Mesh(railGeo, railPlatinumMat)
-    topRail.position.y = heightMeters / 2 + 0.016
-    holder.add(topRail)
-
-    const botRail = new THREE.Mesh(railGeo, railPlatinumMat)
-    botRail.position.y = -heightMeters / 2 - 0.016
-    holder.add(botRail)
-
-    disposables.push(screenGeo, screenMat, railGeo)
-    return holder
-  }
-
-  // Center Hero Gateway Stream, Left Routing Matrix, Right Unified Protocol Hub
-  const centerPanel = addCurvedPanel(4.4, 2.55, 0, codeScreen.texture, 0.98)
-  const leftPanel = addCurvedPanel(2.85, 2.15, 0.46, routingTex, 0.94)
-  const rightPanel = addCurvedPanel(2.85, 2.15, -0.46, protocolTex, 0.94)
-
-  // Soft atmospheric cyan radial glow gently lifting glass panels from nebula backdrop
-  const haloGeo = new THREE.PlaneGeometry(14, 7.5)
-  const haloMat = new THREE.MeshBasicMaterial({
-    map: softGlow,
-    color: 0x38e8d5,
-    transparent: true,
-    opacity: 0.16,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  })
-  const haloMesh = new THREE.Mesh(haloGeo, haloMat)
-  haloMesh.position.set(0, 3.4, -3.2)
-  group.add(haloMesh)
-  disposables.push(haloGeo, haloMat)
-
-  // =========================================================================
-  // 2. 1,800-Particle GPU Multimodal Neural Singularity (Foreground-Left Lower)
-  // =========================================================================
+  // 2. Neural Singularity Core (2,200 / 900 Quantum Synapse Particles + Twin Gimbal Rings + Core Glow)
   const singularityPivot = new THREE.Group()
-  singularityPivot.position.set(-2.25, 1.48, 2.45)
+  singularityPivot.position.set(0, 1.55, 0.85)
   group.add(singularityPivot)
 
-  const gimbalGeo = new THREE.TorusGeometry(1.18, 0.012, 10, 96)
-  const gimbalRing = new THREE.Mesh(gimbalGeo, titaniumMat)
-  gimbalRing.rotation.set(0.42, 0.25, 0)
-  singularityPivot.add(gimbalRing)
-  disposables.push(gimbalGeo)
+  const coreOrbGeo = new THREE.SphereGeometry(0.46, 32, 24)
+  geometries.push(coreOrbGeo)
+  const coreOrbMat = new THREE.MeshStandardMaterial({
+    color: 0x0f172a,
+    emissive: 0x0ea5e9,
+    emissiveIntensity: 1.1,
+    metalness: 0.92,
+    roughness: 0.12,
+  })
+  materials.push(coreOrbMat)
+  const coreOrb = new THREE.Mesh(coreOrbGeo, coreOrbMat)
+  singularityPivot.add(coreOrb)
 
-  const count = highTier ? 1800 : 800
-  const posA = new Float32Array(count * 3) // Neural Sphere
-  const posB = new Float32Array(count * 3) // Image Diffusion Planes
-  const posC = new Float32Array(count * 3) // Video Cinema Helix
-  const posD = new Float32Array(count * 3) // Audio Harmonic Ripples
-  const seeds = new Float32Array(count)
+  const coreGlowMat = new THREE.SpriteMaterial({
+    map: softGlowTex,
+    color: 0x22d3ee,
+    transparent: true,
+    opacity: 0.62,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+  materials.push(coreGlowMat)
+  const coreGlowSprite = new THREE.Sprite(coreGlowMat)
+  coreGlowSprite.scale.set(3.4, 3.4, 1)
+  singularityPivot.add(coreGlowSprite)
 
-  for (let i = 0; i < count; i++) {
-    const t = i / count
-    const phi = Math.acos(1 - 2 * t)
+  const gimbalGeoA = new THREE.TorusGeometry(1.18, 0.028, 10, 64)
+  const gimbalGeoB = new THREE.TorusGeometry(1.42, 0.022, 10, 64)
+  geometries.push(gimbalGeoA, gimbalGeoB)
+  const gimbalMatB = new THREE.MeshStandardMaterial({
+    color: 0x818cf8,
+    emissive: 0x4f46e5,
+    emissiveIntensity: 0.95,
+    metalness: 0.84,
+    roughness: 0.18,
+  })
+  materials.push(gimbalMatB)
+  const gimbalA = new THREE.Mesh(gimbalGeoA, trimCyanMat)
+  gimbalA.rotation.set(0.58, 0.22, 0.18)
+  const gimbalB = new THREE.Mesh(gimbalGeoB, gimbalMatB)
+  gimbalB.rotation.set(-0.62, -0.35, 0.44)
+  singularityPivot.add(gimbalA, gimbalB)
+
+  const neuralCount = highTier ? 2200 : 900
+  const nPos = new Float32Array(neuralCount * 3)
+  const nMeta = new Float32Array(neuralCount * 3) // speed, phase, colorMix
+  for (let i = 0; i < neuralCount; i++) {
+    const phi = Math.acos(1 - (2 * (i + 0.5)) / neuralCount)
     const theta = Math.PI * (1 + Math.sqrt(5)) * i
-    seeds[i] = (i * 0.6180339887) % 1
-
-    const rA = 0.78 + (seeds[i] - 0.5) * 0.1
-    posA[i * 3] = rA * Math.sin(phi) * Math.cos(theta)
-    posA[i * 3 + 1] = rA * Math.cos(phi)
-    posA[i * 3 + 2] = rA * Math.sin(phi) * Math.sin(theta)
-
-    const layer = i % 3
-    const gridIdx = Math.floor(i / 3)
-    const cols = Math.ceil(Math.sqrt(count / 3))
-    posB[i * 3] = ((gridIdx % cols) / cols - 0.5) * 1.25
-    posB[i * 3 + 1] = (Math.floor(gridIdx / cols) / cols - 0.5) * 1.25
-    posB[i * 3 + 2] = (layer - 1) * 0.34
-
-    const hAngle = t * Math.PI * 6 + (i % 2) * Math.PI
-    posC[i * 3] = Math.cos(hAngle) * 0.58
-    posC[i * 3 + 1] = (t - 0.5) * 1.45
-    posC[i * 3 + 2] = Math.sin(hAngle) * 0.58
-
-    const ringIdx = i % 5
-    const rAngle = t * Math.PI * 16
-    const rr = 0.2 + ringIdx * 0.14
-    posD[i * 3] = Math.cos(rAngle) * rr
-    posD[i * 3 + 1] = Math.sin(rr * 10) * 0.26 + (ringIdx - 2) * 0.14
-    posD[i * 3 + 2] = Math.sin(rAngle) * rr
+    const rShell = 0.62 + ((i * 17) % 11) * 0.055
+    nPos[i * 3] = Math.sin(phi) * Math.cos(theta) * rShell
+    nPos[i * 3 + 1] = Math.cos(phi) * rShell
+    nPos[i * 3 + 2] = Math.sin(phi) * Math.sin(theta) * rShell
+    nMeta[i * 3] = 0.7 + ((i * 13) % 7) * 0.18
+    nMeta[i * 3 + 1] = (i * 0.57) % (Math.PI * 2)
+    nMeta[i * 3 + 2] = (i % 6) / 5
   }
 
-  const morphGeo = new THREE.BufferGeometry()
-  morphGeo.setAttribute('position', new THREE.BufferAttribute(posA, 3))
-  morphGeo.setAttribute('aPosB', new THREE.BufferAttribute(posB, 3))
-  morphGeo.setAttribute('aPosC', new THREE.BufferAttribute(posC, 3))
-  morphGeo.setAttribute('aPosD', new THREE.BufferAttribute(posD, 3))
-  morphGeo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1))
+  const neuralGeo = new THREE.BufferGeometry()
+  neuralGeo.setAttribute('position', new THREE.BufferAttribute(nPos, 3))
+  neuralGeo.setAttribute('aMeta', new THREE.BufferAttribute(nMeta, 3))
+  geometries.push(neuralGeo)
 
-  const morphUniforms = {
-    uTime: { value: 0 },
-    uTheme: { value: 0 },
-  }
-  const morphMat = new THREE.ShaderMaterial({
-    uniforms: morphUniforms,
+  const neuralMat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uThemeT: { value: 0 },
+      uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 1.25) },
+    },
     vertexShader: /* glsl */ `
-      attribute vec3 aPosB;
-      attribute vec3 aPosC;
-      attribute vec3 aPosD;
-      attribute float aSeed;
+      attribute vec3 aMeta;
       uniform float uTime;
-      varying float vPhase;
-      varying float vSeed;
-
-      vec3 morphPos(float phase) {
-        float seg = mod(phase, 4.0);
-        if (seg < 1.0) return mix(position, aPosB, smoothstep(0.15, 0.85, seg));
-        if (seg < 2.0) return mix(aPosB, aPosC, smoothstep(0.15, 0.85, seg - 1.0));
-        if (seg < 3.0) return mix(aPosC, aPosD, smoothstep(0.15, 0.85, seg - 2.0));
-        return mix(aPosD, position, smoothstep(0.15, 0.85, seg - 3.0));
-      }
+      uniform float uPixelRatio;
+      varying float vMix;
+      varying float vPulse;
 
       void main() {
-        float phase = uTime * 0.25;
-        vPhase = phase;
-        vSeed = aSeed;
-        vec3 p = morphPos(phase);
-        float c = cos(uTime * 0.36);
-        float s = sin(uTime * 0.36);
+        float ang = uTime * 0.35 * aMeta.x;
+        float c = cos(ang);
+        float s = sin(ang);
+        vec3 p = position;
         p.xz = mat2(c, -s, s, c) * p.xz;
-        p.y += sin(uTime * 1.4 + aSeed * 6.2831) * 0.03;
-        vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
-        gl_PointSize = clamp((30.0 / max(1.0, -mvPosition.z)) * (0.75 + aSeed * 0.65), 1.6, 4.8);
-        gl_Position = projectionMatrix * mvPosition;
+        float breathe = 1.0 + 0.08 * sin(uTime * 2.2 + aMeta.y);
+        p *= breathe;
+
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = clamp((2.6 + aMeta.z * 1.6) * uPixelRatio * (11.0 / max(2.5, -mv.z)), 1.6, 8.5);
+        vMix = aMeta.z;
+        vPulse = 0.55 + 0.45 * sin(uTime * 3.1 + aMeta.y);
+        gl_Position = projectionMatrix * mv;
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform float uTheme;
-      varying float vPhase;
-      varying float vSeed;
+      uniform float uThemeT;
+      varying float vMix;
+      varying float vPulse;
 
       void main() {
-        vec2 c = gl_PointCoord - 0.5;
-        float d2 = dot(c, c);
-        if (d2 > 0.25) discard;
-        float mask = smoothstep(0.25, 0.02, d2);
-
-        vec3 cyan = vec3(0.22, 0.91, 0.84);
-        vec3 sky = vec3(0.24, 0.72, 0.98);
-        vec3 indigo = vec3(0.58, 0.52, 0.98);
-        vec3 champagne = vec3(0.94, 0.76, 0.48);
-
-        float m = mod(vPhase, 4.0) / 4.0;
-        vec3 col = mix(mix(cyan, sky, vSeed), mix(indigo, champagne, vSeed), 0.5 + 0.5 * sin(m * 6.2831));
-        gl_FragColor = vec4(col, mask * mix(0.84, 0.36, uTheme));
+        vec2 c = gl_PointCoord - vec2(0.5);
+        float r2 = dot(c, c);
+        if (r2 > 0.25) discard;
+        float alpha = smoothstep(0.25, 0.02, r2) * vPulse * mix(0.92, 0.42, uThemeT);
+        vec3 col = mix(vec3(0.14, 0.90, 1.0), vec3(0.49, 0.45, 0.98), vMix);
+        gl_FragColor = vec4(col, alpha);
       }
     `,
   })
-  const morphCloud = new THREE.Points(morphGeo, morphMat)
-  singularityPivot.add(morphCloud)
-  disposables.push(morphGeo, morphMat)
+  materials.push(neuralMat)
+  const neuralPoints = new THREE.Points(neuralGeo, neuralMat)
+  singularityPivot.add(neuralPoints)
 
-  // =========================================================================
-  // 3. 24 Recessed Architectural Compute Light-Spires (stay cleanly below top header!)
-  // =========================================================================
-  const spireCount = 24
-  const spireGeo = new THREE.BoxGeometry(0.36, 1.0, 0.72)
-  const spireEdgeGeo = new THREE.BoxGeometry(0.028, 1.0, 0.028)
-  const spireEdgeMat = new THREE.MeshBasicMaterial({
-    color: 0x38e8d5,
+  // 3. Enlarged 3 Primary Curved Holographic Glass Displays + 2 Floating Telemetry Wings
+  const screensPivot = new THREE.Group()
+  screensPivot.position.set(0, 3.8, -0.45)
+  group.add(screensPivot)
+
+  const addScreenCluster = (
+    width: number,
+    height: number,
+    curveDepth: number,
+    tex: THREE.Texture,
+    pos: [number, number, number],
+    rotY: number,
+    rotX = 0,
+  ) => {
+    const faceGeo = createCurvedScreenGeometry(width, height, curveDepth, 28)
+    const bezelGeo = createCurvedScreenGeometry(width + 0.14, height + 0.14, curveDepth + 0.02, 28)
+    geometries.push(faceGeo, bezelGeo)
+
+    const faceMat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 0.95,
+      side: THREE.FrontSide,
+    })
+    const bezelMat = new THREE.MeshStandardMaterial({
+      color: 0x0e172a,
+      emissive: 0x0e7490,
+      emissiveIntensity: 0.24,
+      metalness: 0.88,
+      roughness: 0.2,
+      side: THREE.DoubleSide,
+    })
+    materials.push(faceMat, bezelMat)
+
+    const holder = new THREE.Group()
+    holder.position.set(pos[0], pos[1], pos[2])
+    holder.rotation.set(rotX, rotY, 0)
+
+    const bezelMesh = new THREE.Mesh(bezelGeo, bezelMat)
+    bezelMesh.position.z = -0.045
+    const faceMesh = new THREE.Mesh(faceGeo, faceMat)
+    faceMesh.position.z = 0.025
+
+    holder.add(bezelMesh, faceMesh)
+    screensPivot.add(holder)
+    return { holder, faceMat, bezelMat }
+  }
+
+  const mainCluster = addScreenCluster(5.0, 2.9, 0.42, liveCode.texture, [0, 0.25, -0.35], 0, 0.03)
+  const leftCluster = addScreenCluster(3.3, 2.45, 0.3, routingTex, [-4.35, 0.0, 0.72], 0.42, 0.02)
+  const rightCluster = addScreenCluster(3.3, 2.45, 0.3, protocolTex, [4.35, 0.0, 0.72], -0.42, 0.02)
+
+  // Secondary layered floating glass holographic accent wings (left & right upper-outer flank depth)
+  const wingGeo = createCurvedScreenGeometry(2.45, 1.35, 0.18, 16)
+  geometries.push(wingGeo)
+  const wingMat = new THREE.ShaderMaterial({
     transparent: true,
-    opacity: 0.42,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uTime: { value: 0 },
+      uThemeT: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform float uThemeT;
+      varying vec2 vUv;
+      void main() {
+        float borderX = smoothstep(0.0, 0.04, vUv.x) * smoothstep(1.0, 0.96, vUv.x);
+        float borderY = smoothstep(0.0, 0.06, vUv.y) * smoothstep(1.0, 0.94, vUv.y);
+        float frame = 1.0 - min(borderX, borderY);
+        float scan = smoothstep(0.65, 1.0, sin(vUv.y * 42.0 - uTime * 3.5) * 0.5 + 0.5);
+        float bar = smoothstep(0.75, 0.98, sin(vUv.x * 18.0 + floor(vUv.y * 6.0) * 1.4 - uTime * 2.2) * 0.5 + 0.5);
+        vec3 cyanCol = vec3(0.14, 0.88, 1.0);
+        vec3 indigoCol = vec3(0.45, 0.44, 0.98);
+        vec3 col = mix(indigoCol, cyanCol, vUv.x * 0.7 + scan * 0.3);
+        float alpha = (0.12 + frame * 0.45 + scan * 0.14 + bar * 0.18) * mix(0.85, 0.45, uThemeT);
+        gl_FragColor = vec4(col, alpha);
+      }
+    `,
   })
-  const spireInstances = new THREE.InstancedMesh(spireGeo, darkSpireMat, spireCount)
-  const spireEdgeInstances = new THREE.InstancedMesh(spireEdgeGeo, spireEdgeMat, spireCount)
-  group.add(spireInstances, spireEdgeInstances)
-  disposables.push(spireGeo, spireEdgeGeo, spireEdgeMat)
+  materials.push(wingMat)
 
+  const wingLeft = new THREE.Mesh(wingGeo, wingMat)
+  wingLeft.position.set(-4.85, 2.2, 0.25)
+  wingLeft.rotation.set(0.06, 0.54, 0.04)
+  const wingRight = new THREE.Mesh(wingGeo, wingMat)
+  wingRight.position.set(4.85, 2.2, 0.25)
+  wingRight.rotation.set(0.06, -0.54, -0.04)
+  screensPivot.add(wingLeft, wingRight)
+
+  // 4. Upgraded 32 Architectural Data Spires with Upward-Flowing Data-Pulse Strips (InstancedMesh-aware GLSL)
+  const spireCount = 32
+  const spireGeo = new THREE.BoxGeometry(0.46, 1.0, 0.46)
+  // Translate geometry base to y = 0 so scaling Y grows strictly upward from floor
+  spireGeo.translate(0, 0.5, 0)
+  geometries.push(spireGeo)
+
+  const spireMat = new THREE.ShaderMaterial({
+    transparent: false,
+    depthWrite: true,
+    fog: false,
+    uniforms: {
+      uTime: { value: 0 },
+      uThemeT: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying float vWorldY;
+      varying float vInstPhase;
+
+      void main() {
+        vUv = uv;
+        vec4 localPos = vec4(position, 1.0);
+        #ifdef USE_INSTANCING
+          localPos = instanceMatrix * localPos;
+          mat3 instRot = mat3(instanceMatrix[0].xyz, instanceMatrix[1].xyz, instanceMatrix[2].xyz);
+          vNormalW = normalize(mat3(modelMatrix) * instRot * normal);
+          vInstPhase = instanceMatrix[3][0] * 0.43 + instanceMatrix[3][2] * 0.67;
+        #else
+          vNormalW = normalize(mat3(modelMatrix) * normal);
+          vInstPhase = 0.0;
+        #endif
+        vec4 wp = modelMatrix * localPos;
+        vWorldY = wp.y;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform float uThemeT;
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      varying float vWorldY;
+      varying float vInstPhase;
+
+      void main() {
+        float isVerticalSide = 1.0 - step(0.85, abs(vNormalW.y));
+        // Sleek chamfer edge & vertical telemetry channels
+        float edgeStrip = smoothstep(0.36, 0.47, abs(vUv.x - 0.5));
+        float centerSlot = 1.0 - smoothstep(0.04, 0.11, abs(vUv.x - 0.5));
+        float flowWave = pow(max(0.0, sin(vWorldY * 1.15 - uTime * 3.4 + vInstPhase)), 6.0);
+        float heightFade = smoothstep(0.1, 1.5, vWorldY);
+
+        vec3 n = normalize(vNormalW);
+        float lightMix = clamp(dot(n, normalize(vec3(0.4, 0.85, 0.55))) * 0.5 + 0.5, 0.0, 1.0);
+
+        // Dark obsidian basalt vs Light Mode frosted alabaster stone monoliths
+        vec3 darkStone = mix(vec3(0.024, 0.036, 0.075), vec3(0.065, 0.095, 0.175), lightMix);
+        vec3 lightStone = mix(vec3(0.78, 0.84, 0.93), vec3(0.95, 0.97, 1.0), lightMix);
+        vec3 baseBody = mix(darkStone, lightStone, uThemeT);
+
+        vec3 cyanGlow = vec3(0.14, 0.90, 1.0);
+        vec3 indigoGlow = vec3(0.45, 0.48, 0.98);
+        vec3 pulseColor = mix(cyanGlow, indigoGlow, fract(vInstPhase * 0.37));
+
+        float energy = (edgeStrip * 0.38 + centerSlot * flowWave * 1.15) * isVerticalSide * heightFade;
+        vec3 darkCol = baseBody + pulseColor * energy * 1.15;
+        vec3 lightCol = mix(baseBody, vec3(0.05, 0.58, 0.84), clamp(energy * 0.48, 0.0, 0.65));
+
+        gl_FragColor = vec4(mix(darkCol, lightCol, uThemeT), 1.0);
+      }
+    `,
+  })
+  materials.push(spireMat)
+
+  const spiresInstanced = new THREE.InstancedMesh(spireGeo, spireMat, spireCount)
   const dummy = new THREE.Object3D()
   for (let i = 0; i < spireCount; i++) {
     const t = i / (spireCount - 1)
-    const ang = (t - 0.5) * 1.9
-    const r = 15.5 + ((i * 7) % 5) * 2.1
-    const h = 6.2 + ((i * 11) % 6) * 1.35
-    const sx = Math.sin(ang) * r
-    const sz = -Math.cos(ang) * r
+    // Keep strictly behind & along outer-left semicircular horizon (sin(angle) <= -0.1) so screens & plinth stay unobstructed
+    const arcAngle = -Math.PI * 1.02 + t * Math.PI * 0.96
+    const radius = 6.4 + (i % 4) * 1.5
+    const x = Math.cos(arcAngle) * radius - 1.1
+    const z = Math.sin(arcAngle) * radius * 0.78 - 3.2
+    const height = 6.5 + ((i * 19) % 13) * 0.48 // 6.5m .. 12.26m
+    const wScale = 0.7 + (i % 3) * 0.22
 
-    dummy.position.set(sx, h / 2 - 0.4, sz)
-    dummy.rotation.set(0, -ang, 0)
-    dummy.scale.set(1, h, 1)
+    dummy.position.set(x, 0, z)
+    dummy.rotation.set(0, -arcAngle * 0.45, 0)
+    dummy.scale.set(wScale, height, wScale)
     dummy.updateMatrix()
-    spireInstances.setMatrixAt(i, dummy.matrix)
-
-    dummy.position.set(sx + Math.sin(-ang) * 0.37, h / 2 - 0.4, sz + Math.cos(-ang) * 0.37)
-    dummy.scale.set(1, h * 0.9, 1)
-    dummy.updateMatrix()
-    spireEdgeInstances.setMatrixAt(i, dummy.matrix)
+    spiresInstanced.setMatrixAt(i, dummy.matrix)
   }
-  spireInstances.instanceMatrix.needsUpdate = true
-  spireEdgeInstances.instanceMatrix.needsUpdate = true
+  spiresInstanced.instanceMatrix.needsUpdate = true
+  group.add(spiresInstanced)
 
-  const darkSpireCol = new THREE.Color(0x09111f)
-  const lightSpireCol = new THREE.Color(0x9aa8bd)
+  const update = (elapsed: number, dt: number, focusWeight: number, themeT: number, active = true) => {
+    const safeDt = Math.min(dt, 0.05)
 
-  const update = (
-    elapsed: number,
-    _dt: number,
-    focusWeight: number,
-    themeT: number,
-    active = true,
-  ) => {
-    morphUniforms.uTime.value = elapsed
-    morphUniforms.uTheme.value = themeT
-    codeScreen.update(elapsed, active)
+    // 6Hz gated live code terminal update when screen is visible/active
+    liveCode.update(elapsed, active)
 
-    darkSpireMat.color.copy(darkSpireCol).lerp(lightSpireCol, themeT)
-    haloMat.opacity = (0.14 + focusWeight * 0.06) * (1 - themeT * 0.72)
-    spireEdgeMat.opacity = THREE.MathUtils.lerp(0.42, 0.25, themeT)
+    neuralMat.uniforms.uTime.value = elapsed
+    neuralMat.uniforms.uThemeT.value = themeT
+    wingMat.uniforms.uTime.value = elapsed
+    wingMat.uniforms.uThemeT.value = themeT
+    spireMat.uniforms.uTime.value = elapsed
+    spireMat.uniforms.uThemeT.value = themeT
 
-    gimbalRing.rotation.y = 0.25 + elapsed * 0.16
-    gimbalRing.rotation.z = Math.sin(elapsed * 0.45) * 0.12
+    singularityPivot.position.y = 1.55 + Math.sin(elapsed * 1.4) * 0.08
+    coreOrb.rotation.y += safeDt * 0.55
+    gimbalA.rotation.y += safeDt * (0.48 + focusWeight * 0.25)
+    gimbalA.rotation.x += safeDt * 0.16
+    gimbalB.rotation.y -= safeDt * (0.38 + focusWeight * 0.22)
+    gimbalB.rotation.z += safeDt * 0.21
 
-    // Gentle floating breath on frameless curved glass panels
-    centerPanel.position.y = Math.sin(elapsed * 0.75) * 0.04
-    leftPanel.position.y = Math.sin(elapsed * 0.75 + 1.1) * 0.04
-    rightPanel.position.y = Math.sin(elapsed * 0.75 + 2.2) * 0.04
+    // Smooth holographic parallax breathing & focus enlargement
+    screensPivot.position.y = 3.8 + Math.sin(elapsed * 0.9 + 0.6) * 0.07
+    wingLeft.position.y = 2.2 + Math.sin(elapsed * 1.15) * 0.09
+    wingRight.position.y = 2.2 + Math.cos(elapsed * 1.15) * 0.09
+
+    const themeChassis = themeT > 0.5 ? 0xe2e8f0 : 0x0b1222
+    chassisMat.color.setHex(themeChassis)
+    mainCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xcbd5e1 : 0x0e172a)
+    leftCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xcbd5e1 : 0x0e172a)
+    rightCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xcbd5e1 : 0x0e172a)
+    trimCyanMat.emissiveIntensity = THREE.MathUtils.lerp(0.95, 0.35, themeT)
+    coreGlowMat.opacity = THREE.MathUtils.lerp(0.62, 0.25, themeT) * (0.85 + 0.15 * focusWeight)
+  }
+
+  const dispose = () => {
+    liveCode.dispose()
+    for (const geo of geometries) geo.dispose()
+    for (const mat of materials) mat.dispose()
+    for (const tex of textures) tex.dispose()
+    group.clear()
   }
 
   return {
     group,
     update,
-    dispose: () => {
-      disposables.forEach((d) => d.dispose())
-    },
+    dispose,
   }
 }
