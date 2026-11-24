@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import { buildAiCodeWorld } from './buildAiCodeWorld'
 import { buildOpticalCore } from './buildOpticalCore'
 import { buildQimuStudioWorld } from './buildQimuStudioWorld'
-import { createSoftGlowTexture } from './proceduralTextures'
 import { createStudioEnvironment } from './studioEnvironment'
 
 export type PortalHoverSide = 'aicode' | 'qimu' | null
@@ -45,37 +44,45 @@ function mapProgressToKnotT(progress: number): number {
 
 export function createPortalEngine(options: PortalEngineOptions): PortalEngineController {
   const { canvas } = options
-  const width = Math.max(1, canvas.clientWidth || window.innerWidth)
-  const height = Math.max(1, canvas.clientHeight || window.innerHeight)
+  let currentWidth = Math.max(1, canvas.clientWidth || window.innerWidth)
+  let currentHeight = Math.max(1, canvas.clientHeight || window.innerHeight)
 
-  const isMobileViewport = width < 768
+  const isMobileViewport = currentWidth < 768
   const highTier = !isMobileViewport
 
-  // Single-pass hardware MSAA renderer for crisp reflections & locked 60 FPS
+  let currentDpr = Math.min(window.devicePixelRatio || 1, highTier ? 1.25 : 1.0)
+  let dprSteppedDown = currentDpr <= 1.0
+  let frameCount = 0
+  let emaDt = 0.016
+
+  // Single-pass hardware MSAA renderer with stencil disabled for peak fill-rate & 60-120fps headroom
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
     powerPreference: 'high-performance',
     alpha: false,
+    stencil: false,
+    depth: true,
   })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, highTier ? 1.5 : 1.25))
-  renderer.setSize(width, height, false)
+  renderer.setPixelRatio(currentDpr)
+  renderer.setSize(currentWidth, currentHeight, false)
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = options.initialDark ? 1.12 : 1.02
+  renderer.toneMappingExposure = options.initialDark ? 1.08 : 1.0
   renderer.outputColorSpace = THREE.SRGBColorSpace
 
   const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 140)
-  camera.position.set(0, 2.55, 13.6)
+  let baseFov = currentWidth / currentHeight < 1.0 ? 50 : 44
+  const camera = new THREE.PerspectiveCamera(baseFov, currentWidth / currentHeight, 0.1, 260)
+  camera.position.set(0, 3.2, 16.5)
 
-  // Monumental 4-act spatial cinematography spline
+  // Macro Cosmic-Cinema Horizon spatial spline
   const cameraPosCurve = new THREE.CatmullRomCurve3(
     [
-      new THREE.Vector3(0, 2.55, 13.6), // Act 1: Mechanical Aperture Hall
-      new THREE.Vector3(-9.2, 2.75, 2.8), // Act 2: AICode Compute Vault
-      new THREE.Vector3(0, 3.6, 3.2), // Mid Hall Architectural Sweep
-      new THREE.Vector3(9.2, 2.7, 3.6), // Act 3: Qimu Cinema & Art Studio
-      new THREE.Vector3(0, 7.2, 21.8), // Act 4: Grand Dual-Wing Panorama
+      new THREE.Vector3(0, 3.2, 16.5), // Act 1: Macro Eclipse & Mirror Ocean Panorama
+      new THREE.Vector3(-8.2, 3.1, 4.6), // Act 2: AICode Spatial Smoked-Glass Gallery
+      new THREE.Vector3(0, 4.2, 4.2), // Mid Horizon Sweep
+      new THREE.Vector3(7.1, 3.25, 7.6), // Act 3: Qimu IMAX, Manju & Editorial Gallery
+      new THREE.Vector3(0, 8.8, 25.5), // Act 4: Grand Dual-Horizon Panorama Finale
     ],
     false,
     'catmullrom',
@@ -84,21 +91,18 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
 
   const cameraLookCurve = new THREE.CatmullRomCurve3(
     [
-      new THREE.Vector3(0, 3.25, -3.5), // Act 1 LookAt
-      new THREE.Vector3(-14.5, 2.65, -6.0), // Act 2 LookAt
-      new THREE.Vector3(3.5, 2.8, -5.0), // Transition LookAt
-      new THREE.Vector3(14.5, 2.5, -5.8), // Act 3 LookAt
-      new THREE.Vector3(0, 2.9, -5.5), // Act 4 LookAt
+      new THREE.Vector3(0, 3.8, -8.5), // Act 1 LookAt
+      new THREE.Vector3(-14.5, 3.0, -7.8), // Act 2 LookAt
+      new THREE.Vector3(2.8, 3.4, -8.5), // Mid Sweep LookAt
+      new THREE.Vector3(14.5, 2.95, -7.2), // Act 3 LookAt
+      new THREE.Vector3(0, 3.2, -8.5), // Act 4 LookAt
     ],
     false,
     'catmullrom',
     0.45,
   )
 
-  // Architectural concrete hall, studio lighting dome, basalt floor & bounce pools
   const studioEnv = createStudioEnvironment(scene, renderer, highTier)
-
-  // Hero 3D worlds
   const opticalCore = buildOpticalCore(highTier)
   scene.add(opticalCore.group)
 
@@ -108,51 +112,6 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
   const qimuWorld = buildQimuStudioWorld(renderer, highTier)
   scene.add(qimuWorld.group)
 
-  // Restrained architectural hall atmosphere motes (240 desktop / 100 mobile)
-  const dustCount = highTier ? 240 : 100
-  const dustPositions = new Float32Array(dustCount * 3)
-  const dustColors = new Float32Array(dustCount * 3)
-  const tealCol = new THREE.Color(0x5eead4)
-  const amberCol = new THREE.Color(0xfbbf24)
-  const silverCol = new THREE.Color(0xcbd5e1)
-  const tmpCol = new THREE.Color()
-
-  for (let i = 0; i < dustCount; i++) {
-    const rx = ((Math.sin(i * 78.233) * 43758.5453) % 1 + 1) % 1
-    const ry = ((Math.sin(i * 19.137) * 28411.172) % 1 + 1) % 1
-    const rz = ((Math.sin(i * 45.913) * 19283.391) % 1 + 1) % 1
-    const x = (rx - 0.5) * 44
-    const y = 0.4 + ry * 9.6
-    const z = -26 + rz * 38
-    dustPositions[i * 3] = x
-    dustPositions[i * 3 + 1] = y
-    dustPositions[i * 3 + 2] = z
-
-    if (x < -5) tmpCol.copy(tealCol)
-    else if (x > 5) tmpCol.copy(amberCol)
-    else tmpCol.copy(silverCol)
-    dustColors[i * 3] = tmpCol.r
-    dustColors[i * 3 + 1] = tmpCol.g
-    dustColors[i * 3 + 2] = tmpCol.b
-  }
-
-  const dustGeo = new THREE.BufferGeometry()
-  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3))
-  dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3))
-  const dustTex = createSoftGlowTexture()
-  const dustMat = new THREE.PointsMaterial({
-    map: dustTex,
-    size: 0.16,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.38,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  })
-  const dustPoints = new THREE.Points(dustGeo, dustMat)
-  scene.add(dustPoints)
-
-  // Mutable reactive engine state
   let targetProgress = 0
   let smoothedProgress = 0
   let hoverSide: PortalHoverSide = null
@@ -211,20 +170,20 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
     pointerY += (pointerTargetY - pointerY) * (reducedMotion ? 0 : Math.min(1, dt * 5.0))
 
     studioEnv.applyTheme(currentThemeT)
-    renderer.toneMappingExposure = THREE.MathUtils.lerp(1.12, 1.02, currentThemeT)
-    dustMat.opacity = THREE.MathUtils.lerp(0.38, 0.14, currentThemeT)
+    studioEnv.update?.(elapsed, hoverBias)
+    renderer.toneMappingExposure = THREE.MathUtils.lerp(1.08, 1.0, currentThemeT)
 
     const knotT = mapProgressToKnotT(smoothedProgress)
     cameraPosCurve.getPoint(knotT, camPosVec)
     cameraLookCurve.getPoint(knotT, camLookVec)
 
     const heroWeight = Math.max(0, 1 - smoothedProgress / 0.22)
-    camPosVec.x += hoverBias * 1.45 * heroWeight + pointerX * (reducedMotion ? 0 : 0.45)
-    camPosVec.y += pointerY * (reducedMotion ? 0 : 0.24)
-    camLookVec.x += hoverBias * 2.4 * heroWeight + pointerX * (reducedMotion ? 0 : 0.3)
-    camLookVec.y += pointerY * (reducedMotion ? 0 : 0.16)
+    camPosVec.x += hoverBias * 1.45 * heroWeight + pointerX * (reducedMotion ? 0 : 0.42)
+    camPosVec.y += pointerY * (reducedMotion ? 0 : 0.22)
+    camLookVec.x += hoverBias * 2.4 * heroWeight + pointerX * (reducedMotion ? 0 : 0.28)
+    camLookVec.y += pointerY * (reducedMotion ? 0 : 0.14)
 
-    const targetFov = 40 - Math.abs(hoverBias) * 2.0 * heroWeight
+    const targetFov = baseFov - Math.abs(hoverBias) * 1.8 * heroWeight
     if (Math.abs(camera.fov - targetFov) > 0.02) {
       camera.fov += (targetFov - camera.fov) * smoothRate
       camera.updateProjectionMatrix()
@@ -242,9 +201,6 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
     aiCodeWorld.update(elapsed, dt, aicodeFocus, currentThemeT, isAct2Near)
     qimuWorld.update(elapsed, dt, pointerX, pointerY, qimuFocus, currentThemeT, isAct3Near)
 
-    dustPoints.rotation.y = elapsed * 0.01
-
-    // Single-pass hardware-antialiased render
     renderer.render(scene, camera)
   }
 
@@ -253,6 +209,19 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
     if (disposed || paused) return
     const rawDt = (now - lastNow) / 1000
     lastNow = now
+
+    // Adaptive DPR governor during warmup frames 15..60
+    frameCount++
+    if (!dprSteppedDown && frameCount >= 5 && rawDt > 0 && rawDt < 0.25) {
+      emaDt = emaDt * 0.85 + rawDt * 0.15
+      if (frameCount >= 15 && frameCount <= 60 && emaDt > 0.02 && currentDpr > 1.0) {
+        currentDpr = 1.0
+        dprSteppedDown = true
+        renderer.setPixelRatio(1.0)
+        renderer.setSize(currentWidth, currentHeight, false)
+      }
+    }
+
     const dt = Math.min(0.05, Math.max(0.001, rawDt))
     if (!reducedMotion) {
       elapsed += dt
@@ -306,12 +275,17 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
       }
     },
     resize(nextW: number, nextH: number) {
-      const w = Math.max(1, nextW)
-      const h = Math.max(1, nextH)
-      camera.aspect = w / h
+      currentWidth = Math.max(1, nextW)
+      currentHeight = Math.max(1, nextH)
+      const aspect = currentWidth / currentHeight
+      baseFov = aspect < 1.0 ? 50 : 44
+      camera.aspect = aspect
       camera.updateProjectionMatrix()
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, w < 768 ? 1.25 : 1.5))
-      renderer.setSize(w, h, false)
+      if (!dprSteppedDown) {
+        currentDpr = Math.min(window.devicePixelRatio || 1, currentWidth < 768 ? 1.0 : 1.25)
+        renderer.setPixelRatio(currentDpr)
+      }
+      renderer.setSize(currentWidth, currentHeight, false)
       if (reducedMotion && !disposed) {
         renderFrame(0.016)
       }
@@ -331,9 +305,6 @@ export function createPortalEngine(options: PortalEngineOptions): PortalEngineCo
       aiCodeWorld.dispose()
       qimuWorld.dispose()
       studioEnv.dispose()
-      dustGeo.dispose()
-      dustMat.dispose()
-      dustTex.dispose()
       renderer.dispose()
     },
   }

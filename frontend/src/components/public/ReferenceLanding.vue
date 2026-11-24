@@ -13,7 +13,7 @@
       <a class="rl-skip" href="#home-main">{{ t('glass.nav.skip') }}</a>
 
       <header ref="headerRef" class="rl-header hp__top" :class="{ 'rl-header--scrolled': isScrolled }" @keydown.esc="closeMenu">
-        <nav class="glass-panel rl-nav rl-container" :aria-label="t('glass.nav.navigation')">
+        <nav class="rl-nav rl-container" :aria-label="t('glass.nav.navigation')">
           <router-link to="/" class="rl-brand" @click="scrollToAct('act-portal', $event)">
             <PublicBrandLogo :src="siteLogo || '/logo.svg'" />
             <span>{{ siteName }}</span>
@@ -63,7 +63,7 @@
             >
               <Icon :name="portalDark ? 'sun' : 'moon'" size="md" aria-hidden="true" />
             </button>
-            <router-link :to="entryPath" class="glass-button glass-button--primary rl-button rl-nav-login">
+            <router-link :to="entryPath" class="glass-button rl-button rl-nav-login">
               {{ t(isAuthenticated ? 'glass.nav.console' : 'glass.nav.login') }}
             </router-link>
             <button
@@ -150,85 +150,89 @@
         </div>
 
         <div class="sp-sticky-hud">
-          <!-- ACT 1: Optical Dual Portal Hero (0%) -->
+          <!-- ACT 1: Macro Luminous Eclipse Hero (keeps upper 65% completely clear) -->
           <section
             class="sp-act sp-act--portal"
             :class="{ 'is-active': activeAct === 'portal' }"
             :aria-hidden="activeAct !== 'portal'"
             aria-labelledby="home-title"
           >
-            <div class="sp-hero-brand">
-              <span class="glass-control sp-brand-pill">{{ t('referenceLanding.portal.tagline') }}</span>
-              <h1 id="home-title">{{ siteName }}</h1>
-            </div>
+            <div class="sp-portal-lower rl-container">
+              <div class="sp-hero-brand">
+                <p class="rl-sr-only">{{ t('referenceLanding.portal.tagline') }}</p>
+                <h1 id="home-title">{{ siteName }}</h1>
+              </div>
 
-            <div class="sp-dual-docks rl-container">
-              <article
-                class="glass-panel sp-portal-dock sp-portal-dock--aicode"
-                data-testid="portal-aicode"
-                @pointerenter="hoverSide = 'aicode'"
-                @pointerleave="hoverSide = null"
-              >
-                <div class="sp-dock-head">
-                  <span class="sp-dot sp-dot--aicode" aria-hidden="true" />
-                  <div>
-                    <h2>{{ t('referenceLanding.portal.aicodeTitle') }}</h2>
-                    <span class="sp-dock-tags">{{ t('referenceLanding.portal.aicodeTag') }}</span>
+              <div class="sp-split-portal">
+                <article
+                  class="sp-split-cell sp-split-cell--aicode"
+                  data-testid="portal-aicode"
+                  @pointerenter="hoverSide = 'aicode'"
+                  @pointerleave="hoverSide = null"
+                >
+                  <div class="sp-dock-head">
+                    <span class="sp-dot sp-dot--aicode" aria-hidden="true" />
+                    <div>
+                      <h2>{{ t('referenceLanding.portal.aicodeTitle') }}</h2>
+                      <span class="sp-dock-tags">{{ t('referenceLanding.portal.aicodeTag') }}</span>
+                    </div>
                   </div>
-                </div>
-                <div class="sp-dock-actions">
-                  <router-link :to="entryPath" class="glass-button glass-button--primary sp-cta-aicode">
-                    <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
-                    <Icon name="arrowRight" size="sm" aria-hidden="true" />
-                  </router-link>
-                  <button
-                    type="button"
-                    class="glass-button rl-icon-button sp-copy-btn"
-                    :class="{ 'is-copied': copiedTarget === 'hero-address' }"
-                    :aria-label="t(copiedTarget === 'hero-address' ? 'glass.home.copied' : 'referenceLanding.portal.copyApi')"
-                    :title="apiBaseUrl"
-                    @click="copyValue(apiBaseUrl, 'hero-address')"
-                  >
-                    <Icon :name="copiedTarget === 'hero-address' ? 'check' : 'copy'" size="md" aria-hidden="true" />
-                  </button>
-                </div>
-              </article>
-
-              <article
-                class="glass-panel sp-portal-dock sp-portal-dock--qimu"
-                data-testid="portal-qimu"
-                @pointerenter="hoverSide = 'qimu'"
-                @pointerleave="hoverSide = null"
-              >
-                <div class="sp-dock-head">
-                  <span class="sp-dot sp-dot--qimu" aria-hidden="true" />
-                  <div>
-                    <h2>{{ t('referenceLanding.portal.qimuTitle') }}</h2>
-                    <span class="sp-dock-tags">{{ t('referenceLanding.portal.qimuTag') }}</span>
+                  <div class="sp-dock-actions">
+                    <router-link :to="entryPath" class="glass-button sp-cta-aicode">
+                      <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                      <Icon name="arrowRight" size="sm" aria-hidden="true" />
+                    </router-link>
+                    <button
+                      type="button"
+                      class="glass-button rl-icon-button sp-copy-btn"
+                      :class="{ 'is-copied': copiedTarget === 'hero-address' }"
+                      :aria-label="t(copiedTarget === 'hero-address' ? 'glass.home.copied' : 'referenceLanding.portal.copyApi')"
+                      :title="apiBaseUrl"
+                      @click="copyValue(apiBaseUrl, 'hero-address')"
+                    >
+                      <Icon :name="copiedTarget === 'hero-address' ? 'check' : 'copy'" size="md" aria-hidden="true" />
+                    </button>
                   </div>
-                </div>
-                <div class="sp-dock-actions">
-                  <a
-                    :href="qimuUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="glass-button sp-cta-qimu"
-                  >
-                    <span>{{ qimuLabel }}</span>
-                    <Icon name="externalLink" size="sm" aria-hidden="true" />
-                  </a>
-                </div>
-              </article>
-            </div>
+                </article>
 
-            <button
-              type="button"
-              class="sp-scroll-cue"
-              @click="scrollToAct('act-aicode')"
-            >
-              <span>{{ t('referenceLanding.portal.scrollHint') }}</span>
-              <Icon name="chevronDown" size="sm" aria-hidden="true" />
-            </button>
+                <span class="sp-split-divider" aria-hidden="true" />
+
+                <article
+                  class="sp-split-cell sp-split-cell--qimu"
+                  data-testid="portal-qimu"
+                  @pointerenter="hoverSide = 'qimu'"
+                  @pointerleave="hoverSide = null"
+                >
+                  <div class="sp-dock-head">
+                    <span class="sp-dot sp-dot--qimu" aria-hidden="true" />
+                    <div>
+                      <h2>{{ t('referenceLanding.portal.qimuTitle') }}</h2>
+                      <span class="sp-dock-tags">{{ t('referenceLanding.portal.qimuTag') }}</span>
+                    </div>
+                  </div>
+                  <div class="sp-dock-actions">
+                    <a
+                      :href="qimuUrl"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="glass-button sp-cta-qimu"
+                    >
+                      <span>{{ qimuLabel }}</span>
+                      <Icon name="externalLink" size="sm" aria-hidden="true" />
+                    </a>
+                  </div>
+                </article>
+              </div>
+
+              <button
+                type="button"
+                class="sp-scroll-cue"
+                @click="scrollToAct('act-aicode')"
+              >
+                <span>{{ t('referenceLanding.portal.scrollHint') }}</span>
+                <Icon name="chevronDown" size="sm" aria-hidden="true" />
+              </button>
+            </div>
           </section>
 
           <!-- ACT 2: AICode 3D Quantum Compute & Multi-Modal Core (35%) -->
@@ -238,7 +242,7 @@
             :aria-hidden="activeAct !== 'aicode'"
           >
             <div class="rl-container sp-stage-bar sp-stage-bar--left">
-              <div class="glass-panel sp-stage-dock sp-portal-dock--aicode">
+              <div class="sp-stage-dock">
                 <div class="sp-dock-head">
                   <span class="sp-dot sp-dot--aicode" aria-hidden="true" />
                   <div>
@@ -247,7 +251,7 @@
                   </div>
                 </div>
                 <div class="sp-dock-actions">
-                  <router-link :to="entryPath" class="glass-button glass-button--primary sp-cta-aicode">
+                  <router-link :to="entryPath" class="glass-button sp-cta-aicode">
                     <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
                     <Icon name="arrowRight" size="sm" aria-hidden="true" />
                   </router-link>
@@ -277,7 +281,7 @@
             :aria-hidden="activeAct !== 'qimu'"
           >
             <div class="rl-container sp-stage-bar sp-stage-bar--right">
-              <div class="glass-panel sp-stage-dock sp-portal-dock--qimu">
+              <div class="sp-stage-dock">
                 <div class="sp-dock-head">
                   <span class="sp-dot sp-dot--qimu" aria-hidden="true" />
                   <div>
@@ -307,7 +311,7 @@
             :aria-hidden="activeAct !== 'finale'"
           >
             <div class="sp-finale-portals">
-              <router-link :to="entryPath" class="glass-button glass-button--primary rl-button sp-cta-aicode">
+              <router-link :to="entryPath" class="glass-button rl-button sp-cta-aicode">
                 <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
                 <Icon name="arrowRight" size="md" aria-hidden="true" />
               </router-link>
@@ -322,7 +326,7 @@
               </a>
             </div>
 
-            <footer class="glass-panel rl-footer-bar rl-container">
+            <footer class="rl-footer-bar rl-container">
               <div class="rl-footer-brand">
                 <PublicBrandLogo :src="siteLogo || '/logo.svg'" />
                 <span>&copy; {{ currentYear }} {{ siteName }}</span>

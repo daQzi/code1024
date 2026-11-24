@@ -1,7 +1,6 @@
 /* ============================================================================
- * Code1024 3D Spatial Portal · Liquid Glass HUD Layer
- * Built over full-viewport Three.js WebGL2 studio scenes.
- * Zero prose clutter — all capabilities live inside the 3D space.
+ * Code1024 Macro Cosmic-Cinema Portal · Editorial Luxury HUD Layer
+ * Built over single-pass WebGL2 MSAA 3D worlds with lean compositor layers.
  * ========================================================================= */
 
 .rl-theme-shell {
@@ -11,13 +10,23 @@
 
 .reference-landing {
   --rl-ground: var(--glass-ground);
-  --rl-ink: var(--glass-text);
-  --rl-muted: var(--glass-muted);
-  --rl-accent: var(--glass-accent);
-  --rl-line: var(--glass-line);
+  --rl-ink: #f5f7fb;
+  --rl-muted: rgb(203 213 225 / 0.72);
+  --rl-accent: #38e8d5;
+  --rl-champagne: #f0c27b;
+  --rl-line: rgb(255 255 255 / 0.11);
   font-size: 16px;
   line-height: 1.5;
   background: transparent;
+  color: var(--rl-ink);
+}
+
+.rl-theme-shell:not(.dark) .reference-landing {
+  --rl-ink: #0b1220;
+  --rl-muted: rgb(30 41 59 / 0.68);
+  --rl-accent: #0f766e;
+  --rl-champagne: #9a6b25;
+  --rl-line: rgb(15 23 42 / 0.12);
 }
 
 .reference-landing *,
@@ -42,12 +51,20 @@
 }
 
 .reference-landing :is(a, button):focus-visible {
-  outline: 3px solid var(--rl-accent);
-  outline-offset: 4px;
+  outline: 2.5px solid var(--rl-accent);
+  outline-offset: 3px;
+}
+
+/* Strip expensive stacked backdrop-filters on small buttons/controls for peak WebGL FPS */
+.public-glass.reference-landing .glass-button,
+.public-glass.reference-landing .public-locale,
+.public-glass.reference-landing .glass-control {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .reference-landing .rl-container {
-  width: min(1240px, calc(100% - 48px));
+  width: min(1280px, calc(100% - 48px));
   margin-inline: auto;
 }
 
@@ -57,7 +74,7 @@
   left: 16px;
   z-index: 60;
   padding: 10px 16px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--rl-ink);
   color: var(--rl-ground);
   transform: translateY(-200%);
@@ -78,40 +95,49 @@
 .reference-landing .rl-reading-progress {
   position: fixed;
   inset: 0 0 auto;
-  height: 2.5px;
+  height: 2px;
   z-index: 50;
-  background: linear-gradient(90deg, #2dd4bf 0%, #38bdf8 48%, #fbbf24 100%);
+  background: linear-gradient(90deg, #38e8d5 0%, #e2e8f0 50%, #f0c27b 100%);
   transform: scaleX(var(--rl-progress, 0));
   transform-origin: left;
   pointer-events: none;
 }
 
 /* ============================================================================
- * Floating Liquid Glass Header
+ * Borderless Flush Architectural Header
  * ========================================================================= */
 .reference-landing .rl-header {
   position: fixed;
   inset: 0 0 auto;
   z-index: 40;
-  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid transparent;
+  transition: background-color 240ms ease, border-color 240ms ease;
   pointer-events: none;
+}
+
+.reference-landing .rl-header--scrolled {
+  background: rgb(3 5 10 / 0.64);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom-color: rgb(255 255 255 / 0.08);
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .rl-header--scrolled {
+  background: rgb(237 241 247 / 0.72);
+  border-bottom-color: rgb(15 23 42 / 0.09);
 }
 
 .reference-landing .rl-nav {
   pointer-events: auto;
-  min-height: 62px;
-  padding: 8px 10px 8px 18px;
-  border-radius: 999px;
+  min-height: 64px;
+  padding: 10px 0;
   display: flex;
   align-items: center;
   gap: 18px;
-  transition: box-shadow 220ms var(--ui-ease-out), border-color 220ms ease;
-}
-
-.reference-landing .rl-header--scrolled .rl-nav {
-  box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 0.35),
-    0 18px 42px -18px rgb(0 8 24 / 0.52);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .reference-landing .rl-brand {
@@ -121,10 +147,14 @@
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
-  font-size: 1rem;
+  font-size: 0.98rem;
   font-weight: 650;
   letter-spacing: -0.02em;
   white-space: nowrap;
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .rl-brand {
+  text-shadow: 0 1px 12px rgb(255 255 255 / 0.9);
 }
 
 .reference-landing .rl-brand span {
@@ -134,8 +164,8 @@
 }
 
 .reference-landing .rl-brand img {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   flex: none;
 }
@@ -145,26 +175,23 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  gap: 4px;
+  gap: 6px;
 }
 
 .reference-landing .rl-nav-links a {
+  position: relative;
   min-height: 36px;
-  padding: 6px 14px;
+  padding: 6px 13px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 0.84rem;
-  font-weight: 600;
+  font-weight: 560;
+  letter-spacing: 0.01em;
   white-space: nowrap;
   color: var(--rl-muted);
-  border: 1px solid transparent;
-  transition:
-    color 180ms ease,
-    background-color 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
+  transition: color 180ms ease, background-color 180ms ease;
 }
 
 .reference-landing .rl-nav-links a:hover {
@@ -173,17 +200,15 @@
 
 .reference-landing .rl-nav-links a.is-active {
   color: var(--rl-ink);
-  background: var(--glass-control-fill);
-  border-color: var(--glass-control-edge);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35);
+  background: rgb(255 255 255 / 0.075);
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .rl-nav-links a.is-active {
+  background: rgb(15 23 42 / 0.07);
 }
 
 .reference-landing .rl-nav-links a.rl-nav-plaza {
-  color: #2dd4bf;
-}
-
-.rl-theme-shell:not(.dark) .reference-landing .rl-nav-links a.rl-nav-plaza {
-  color: #0d9488;
+  color: var(--rl-accent);
 }
 
 .reference-landing .rl-nav-actions {
@@ -198,23 +223,36 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
   padding: 0;
   flex-shrink: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid rgb(255 255 255 / 0.13);
+}
+
+.rl-theme-shell:not(.dark) .public-glass.reference-landing .glass-button.rl-icon-button {
+  background: rgb(255 255 255 / 0.52);
+  border-color: rgb(15 23 42 / 0.14);
+}
+
+.public-glass.reference-landing .glass-button.rl-icon-button:hover {
+  border-color: rgb(255 255 255 / 0.34);
+  background: rgb(255 255 255 / 0.11);
 }
 
 .public-glass.reference-landing .rl-icon-button svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: block;
   flex: none;
 }
 
 .public-glass.reference-landing .rl-icon-button.is-copied {
-  color: #34d399;
-  border-color: rgb(52 211 153 / 0.55);
+  color: #38e8d5;
+  border-color: rgb(56 232 213 / 0.65);
 }
 
 .public-glass.reference-landing .public-locale {
@@ -222,15 +260,38 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-height: 40px;
+  min-height: 38px;
   min-width: 46px;
-  padding: 6px 10px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.05);
+  border: 1px solid rgb(255 255 255 / 0.13);
+}
+
+.rl-theme-shell:not(.dark) .public-glass.reference-landing .public-locale {
+  background: rgb(255 255 255 / 0.52);
+  border-color: rgb(15 23 42 / 0.14);
 }
 
 .public-glass.reference-landing .glass-button.rl-nav-login {
-  min-height: 40px;
-  padding: 8px 18px;
-  font-size: 0.84rem;
+  min-height: 38px;
+  padding: 7px 18px;
+  border-radius: 999px;
+  font-size: 0.83rem;
+  font-weight: 600;
+  background: #f5f7fb;
+  color: #050811;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+.public-glass.reference-landing .glass-button.rl-nav-login:hover {
+  background: #ffffff;
+}
+
+.rl-theme-shell:not(.dark) .public-glass.reference-landing .glass-button.rl-nav-login {
+  background: #0b1220;
+  color: #f8fafc;
 }
 
 .public-glass.reference-landing .rl-nav-actions .rl-menu-toggle {
@@ -241,9 +302,18 @@
   pointer-events: auto;
   display: grid;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 8px;
   padding: 14px;
-  border-radius: 24px;
+  border-radius: 18px;
+  background: rgb(6 10 20 / 0.82);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .rl-mobile-nav {
+  background: rgb(245 247 251 / 0.88);
+  border-color: rgb(15 23 42 / 0.12);
 }
 
 .reference-landing .rl-mobile-nav a,
@@ -254,15 +324,15 @@
   min-height: 44px;
   padding: 8px 14px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: transparent;
   color: var(--rl-ink);
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 580;
 }
 
 .reference-landing .rl-mobile-nav a.is-active {
-  background: var(--glass-control-fill);
+  background: rgb(255 255 255 / 0.08);
 }
 
 .reference-landing .rl-mobile-language {
@@ -276,29 +346,33 @@
 }
 
 /* ============================================================================
- * Right Vertical 4-Act Spatial Rail
+ * Right Architectural Tick Rail
  * ========================================================================= */
 .reference-landing .sp-rail {
   position: fixed;
-  right: 22px;
+  right: 24px;
   top: 50%;
   transform: translateY(-50%);
   z-index: 35;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 22px;
+  align-items: flex-end;
+  gap: 20px;
 }
 
 .reference-landing .sp-rail-track {
   position: absolute;
-  top: 6px;
-  bottom: 6px;
-  width: 2px;
-  border-radius: 999px;
-  background: rgb(148 163 184 / 0.25);
+  right: 5px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgb(255 255 255 / 0.14);
   overflow: hidden;
   pointer-events: none;
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .sp-rail-track {
+  background: rgb(15 23 42 / 0.16);
 }
 
 .reference-landing .sp-rail-fill {
@@ -306,48 +380,63 @@
   width: 100%;
   height: 100%;
   transform-origin: top;
-  background: linear-gradient(180deg, #2dd4bf 0%, #38bdf8 52%, #fbbf24 100%);
+  background: linear-gradient(180deg, #38e8d5 0%, #f5f7fb 50%, #f0c27b 100%);
 }
 
 .reference-landing .sp-rail-dot {
   position: relative;
   width: 12px;
-  height: 12px;
+  height: 14px;
   padding: 0;
-  border-radius: 50%;
-  border: 1.5px solid rgb(226 232 240 / 0.65);
-  background: rgb(15 23 42 / 0.72);
-  transition: transform 200ms var(--ui-ease-out), border-color 200ms ease, background-color 200ms ease, box-shadow 200ms ease;
+  border: 0;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
-.rl-theme-shell:not(.dark) .reference-landing .sp-rail-dot {
-  border-color: rgb(30 41 59 / 0.45);
-  background: rgb(255 255 255 / 0.82);
+.reference-landing .sp-rail-dot::before {
+  content: '';
+  display: block;
+  width: 12px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: rgb(226 232 240 / 0.45);
+  transition: width 200ms var(--ui-ease-out), background-color 200ms ease, box-shadow 200ms ease;
 }
 
-.reference-landing .sp-rail-dot.is-active {
-  transform: scale(1.38);
-  border-color: #2dd4bf;
-  background: #2dd4bf;
-  box-shadow: 0 0 14px rgb(45 212 191 / 0.75);
+.rl-theme-shell:not(.dark) .reference-landing .sp-rail-dot::before {
+  background: rgb(15 23 42 / 0.38);
+}
+
+.reference-landing .sp-rail-dot.is-active::before {
+  width: 24px;
+  height: 2px;
+  background: #38e8d5;
+  box-shadow: 0 0 10px rgb(56 232 213 / 0.65);
 }
 
 .reference-landing .sp-rail-tooltip {
   position: absolute;
-  right: 22px;
+  right: 32px;
   top: 50%;
   transform: translateY(-50%) translateX(6px);
-  padding: 4px 10px;
+  padding: 3px 9px;
   border-radius: 999px;
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 560;
   white-space: nowrap;
   color: var(--rl-ink);
-  background: var(--glass-panel-fill);
-  border: 1px solid var(--glass-control-edge);
+  background: rgb(5 9 18 / 0.78);
+  border: 1px solid rgb(255 255 255 / 0.14);
   opacity: 0;
   pointer-events: none;
   transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .sp-rail-tooltip {
+  background: rgb(255 255 255 / 0.88);
+  border-color: rgb(15 23 42 / 0.14);
 }
 
 .reference-landing .sp-rail-dot:hover .sp-rail-tooltip,
@@ -399,11 +488,11 @@
   inset: 0;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(14px) scale(0.985);
+  transform: translateY(12px) scale(0.99);
   transition:
-    opacity 420ms var(--ui-ease-out),
-    transform 480ms var(--ui-ease-out),
-    visibility 0s linear 420ms;
+    opacity 400ms var(--ui-ease-out),
+    transform 460ms var(--ui-ease-out),
+    visibility 0s linear 400ms;
   pointer-events: none;
 }
 
@@ -412,27 +501,34 @@
   visibility: visible;
   transform: none;
   transition:
-    opacity 420ms var(--ui-ease-out),
-    transform 480ms var(--ui-ease-out),
+    opacity 400ms var(--ui-ease-out),
+    transform 460ms var(--ui-ease-out),
     visibility 0s linear 0s;
 }
 
 .reference-landing .sp-act.is-active a,
 .reference-landing .sp-act.is-active button,
-.reference-landing .sp-act.is-active .sp-portal-dock,
+.reference-landing .sp-act.is-active .sp-split-portal,
 .reference-landing .sp-act.is-active .sp-stage-dock,
 .reference-landing .sp-act.is-active .rl-footer-bar {
   pointer-events: auto;
 }
 
 /* ============================================================================
- * Act 1: Dual Optical Portal Hero (leaves center prism wide open)
+ * Act 1: Macro Luminous Eclipse Hero (Leaves Upper 65% Uninterrupted)
  * ========================================================================= */
 .reference-landing .sp-act--portal {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: calc(96px + env(safe-area-inset-top, 0px)) 0 calc(26px + env(safe-area-inset-bottom, 0px));
+  justify-content: flex-end;
+  padding: calc(74px + env(safe-area-inset-top, 0px)) 0 calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+.reference-landing .sp-portal-lower {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
 .reference-landing .sp-hero-brand {
@@ -440,71 +536,110 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 10px;
-  padding-inline: 20px;
-}
-
-.reference-landing .sp-brand-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 14px;
-  border-radius: 999px;
-  font-size: 0.76rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--rl-ink);
 }
 
 .reference-landing .sp-hero-brand h1 {
-  font-size: clamp(2.4rem, 5vw, 4.1rem);
-  font-weight: 700;
+  font-size: clamp(2.3rem, 4.4vw, 3.6rem);
+  font-weight: 680;
   letter-spacing: -0.04em;
-  line-height: 1.05;
+  line-height: 1.02;
   color: var(--rl-ink);
-  text-shadow: 0 10px 36px rgb(0 0 0 / 0.35);
+  text-shadow: 0 12px 38px rgb(0 0 0 / 0.55);
 }
 
 .rl-theme-shell:not(.dark) .reference-landing .sp-hero-brand h1 {
-  text-shadow: 0 8px 26px rgb(255 255 255 / 0.55);
+  text-shadow: 0 8px 28px rgb(255 255 255 / 0.65);
 }
 
-.reference-landing .sp-dual-docks {
+/* Unified Architectural Split-Portal Dock */
+.reference-landing .sp-split-portal {
+  width: min(920px, 100%);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 360px));
-  justify-content: space-between;
-  align-items: end;
-  gap: 24px;
-  margin-top: auto;
-  margin-bottom: 18px;
+  grid-template-columns: 1fr 1px 1fr;
+  align-items: stretch;
+  border-radius: 20px;
+  background: rgb(5 9 18 / 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 24px 60px -24px rgb(0 0 0 / 0.72);
+  overflow: hidden;
 }
 
-.reference-landing .sp-portal-dock,
+.rl-theme-shell:not(.dark) .reference-landing .sp-split-portal {
+  background: rgb(255 255 255 / 0.68);
+  border-color: rgb(15 23 42 / 0.12);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.8),
+    0 20px 50px -24px rgb(15 23 42 / 0.24);
+}
+
+.reference-landing .sp-split-cell {
+  position: relative;
+  padding: 18px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  transition: background-color 220ms ease;
+}
+
+.reference-landing .sp-split-cell::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1.5px;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.reference-landing .sp-split-cell--aicode::before {
+  background: linear-gradient(90deg, transparent 0%, #38e8d5 50%, transparent 100%);
+}
+
+.reference-landing .sp-split-cell--qimu::before {
+  background: linear-gradient(90deg, transparent 0%, #f0c27b 50%, transparent 100%);
+}
+
+.reference-landing .sp-split-cell--aicode:hover {
+  background: rgb(56 232 213 / 0.055);
+}
+
+.reference-landing .sp-split-cell--qimu:hover {
+  background: rgb(240 194 123 / 0.055);
+}
+
+.reference-landing .sp-split-cell:hover::before {
+  opacity: 0.95;
+}
+
+.reference-landing .sp-split-divider {
+  display: block;
+  width: 1px;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .sp-split-divider {
+  background: rgb(15 23 42 / 0.1);
+}
+
 .reference-landing .sp-stage-dock {
-  padding: 18px 20px;
-  border-radius: 26px;
+  padding: 18px 22px;
+  border-radius: 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transition:
-    transform 260ms var(--ui-ease-out),
-    border-color 240ms ease,
-    box-shadow 260ms var(--ui-ease-out);
+  background: rgb(5 9 18 / 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgb(255 255 255 / 0.13);
 }
 
-.reference-landing .sp-portal-dock--aicode:hover {
-  transform: translateY(-4px);
-  border-color: rgb(45 212 191 / 0.58);
-  box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 0.45),
-    0 20px 54px -20px rgb(20 184 166 / 0.55);
-}
-
-.reference-landing .sp-portal-dock--qimu:hover {
-  transform: translateY(-4px);
-  border-color: rgb(251 191 36 / 0.58);
-  box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 0.45),
-    0 20px 54px -20px rgb(245 158 11 / 0.5);
+.rl-theme-shell:not(.dark) .reference-landing .sp-stage-dock {
+  background: rgb(255 255 255 / 0.72);
+  border-color: rgb(15 23 42 / 0.12);
 }
 
 .reference-landing .sp-dock-head {
@@ -514,8 +649,8 @@
 }
 
 .reference-landing .sp-dock-head h2 {
-  font-size: 1.12rem;
-  font-weight: 680;
+  font-size: 1.06rem;
+  font-weight: 640;
   letter-spacing: -0.02em;
   color: var(--rl-ink);
 }
@@ -524,26 +659,26 @@
   display: block;
   margin-top: 2px;
   font-size: 0.74rem;
-  font-weight: 550;
+  font-weight: 520;
   letter-spacing: 0.04em;
   color: var(--rl-muted);
 }
 
 .reference-landing .sp-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   flex: none;
 }
 
 .reference-landing .sp-dot--aicode {
-  background: #2dd4bf;
-  box-shadow: 0 0 0 4px rgb(45 212 191 / 0.22), 0 0 14px #2dd4bf;
+  background: #38e8d5;
+  box-shadow: 0 0 12px rgb(56 232 213 / 0.85);
 }
 
 .reference-landing .sp-dot--qimu {
-  background: #fbbf24;
-  box-shadow: 0 0 0 4px rgb(251 191 36 / 0.22), 0 0 14px #fbbf24;
+  background: #f0c27b;
+  box-shadow: 0 0 12px rgb(240 194 123 / 0.85);
 }
 
 .reference-landing .sp-dock-actions {
@@ -553,38 +688,63 @@
   gap: 10px;
 }
 
-.reference-landing .sp-cta-aicode {
+/* Monochrome & Champagne Editorial CTAs (zero neon SaaS gradients) */
+.public-glass.reference-landing .glass-button.sp-cta-aicode {
   flex: 1 1 auto;
-  background: linear-gradient(125deg, #0d9488 0%, #0284c7 62%, #4f46e5 100%);
-  border-color: rgb(94 234 212 / 0.45);
-  color: #ffffff;
-  box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 0.45),
-    0 12px 28px -12px rgb(20 184 166 / 0.65);
+  min-height: 42px;
+  padding: 9px 18px;
+  border-radius: 12px;
+  background: #f5f7fb;
+  color: #050811;
+  border: 1px solid transparent;
+  font-weight: 620;
+  box-shadow: none;
+  transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
-.reference-landing .sp-cta-aicode:hover {
-  background: linear-gradient(125deg, #14b8a6 0%, #0ea5e9 62%, #6366f1 100%);
-  box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 0.55),
-    0 16px 34px -10px rgb(45 212 191 / 0.75);
+.public-glass.reference-landing .glass-button.sp-cta-aicode:hover {
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgb(56 232 213 / 0.55), 0 8px 24px -10px rgb(56 232 213 / 0.45);
+  transform: translateY(-1px);
 }
 
-.reference-landing .sp-cta-qimu {
+.rl-theme-shell:not(.dark) .public-glass.reference-landing .glass-button.sp-cta-aicode {
+  background: #0b1220;
+  color: #f8fafc;
+}
+
+.rl-theme-shell:not(.dark) .public-glass.reference-landing .glass-button.sp-cta-aicode:hover {
+  background: #142038;
+}
+
+.public-glass.reference-landing .glass-button.sp-cta-qimu {
   flex: 1 1 auto;
-  background: linear-gradient(125deg, rgb(245 158 11 / 0.92) 0%, rgb(168 85 247 / 0.88) 100%);
-  border-color: rgb(253 230 138 / 0.5);
-  color: #ffffff;
-  box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 0.45),
-    0 12px 28px -12px rgb(245 158 11 / 0.62);
+  min-height: 42px;
+  padding: 9px 18px;
+  border-radius: 12px;
+  background: rgb(240 194 123 / 0.13);
+  border: 1px solid rgb(240 194 123 / 0.42);
+  color: #f8e4c1;
+  font-weight: 600;
+  box-shadow: none;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
-.reference-landing .sp-cta-qimu:hover {
-  background: linear-gradient(125deg, rgb(251 191 36 / 0.96) 0%, rgb(192 132 252 / 0.94) 100%);
-  box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 0.55),
-    0 16px 34px -10px rgb(251 191 36 / 0.72);
+.public-glass.reference-landing .glass-button.sp-cta-qimu:hover {
+  background: rgb(240 194 123 / 0.22);
+  border-color: rgb(240 194 123 / 0.72);
+  box-shadow: 0 8px 24px -10px rgb(240 194 123 / 0.4);
+  transform: translateY(-1px);
+}
+
+.rl-theme-shell:not(.dark) .public-glass.reference-landing .glass-button.sp-cta-qimu {
+  background: rgb(154 107 37 / 0.12);
+  border-color: rgb(154 107 37 / 0.42);
+  color: #5c3d0c;
+}
+
+.rl-theme-shell:not(.dark) .public-glass.reference-landing .glass-button.sp-cta-qimu:hover {
+  background: rgb(154 107 37 / 0.2);
 }
 
 .reference-landing .sp-scroll-cue {
@@ -592,14 +752,20 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 14px;
+  padding: 5px 14px;
   border: 0;
   border-radius: 999px;
-  background: transparent;
-  font-size: 0.76rem;
-  font-weight: 550;
-  color: var(--rl-muted);
-  transition: color 180ms ease, transform 180ms ease;
+  background: rgb(3 5 10 / 0.45);
+  font-size: 0.75rem;
+  font-weight: 560;
+  letter-spacing: 0.04em;
+  color: rgb(241 245 249 / 0.9);
+  transition: color 180ms ease, transform 180ms ease, background-color 180ms ease;
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .sp-scroll-cue {
+  background: rgb(255 255 255 / 0.56);
+  color: rgb(15 23 42 / 0.78);
 }
 
 .reference-landing .sp-scroll-cue:hover {
@@ -617,12 +783,12 @@
 }
 
 /* ============================================================================
- * Act 2 & Act 3: Unobstructed 3D Stage Floating Corner Docks
+ * Act 2 & Act 3: Unobstructed Stage Floating Corner Docks
  * ========================================================================= */
 .reference-landing .sp-act--stage {
   display: flex;
   align-items: flex-end;
-  padding-bottom: calc(34px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
 }
 
 .reference-landing .sp-stage-bar {
@@ -642,29 +808,29 @@
 }
 
 /* ============================================================================
- * Act 4: Panorama Finale & Single-Row Glass Footer
+ * Act 4: Panorama Finale & Minimal Glass Footer
  * ========================================================================= */
 .reference-landing .sp-act--finale {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   align-items: center;
-  gap: 28px;
-  padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  gap: 24px;
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
 }
 
 .reference-landing .sp-finale-portals {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 16px;
+  gap: 14px;
   padding-inline: 20px;
 }
 
 .reference-landing .rl-button {
-  min-height: 48px;
-  padding: 12px 24px;
-  font-size: 0.94rem;
+  min-height: 46px;
+  padding: 11px 22px;
+  font-size: 0.92rem;
 }
 
 .reference-landing .rl-footer-bar {
@@ -674,9 +840,18 @@
   flex-wrap: wrap;
   gap: 12px 24px;
   padding: 12px 20px;
-  border-radius: 22px;
+  border-radius: 16px;
   font-size: 0.78rem;
   color: var(--rl-muted);
+  background: rgb(5 9 18 / 0.56);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.rl-theme-shell:not(.dark) .reference-landing .rl-footer-bar {
+  background: rgb(255 255 255 / 0.68);
+  border-color: rgb(15 23 42 / 0.1);
 }
 
 .reference-landing .rl-footer-brand {
@@ -727,13 +902,20 @@
     display: none;
   }
   .reference-landing .sp-rail {
-    right: 10px;
+    right: 12px;
     gap: 16px;
   }
-  .reference-landing .sp-dual-docks {
+  .reference-landing .sp-split-portal {
     grid-template-columns: 1fr;
-    max-width: 420px;
-    gap: 12px;
+    max-width: 440px;
+  }
+  .reference-landing .sp-split-divider {
+    width: auto;
+    height: 1px;
+  }
+  .reference-landing .sp-split-cell {
+    padding: 14px 18px;
+    gap: 10px;
   }
 }
 
@@ -743,7 +925,7 @@
   }
   .reference-landing .rl-nav {
     min-height: 54px;
-    padding: 6px 8px 6px 14px;
+    padding: 8px 0;
     gap: 8px;
   }
   .public-glass.reference-landing .glass-button.rl-nav-login {
@@ -753,15 +935,14 @@
     display: none;
   }
   .reference-landing .sp-hero-brand h1 {
-    font-size: 2.15rem;
+    font-size: 2.1rem;
   }
-  .reference-landing .sp-portal-dock,
   .reference-landing .sp-stage-dock {
     padding: 14px 16px;
-    border-radius: 20px;
+    border-radius: 16px;
   }
   .reference-landing .rl-footer-bar {
-    border-radius: 18px;
+    border-radius: 14px;
     padding: 12px 14px;
     font-size: 0.74rem;
   }
@@ -770,8 +951,8 @@
 @media (prefers-reduced-motion: reduce) {
   .reference-landing .sp-act,
   .reference-landing .sp-scroll-cue svg,
-  .reference-landing .sp-rail-dot,
-  .reference-landing .sp-portal-dock {
+  .reference-landing .sp-rail-dot::before,
+  .reference-landing .sp-split-cell {
     animation: none !important;
     transition: none !important;
   }

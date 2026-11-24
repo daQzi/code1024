@@ -135,12 +135,12 @@ onBeforeUnmount(() => {
   overflow: hidden;
   contain: layout paint size;
   pointer-events: none;
-  background: #04070f;
+  background: #03050a;
   transition: background-color 480ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sp-stage.is-light {
-  background: #dde6f4;
+  background: #edf1f7;
 }
 
 .sp-canvas {
@@ -164,18 +164,18 @@ onBeforeUnmount(() => {
   opacity: 1;
   transition: opacity 520ms ease;
   background:
-    radial-gradient(65% 58% at 22% 48%, rgb(45 212 191 / 0.22) 0%, transparent 62%),
-    radial-gradient(62% 56% at 78% 48%, rgb(251 191 36 / 0.2) 0%, transparent 60%),
-    radial-gradient(48% 42% at 50% 45%, rgb(129 140 248 / 0.22) 0%, transparent 66%),
-    linear-gradient(170deg, #04070f 0%, #091124 55%, #04070f 100%);
+    radial-gradient(65% 58% at 22% 48%, rgb(56 232 213 / 0.16) 0%, transparent 62%),
+    radial-gradient(62% 56% at 78% 48%, rgb(240 194 123 / 0.14) 0%, transparent 60%),
+    radial-gradient(48% 42% at 50% 45%, rgb(148 163 184 / 0.14) 0%, transparent 66%),
+    linear-gradient(170deg, #03050a 0%, #070c18 55%, #03050a 100%);
 }
 
 .sp-stage.is-light .sp-fallback {
   background:
-    radial-gradient(68% 60% at 20% 45%, rgb(110 231 215 / 0.42) 0%, transparent 62%),
-    radial-gradient(65% 58% at 80% 45%, rgb(251 191 36 / 0.26) 0%, transparent 60%),
-    radial-gradient(50% 45% at 50% 40%, rgb(147 197 253 / 0.4) 0%, transparent 66%),
-    linear-gradient(170deg, #dde6f4 0%, #cad7ec 100%);
+    radial-gradient(68% 60% at 20% 45%, rgb(56 232 213 / 0.24) 0%, transparent 62%),
+    radial-gradient(65% 58% at 80% 45%, rgb(240 194 123 / 0.22) 0%, transparent 60%),
+    radial-gradient(50% 45% at 50% 40%, rgb(147 197 253 / 0.32) 0%, transparent 66%),
+    linear-gradient(170deg, #edf1f7 0%, #dce4f1 100%);
 }
 
 .sp-stage.is-hover-aicode .sp-fallback {

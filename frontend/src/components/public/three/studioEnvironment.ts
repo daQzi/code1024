@@ -1,17 +1,18 @@
 import * as THREE from 'three'
-import { createArchitecturalConcreteMaps, createSoftGlowTexture } from './proceduralTextures'
+import { createSeamlessNoiseTexture, createSoftGlowTexture } from './proceduralTextures'
 
 export interface StudioEnvironmentHandle {
   applyTheme: (themeT: number) => void
+  update?: (elapsed: number, hoverBias: number) => void
   dispose: () => void
 }
 
-function buildStudioEnvRenderTarget(
+function buildRestrainedEnvRenderTarget(
   pmrem: THREE.PMREMGenerator,
   dark: boolean,
 ): THREE.WebGLRenderTarget {
   const envScene = new THREE.Scene()
-  envScene.background = new THREE.Color(dark ? 0x02050c : 0xcad8ec)
+  envScene.background = new THREE.Color(dark ? 0x02040a : 0xdde6f4)
 
   const geometries: THREE.BufferGeometry[] = []
   const materials: THREE.Material[] = []
@@ -38,50 +39,58 @@ function buildStudioEnvRenderTarget(
   }
 
   if (dark) {
-    // Architectural cinema studio lighting dome: negative fill walls + bright softbox strips
-    addPanel(24, 2.2, [0, 15, -4], [0, 0, -4], [6.5, 7.0, 7.8]) // Overhead skylight 1
-    addPanel(24, 2.2, [0, 15, 5], [0, 0, 0], [5.8, 6.2, 6.9]) // Overhead skylight 2
-    addPanel(6.5, 13, [-18, 5.5, 2], [0, 2.5, -4], [0.85, 5.8, 5.4]) // Left AICode cyan-teal reflector
-    addPanel(6.5, 13, [18, 5.5, 2], [0, 2.5, -4], [6.6, 4.4, 1.35]) // Right Qimu warm tungsten softbox
-    addPanel(20, 4.5, [0, 8.5, -20], [0, 2.5, 0], [2.1, 2.8, 5.8]) // Deep indigo rear rim
-    addPanel(14, 2.0, [0, 1.0, 18], [0, 3, -3], [1.6, 2.0, 2.6]) // Subtle front lens fill
-    // Dark negative-fill baffles for crisp architectural metal contrast
-    addPanel(12, 10, [-10, 4, 12], [0, 2, 0], [0.02, 0.03, 0.05])
-    addPanel(12, 10, [10, 4, 12], [0, 2, 0], [0.02, 0.03, 0.05])
+    addPanel(20, 1.8, [0, 16, -2], [0, 3, -6], [2.2, 2.5, 3.0])
+    addPanel(5, 11, [-18, 6, 2], [0, 3, -6], [0.45, 2.8, 2.6])
+    addPanel(5, 11, [18, 6, 2], [0, 3, -6], [2.9, 2.0, 0.85])
+    addPanel(16, 3.5, [0, 7, -18], [0, 3, 0], [1.1, 1.4, 2.6])
   } else {
-    // Sunlit architectural gallery concrete softboxes
-    addPanel(26, 6, [0, 16, 0], [0, 0, -4], [4.6, 4.8, 5.1])
-    addPanel(7, 13, [-18, 6, 2], [0, 2.5, -4], [0.9, 4.2, 4.0])
-    addPanel(7, 13, [18, 6, 2], [0, 2.5, -4], [4.6, 3.3, 1.4])
-    addPanel(20, 5, [0, 8, -20], [0, 2.5, 0], [2.4, 2.9, 4.4])
+    addPanel(24, 5, [0, 16, 0], [0, 3, -6], [3.2, 3.4, 3.6])
+    addPanel(6, 12, [-18, 6, 2], [0, 3, -6], [0.8, 2.8, 2.7])
+    addPanel(6, 12, [18, 6, 2], [0, 3, -6], [3.2, 2.4, 1.1])
   }
 
-  const rt = pmrem.fromScene(envScene, 0.025)
+  const rt = pmrem.fromScene(envScene, 0.03)
   geometries.forEach((g) => g.dispose())
   materials.forEach((m) => m.dispose())
   return rt
 }
 
-function createChamferedPillarGeometry(width: number, height: number, depth: number, bevel: number): THREE.ExtrudeGeometry {
-  const hw = width / 2 - bevel
-  const hd = depth / 2 - bevel
-  const shape = new THREE.Shape()
-  shape.moveTo(-hw, -hd)
-  shape.lineTo(hw, -hd)
-  shape.lineTo(hw, hd)
-  shape.lineTo(-hw, hd)
-  shape.closePath()
+/**
+ * Builds the distant horizon mountain & terraced monolith ridge ring once on CPU
+ * so the GPU fragment shader executes zero noise loops.
+ */
+function buildSculptedHorizonRidgeGeometry(radius: number, radialSegs: number): THREE.CylinderGeometry {
+  const geo = new THREE.CylinderGeometry(radius, radius, 1, radialSegs, 1, true)
+  const posAttr = geo.getAttribute('position') as THREE.BufferAttribute
 
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: height - bevel * 2,
-    bevelEnabled: true,
-    bevelThickness: bevel,
-    bevelSize: bevel,
-    bevelSegments: 2,
-  })
-  // Orient extrusion along +Y starting at y = 0
-  geo.rotateX(-Math.PI / 2)
-  geo.translate(0, bevel, 0)
+  for (let i = 0; i < posAttr.count; i++) {
+    const x = posAttr.getX(i)
+    const y = posAttr.getY(i)
+    const z = posAttr.getZ(i)
+    const theta = Math.atan2(z, x)
+    const nx = Math.cos(theta)
+    const nz = Math.sin(theta)
+
+    if (y > 0) {
+      // Sculpt natural canyon / jagged horizon skyline combined with subtle monolithic steps
+      const wave1 = Math.sin(theta * 3.0 + 0.4) * 3.2 + Math.cos(theta * 5.0 - 0.8) * 2.4
+      const wave2 = Math.abs(Math.sin(theta * 11.0 + 1.1)) * 4.2 + Math.cos(theta * 17.0) * 1.4
+      const terrace = Math.floor((Math.sin(theta * 7.0) * 0.5 + 0.5) * 4.0) * 0.85
+      let h = 2.6 + Math.max(0, 4.5 + wave1 + wave2 * 0.65 + terrace)
+
+      // Open a dramatic lower horizon canyon gap behind center eclipse (-Z axis: nz < 0, nx near 0)
+      if (nz < 0) {
+        const valleyWeight = Math.exp(-Math.pow(nx * 2.8, 2))
+        h *= 1.0 - valleyWeight * 0.62
+      }
+      posAttr.setY(i, h)
+    } else {
+      // Skirt down gently below sea level y = 0 to prevent any hairline gap
+      posAttr.setY(i, -0.8)
+    }
+  }
+
+  geo.computeVertexNormals()
   return geo
 }
 
@@ -93,27 +102,32 @@ export function createStudioEnvironment(
   const pmrem = new THREE.PMREMGenerator(renderer)
   pmrem.compileEquirectangularShader()
 
-  const darkEnvRT = buildStudioEnvRenderTarget(pmrem, true)
-  const lightEnvRT = buildStudioEnvRenderTarget(pmrem, false)
+  const darkEnvRT = buildRestrainedEnvRenderTarget(pmrem, true)
+  const lightEnvRT = buildRestrainedEnvRenderTarget(pmrem, false)
   pmrem.dispose()
 
-  const disposables: Array<{ dispose: () => void }> = [darkEnvRT, lightEnvRT]
+  const noiseTex = createSeamlessNoiseTexture()
+  const starTex = createSoftGlowTexture()
+  const disposables: Array<{ dispose: () => void }> = [darkEnvRT, lightEnvRT, noiseTex, starTex]
 
-  const darkBg = new THREE.Color(0x04070f)
-  const lightBg = new THREE.Color(0xdde6f4)
+  const darkBg = new THREE.Color(0x03060d)
+  const lightBg = new THREE.Color(0xe9eef7)
   const workingBg = darkBg.clone()
 
   scene.background = workingBg
-  const fog = new THREE.FogExp2(0x04070f, 0.0145)
+  const fog = new THREE.FogExp2(0x03060d, 0.0085)
   scene.fog = fog
 
   // =========================================================================
-  // 1. Custom GLSL Atmospheric Horizon Cyclorama Dome
+  // 1. Macro Volumetric Nebula & Horizon Sky Dome (Texture-Sampled, Zero Loops)
   // =========================================================================
   const skyUniforms = {
+    uTime: { value: 0 },
     uTheme: { value: 0 },
+    uHoverBias: { value: 0 },
+    uNoiseTex: { value: noiseTex },
   }
-  const skyGeo = new THREE.SphereGeometry(88, 32, 20)
+  const skyGeo = new THREE.SphereGeometry(180, 40, 28)
   const skyMat = new THREE.ShaderMaterial({
     uniforms: skyUniforms,
     side: THREE.BackSide,
@@ -127,7 +141,10 @@ export function createStudioEnvironment(
       }
     `,
     fragmentShader: /* glsl */ `
+      uniform float uTime;
       uniform float uTheme;
+      uniform float uHoverBias;
+      uniform sampler2D uNoiseTex;
       varying vec3 vWorldDir;
 
       float hash12(vec2 p) {
@@ -138,28 +155,40 @@ export function createStudioEnvironment(
 
       void main() {
         vec3 d = normalize(vWorldDir);
-        float elev = clamp(d.y * 0.5 + 0.5, 0.0, 1.0);
-        float horizonBand = exp(-abs(d.y - 0.03) * 6.5);
-        float leftRight = smoothstep(-0.75, 0.75, d.x);
+        float horizonBand = exp(-abs(d.y - 0.04) * 6.0);
+        float cloudStrataBand = smoothstep(-0.02, 0.13, d.y) * smoothstep(0.45, 0.11, d.y);
 
-        // Dark architectural cinema soundstage atmosphere
-        vec3 darkZenith = vec3(0.014, 0.024, 0.052);
-        vec3 darkHorizonLeft = vec3(0.035, 0.16, 0.21);
-        vec3 darkHorizonRight = vec3(0.18, 0.11, 0.045);
-        vec3 darkHorizon = mix(darkHorizonLeft, darkHorizonRight, leftRight);
-        vec3 darkCol = mix(darkZenith, darkHorizon, horizonBand * 0.82);
-        darkCol = mix(darkCol, vec3(0.012, 0.018, 0.038), smoothstep(0.0, -0.35, d.y));
+        // Two fast hardware texture lookups (seamless cylindrical UV around Y, no seams!)
+        float az = atan(d.z, d.x) / 6.2831853 + 0.5;
+        vec2 uvA = vec2(az * 2.0 + uTime * 0.004, d.y * 2.2);
+        vec2 uvB = vec2(az * 4.0 - uTime * 0.006, d.y * 3.8 + 0.27);
+        vec3 nA = texture2D(uNoiseTex, uvA).rgb;
+        vec3 nB = texture2D(uNoiseTex, uvB).rgb;
+        float nebulaMask = cloudStrataBand * smoothstep(0.28, 0.78, nA.r * 0.62 + nB.g * 0.38);
 
-        // Light gallery alabaster-slate sky
-        vec3 lightZenith = vec3(0.82, 0.87, 0.96);
-        vec3 lightLeft = vec3(0.76, 0.90, 0.92);
-        vec3 lightRight = vec3(0.95, 0.89, 0.80);
-        vec3 lightHorizon = mix(lightLeft, lightRight, leftRight);
-        vec3 lightCol = mix(lightZenith, lightHorizon, horizonBand * 0.72);
-        lightCol = mix(lightCol, vec3(0.84, 0.88, 0.95), smoothstep(0.0, -0.3, d.y));
+        float wingMix = smoothstep(-0.62, 0.62, d.x);
+        float aicodeBoost = 1.0 + max(0.0, -uHoverBias) * 0.45;
+        float qimuBoost = 1.0 + max(0.0, uHoverBias) * 0.45;
+
+        // Dark Macro Cosmos Sky Palette
+        vec3 darkZenith = vec3(0.008, 0.014, 0.032);
+        vec3 leftCyanAurora = vec3(0.05, 0.40, 0.49) * aicodeBoost;
+        vec3 rightChampagneCloud = mix(vec3(0.44, 0.25, 0.11), vec3(0.24, 0.15, 0.38), nB.b) * qimuBoost;
+        vec3 horizonHue = mix(leftCyanAurora, rightChampagneCloud, wingMix);
+
+        float frontFacing = pow(clamp(-d.z, 0.0, 1.0), 3.0);
+        vec3 darkCol = mix(darkZenith, vec3(0.024, 0.038, 0.078), horizonBand * 0.9);
+        darkCol += horizonHue * nebulaMask * 0.64;
+        darkCol += vec3(0.15, 0.21, 0.34) * horizonBand * frontFacing * 0.42;
+        darkCol += mix(vec3(0.04, 0.22, 0.28), vec3(0.28, 0.17, 0.07), wingMix) * horizonBand * 0.34;
+
+        // Light Architectural High-Altitude Gallery Sky
+        vec3 lightZenith = vec3(0.86, 0.90, 0.96);
+        vec3 lightHorizon = mix(vec3(0.80, 0.91, 0.94), vec3(0.95, 0.89, 0.81), wingMix);
+        vec3 lightCol = mix(lightZenith, lightHorizon, horizonBand * 0.85);
+        lightCol += mix(vec3(0.04, 0.14, 0.16), vec3(0.18, 0.12, 0.06), wingMix) * nebulaMask * 0.42;
 
         vec3 col = mix(darkCol, lightCol, uTheme);
-        // Ultra-fine dithering eliminates dark atmospheric gradient banding
         col += (hash12(gl_FragCoord.xy) - 0.5) * (1.2 / 255.0);
         gl_FragColor = vec4(max(col, 0.0), 1.0);
       }
@@ -170,239 +199,235 @@ export function createStudioEnvironment(
   disposables.push(skyGeo, skyMat)
 
   // =========================================================================
-  // 2. Three-Point Cinematography Lighting Rig (Zero RectAreaLight)
+  // 2. Crisp Pinpoint Macro Starfield (1200 desktop / 500 mobile)
   // =========================================================================
-  const fillHemi = new THREE.HemisphereLight(0xc8daf7, 0x090f1d, 0.85)
-  scene.add(fillHemi)
+  const starCount = highTier ? 1200 : 500
+  const starPos = new Float32Array(starCount * 3)
+  const starColors = new Float32Array(starCount * 3)
 
-  const overheadKey = new THREE.DirectionalLight(0xeef5ff, 2.2)
-  overheadKey.position.set(0, 18, 9)
-  scene.add(overheadKey)
+  const starPalette = [
+    new THREE.Color(0xf5f7fb),
+    new THREE.Color(0xbae6fd),
+    new THREE.Color(0xfde68a),
+    new THREE.Color(0xc4b5fd),
+  ]
+  const sTmp = new THREE.Color()
 
-  const leftCyanRim = new THREE.DirectionalLight(0x2dd4bf, 1.55)
-  leftCyanRim.position.set(-22, 9, -8)
-  scene.add(leftCyanRim)
+  for (let i = 0; i < starCount; i++) {
+    const u = ((Math.sin(i * 12.9898 + 1.2) * 43758.5453) % 1 + 1) % 1
+    const v = ((Math.sin(i * 78.233 + 4.7) * 28411.172) % 1 + 1) % 1
+    const w = ((Math.sin(i * 39.425 + 9.1) * 19283.391) % 1 + 1) % 1
 
-  const rightWarmRim = new THREE.DirectionalLight(0xfbbf24, 1.48)
-  rightWarmRim.position.set(22, 9, -8)
-  scene.add(rightWarmRim)
+    const theta = u * Math.PI * 2
+    const sinPhi = 0.08 + Math.pow(v, 0.85) * 0.9
+    const cosPhi = Math.sqrt(Math.max(0, 1 - sinPhi * sinPhi))
+    const r = 132 + w * 26
 
-  const aicodePoint = new THREE.PointLight(0x38bdf8, 12.0, 26, 1.45)
-  aicodePoint.position.set(-14.5, 5.5, -3.5)
-  scene.add(aicodePoint)
+    starPos[i * 3] = Math.cos(theta) * cosPhi * r
+    starPos[i * 3 + 1] = sinPhi * r
+    starPos[i * 3 + 2] = Math.sin(theta) * cosPhi * r
 
-  const qimuPoint = new THREE.PointLight(0xf59e0b, 12.5, 28, 1.45)
-  qimuPoint.position.set(14.5, 5.5, -3.5)
-  scene.add(qimuPoint)
-
-  // =========================================================================
-  // 3. Monumental Brutalist Concrete Colonnade, Horizon Portal & Skylights
-  // =========================================================================
-  const concreteMaps = createArchitecturalConcreteMaps()
-  disposables.push(concreteMaps)
-
-  const architecturalConcreteMat = new THREE.MeshStandardMaterial({
-    color: 0x0e1523,
-    roughness: 0.78,
-    metalness: 0.14,
-    roughnessMap: concreteMaps.roughnessMap,
-    normalMap: concreteMaps.normalMap,
-    normalScale: new THREE.Vector2(0.42, 0.42),
-    envMapIntensity: 1.05,
-  })
-  const matteSteelMat = new THREE.MeshStandardMaterial({
-    color: 0x0a101b,
-    roughness: 0.36,
-    metalness: 0.88,
-    envMapIntensity: 1.4,
-  })
-  const inlayTrimMat = new THREE.MeshStandardMaterial({
-    color: 0x64748b,
-    roughness: 0.25,
-    metalness: 0.92,
-    envMapIntensity: 1.5,
-  })
-  disposables.push(architecturalConcreteMat, matteSteelMat, inlayTrimMat)
-
-  // 14 towering chamfered concrete monolith ribs along x = ±23 (InstancedMesh)
-  const ribGeo = createChamferedPillarGeometry(1.1, 16.0, 2.6, 0.08)
-  const ribMesh = new THREE.InstancedMesh(ribGeo, architecturalConcreteMat, 14)
-  const dummy = new THREE.Object3D()
-  let ribIdx = 0
-  for (let i = 0; i < 7; i++) {
-    const z = 10 - i * 7.3
-    for (const side of [-1, 1]) {
-      dummy.position.set(side * 23.0, 0, z)
-      dummy.rotation.set(0, 0, 0)
-      dummy.scale.set(1, 1, 1)
-      dummy.updateMatrix()
-      ribMesh.setMatrixAt(ribIdx++, dummy.matrix)
-    }
+    const baseCol = starPalette[i % starPalette.length]
+    const horizonAtten = Math.min(1, Math.max(0.25, (sinPhi - 0.06) * 4.2))
+    const bright = (0.55 + ((i * 7) % 10) * 0.045) * horizonAtten
+    sTmp.copy(baseCol).multiplyScalar(bright)
+    starColors[i * 3] = sTmp.r
+    starColors[i * 3 + 1] = sTmp.g
+    starColors[i * 3 + 2] = sTmp.b
   }
-  ribMesh.instanceMatrix.needsUpdate = true
-  scene.add(ribMesh)
-  disposables.push(ribGeo)
 
-  // Grand Distant Horizon Architectural Portal Frame at z = -31
-  const vistaArchGroup = new THREE.Group()
-  vistaArchGroup.position.set(0, 0, -31)
-  scene.add(vistaArchGroup)
-
-  const vistaPierGeo = createChamferedPillarGeometry(2.1, 15.6, 2.8, 0.12)
-  const vistaLeftPier = new THREE.Mesh(vistaPierGeo, architecturalConcreteMat)
-  vistaLeftPier.position.set(-10.5, 0, 0)
-  vistaArchGroup.add(vistaLeftPier)
-
-  const vistaRightPier = new THREE.Mesh(vistaPierGeo, architecturalConcreteMat)
-  vistaRightPier.position.set(10.5, 0, 0)
-  vistaArchGroup.add(vistaRightPier)
-
-  const vistaLintelGeo = createChamferedPillarGeometry(23.6, 1.8, 3.0, 0.12)
-  const vistaLintel = new THREE.Mesh(vistaLintelGeo, architecturalConcreteMat)
-  vistaLintel.position.set(0, 13.8, 0)
-  vistaArchGroup.add(vistaLintel)
-  disposables.push(vistaPierGeo, vistaLintelGeo)
-
-  // Overhead matte-black ceiling trusses & 6 linear skylight diffuser strips
-  const trussGeo = new THREE.BoxGeometry(46.0, 0.55, 0.65)
-  const trussMesh = new THREE.InstancedMesh(trussGeo, matteSteelMat, 6)
-  const skylightGeo = new THREE.PlaneGeometry(18.0, 0.72)
-  const skylightMat = new THREE.MeshBasicMaterial({
-    color: 0xe6f1ff,
-    side: THREE.DoubleSide,
+  const starGeo = new THREE.BufferGeometry()
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
+  starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3))
+  const starMat = new THREE.PointsMaterial({
+    map: starTex,
+    size: 0.46,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.9,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    fog: false,
   })
-  const skylightMesh = new THREE.InstancedMesh(skylightGeo, skylightMat, 6)
+  const starField = new THREE.Points(starGeo, starMat)
+  scene.add(starField)
+  disposables.push(starGeo, starMat)
 
-  for (let i = 0; i < 6; i++) {
-    const z = 8 - i * 7.6
-    dummy.position.set(0, 14.5, z)
-    dummy.rotation.set(0, 0, 0)
-    dummy.scale.set(1, 1, 1)
-    dummy.updateMatrix()
-    trussMesh.setMatrixAt(i, dummy.matrix)
-
-    dummy.position.set(0, 14.16, z)
-    dummy.rotation.set(Math.PI / 2, 0, 0)
-    dummy.updateMatrix()
-    skylightMesh.setMatrixAt(i, dummy.matrix)
-  }
-  trussMesh.instanceMatrix.needsUpdate = true
-  skylightMesh.instanceMatrix.needsUpdate = true
-  scene.add(trussMesh, skylightMesh)
-  disposables.push(trussGeo, skylightGeo, skylightMat)
-
-  // Subtle fresnel-faded vertical skylight atmospheric curtains (zero hard edges)
-  const curtainUniforms = {
+  // =========================================================================
+  // 3. Vertex-Sculpted Horizon Ridge Ring (Zero Fragment Loops, Zero discard)
+  // =========================================================================
+  const ridgeUniforms = {
     uTheme: { value: 0 },
   }
-  const curtainGeo = new THREE.PlaneGeometry(16.0, 10.5)
-  const curtainMat = new THREE.ShaderMaterial({
-    uniforms: curtainUniforms,
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
+  const ridgeGeo = buildSculptedHorizonRidgeGeometry(132, 128)
+  const ridgeMat = new THREE.ShaderMaterial({
+    uniforms: ridgeUniforms,
+    side: THREE.BackSide,
+    depthWrite: true,
+    fog: false,
     vertexShader: /* glsl */ `
-      varying vec2 vUv;
-      varying vec3 vNormalView;
-      varying vec3 vViewDir;
+      varying vec3 vWorldPos;
+      varying float vUvY;
       void main() {
-        vUv = uv;
-        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-        vNormalView = normalize(normalMatrix * normal);
-        vViewDir = normalize(-mvPos.xyz);
-        gl_Position = projectionMatrix * mvPos;
+        vUvY = uv.y;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorldPos = wp.xyz;
+        gl_Position = projectionMatrix * viewMatrix * wp;
       }
     `,
     fragmentShader: /* glsl */ `
       uniform float uTheme;
-      varying vec2 vUv;
-      varying vec3 vNormalView;
-      varying vec3 vViewDir;
+      varying vec3 vWorldPos;
+      varying float vUvY;
+
       void main() {
-        float facing = abs(dot(normalize(vNormalView), normalize(vViewDir)));
-        float angleFade = pow(facing, 1.55);
-        float edgeX = smoothstep(0.0, 0.25, vUv.x) * smoothstep(1.0, 0.75, vUv.x);
-        float vert = pow(vUv.y, 1.8) * smoothstep(1.0, 0.88, vUv.y);
-        float alpha = angleFade * edgeX * vert * mix(0.042, 0.008, uTheme);
-        vec3 col = mix(vec3(0.68, 0.84, 1.0), vec3(0.95, 0.98, 1.0), vUv.y);
-        gl_FragColor = vec4(col, alpha);
+        float ridgeRim = pow(clamp(vUvY, 0.0, 1.0), 4.0);
+        float baseMist = 1.0 - smoothstep(0.0, 0.45, vUvY);
+        float wingMix = smoothstep(-55.0, 55.0, vWorldPos.x);
+
+        vec3 darkBody = vec3(0.011, 0.018, 0.038);
+        vec3 darkRim = mix(vec3(0.08, 0.54, 0.60), vec3(0.72, 0.46, 0.18), wingMix);
+        vec3 darkMistCol = mix(vec3(0.025, 0.11, 0.16), vec3(0.12, 0.08, 0.05), wingMix);
+        vec3 darkCol = mix(darkBody, darkRim, ridgeRim * 0.42);
+        darkCol = mix(darkCol, darkMistCol, baseMist * 0.72);
+
+        vec3 lightBody = vec3(0.69, 0.76, 0.87);
+        vec3 lightRim = vec3(0.92, 0.95, 0.99);
+        vec3 lightCol = mix(lightBody, lightRim, ridgeRim * 0.45);
+        lightCol = mix(lightCol, vec3(0.85, 0.89, 0.95), baseMist * 0.82);
+
+        gl_FragColor = vec4(mix(darkCol, lightCol, uTheme), 1.0);
       }
     `,
   })
-  const curtainZPositions = [4.0, -4.0, -12.0, -20.0]
-  curtainZPositions.forEach((cz) => {
-    const curtain = new THREE.Mesh(curtainGeo, curtainMat)
-    curtain.position.set(0, 9.0, cz)
-    scene.add(curtain)
-  })
-  disposables.push(curtainGeo, curtainMat)
+  const ridgeMesh = new THREE.Mesh(ridgeGeo, ridgeMat)
+  scene.add(ridgeMesh)
+  disposables.push(ridgeGeo, ridgeMat)
 
   // =========================================================================
-  // 4. Wet Honed Basalt Floor + Specular Bounce Pools & Brushed Steel Trims
+  // 4. Infinite Calm Dark Mirror Horizon Ocean (Lean 2-Wave Specular Shader)
   // =========================================================================
-  const floorGeo = new THREE.PlaneGeometry(130, 110)
-  const floorMat = new THREE.MeshPhysicalMaterial({
-    color: 0x09101c,
-    roughness: 0.28,
-    metalness: 0.42,
-    clearcoat: 0.85,
-    clearcoatRoughness: 0.16,
-    roughnessMap: concreteMaps.roughnessMap,
-    normalMap: concreteMaps.normalMap,
-    normalScale: new THREE.Vector2(0.22, 0.22),
-    envMapIntensity: 1.65,
+  const oceanUniforms = {
+    uTime: { value: 0 },
+    uTheme: { value: 0 },
+    uHoverBias: { value: 0 },
+  }
+  const oceanGeo = new THREE.PlaneGeometry(320, 320)
+  const oceanMat = new THREE.ShaderMaterial({
+    uniforms: oceanUniforms,
+    depthWrite: true,
+    fog: false,
+    vertexShader: /* glsl */ `
+      varying vec3 vWorldPos;
+      varying vec3 vToCam;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorldPos = wp.xyz;
+        vToCam = cameraPosition - wp.xyz;
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform float uTheme;
+      uniform float uHoverBias;
+      varying vec3 vWorldPos;
+      varying vec3 vToCam;
+
+      void main() {
+        float dist = length(vToCam);
+        vec3 viewDir = vToCam / max(dist, 0.001);
+
+        // Lean 2-wave analytical capillary ripples attenuated with distance & foreground edge
+        float damp = 1.0 / (1.0 + dist * 0.05);
+        float p1 = vWorldPos.x * 1.25 + vWorldPos.z * 0.85 + uTime * 0.65;
+        float p2 = vWorldPos.x * -0.92 + vWorldPos.z * 2.35 - uTime * 0.52;
+        float p3 = vWorldPos.z * 4.4 + uTime * 1.1 + sin(vWorldPos.x * 1.4) * 0.8;
+        float dx = (cos(p1) * 1.25 - cos(p2) * 0.92) * 0.014 * damp;
+        float dz = (cos(p1) * 0.85 + cos(p2) * 2.35 + cos(p3) * 1.35) * 0.022 * damp;
+
+        vec3 n = normalize(vec3(-dx, 1.0, -dz));
+        vec3 refDir = reflect(-viewDir, n);
+        float ndv = clamp(dot(n, viewDir), 0.0, 1.0);
+        float fresnel = pow(1.0 - ndv, 4.2);
+
+        float wingMix = smoothstep(-22.0, 22.0, vWorldPos.x);
+        vec3 darkSurface = mix(
+          vec3(0.008, 0.014, 0.028),
+          mix(vec3(0.02, 0.10, 0.16), vec3(0.13, 0.08, 0.045), wingMix),
+          fresnel * 0.36
+        );
+        vec3 lightSurface = mix(
+          vec3(0.78, 0.84, 0.91),
+          mix(vec3(0.80, 0.90, 0.96), vec3(0.96, 0.91, 0.85), wingMix),
+          fresnel * 0.62
+        );
+
+        // Crisp rippled mirror glint columns (fade cleanly before bottom HUD zone z > 2.5)
+        float hudFade = smoothstep(8.5, -1.5, vWorldPos.z);
+        float rippleMod = 0.55 + 0.45 * sin(vWorldPos.z * 4.8 + uTime * 1.25 + sin(vWorldPos.x * 1.9));
+
+        vec3 eclipseDir = normalize(vec3(0.0, 4.45, -9.5) - vWorldPos);
+        float eclipseDot = max(dot(refDir, eclipseDir), 0.0);
+        float eclipseSpec = pow(eclipseDot, 165.0) * rippleMod;
+        float eclipseTrack = pow(eclipseDot, 42.0) * (0.28 + 0.72 * rippleMod);
+        vec3 eclipseHue = mix(
+          vec3(0.22, 0.91, 0.84),
+          vec3(0.94, 0.76, 0.48),
+          clamp(0.5 + uHoverBias * 0.36 + vWorldPos.x * 0.04, 0.0, 1.0)
+        );
+        vec3 centerSheen = eclipseHue * (eclipseSpec * 1.25 + eclipseTrack * 0.24) * hudFade;
+
+        float aicodeDot = max(dot(refDir, normalize(vec3(-14.5, 3.2, -8.5) - vWorldPos)), 0.0);
+        vec3 leftSheen = vec3(0.22, 0.91, 0.84) * pow(aicodeDot, 68.0) * rippleMod * (0.45 + max(0.0, -uHoverBias) * 0.3) * hudFade;
+
+        float qimuDot = max(dot(refDir, normalize(vec3(14.5, 3.6, -8.5) - vWorldPos)), 0.0);
+        vec3 rightSheen = vec3(0.94, 0.76, 0.48) * pow(qimuDot, 68.0) * rippleMod * (0.45 + max(0.0, uHoverBias) * 0.3) * hudFade;
+
+        vec3 sheen = (centerSheen + leftSheen + rightSheen) * mix(1.0, 0.32, uTheme);
+        darkSurface += sheen;
+        lightSurface += sheen * 0.45;
+
+        vec3 waterCol = mix(darkSurface, lightSurface, uTheme);
+        vec3 horizonCol = mix(
+          mix(vec3(0.025, 0.08, 0.13), vec3(0.11, 0.07, 0.05), wingMix),
+          vec3(0.87, 0.90, 0.95),
+          uTheme
+        );
+        float horizonFade = 1.0 - exp(-pow(dist * 0.0082, 1.65));
+        waterCol = mix(waterCol, horizonCol, clamp(horizonFade, 0.0, 1.0));
+
+        gl_FragColor = vec4(waterCol, 1.0);
+      }
+    `,
   })
-  const floorMesh = new THREE.Mesh(floorGeo, floorMat)
-  floorMesh.rotation.x = -Math.PI / 2
-  floorMesh.position.set(0, 0, -10)
-  scene.add(floorMesh)
-  disposables.push(floorGeo, floorMat)
+  const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat)
+  oceanMesh.rotation.x = -Math.PI / 2
+  oceanMesh.position.y = 0
+  scene.add(oceanMesh)
+  disposables.push(oceanGeo, oceanMat)
 
-  // Inlaid brushed-steel architectural perspective aisle strips
-  const aisleStripGeo = new THREE.BoxGeometry(0.045, 0.008, 48)
-  for (const ax of [-4.6, 4.6]) {
-    const strip = new THREE.Mesh(aisleStripGeo, inlayTrimMat)
-    strip.position.set(ax, 0.004, -10)
-    scene.add(strip)
-  }
-  disposables.push(aisleStripGeo)
+  // =========================================================================
+  // 5. Restrained 3-Point Cinematography Lights
+  // =========================================================================
+  const fillHemi = new THREE.HemisphereLight(0xc8daf7, 0x050914, 0.65)
+  scene.add(fillHemi)
 
-  // Grounded elongated specular bounce light pools beneath the 3 major stages
-  const bounceTex = createSoftGlowTexture()
-  disposables.push(bounceTex)
+  const overheadKey = new THREE.DirectionalLight(0xf1f5f9, 1.35)
+  overheadKey.position.set(0, 18, 12)
+  scene.add(overheadKey)
 
-  const makeBouncePool = (w: number, h: number, color: number, x: number, z: number, opacity: number) => {
-    const geo = new THREE.PlaneGeometry(w, h)
-    const mat = new THREE.MeshBasicMaterial({
-      map: bounceTex,
-      color,
-      transparent: true,
-      opacity,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    })
-    const mesh = new THREE.Mesh(geo, mat)
-    mesh.rotation.x = -Math.PI / 2
-    mesh.position.set(x, 0.012, z)
-    scene.add(mesh)
-    disposables.push(geo, mat)
-    return { mat, baseOpacity: opacity }
-  }
+  const leftCyanRim = new THREE.DirectionalLight(0x38e8d5, 1.15)
+  leftCyanRim.position.set(-22, 10, -8)
+  scene.add(leftCyanRim)
 
-  const centerBounceL = makeBouncePool(8.5, 16.0, 0x2dd4bf, -2.0, 1.5, highTier ? 0.2 : 0.14)
-  const centerBounceR = makeBouncePool(8.5, 16.0, 0xf59e0b, 2.0, 1.5, highTier ? 0.19 : 0.13)
-  const aicodeBounce = makeBouncePool(11.0, 17.5, 0x2dd4bf, -14.5, -2.8, highTier ? 0.24 : 0.16)
-  const qimuBounce = makeBouncePool(11.5, 18.0, 0xfbbf24, 14.5, -2.8, highTier ? 0.23 : 0.15)
+  const rightWarmRim = new THREE.DirectionalLight(0xf0c27b, 1.15)
+  rightWarmRim.position.set(22, 10, -8)
+  scene.add(rightWarmRim)
 
-  // Color LUTs for Dark <-> Light smooth transitions
-  const darkFloorColor = new THREE.Color(0x09101c)
-  const lightFloorColor = new THREE.Color(0xc9d5e8)
-  const darkConcreteColor = new THREE.Color(0x0e1523)
-  const lightConcreteColor = new THREE.Color(0xb6c3d8)
   const darkHemiSky = new THREE.Color(0xc8daf7)
   const lightHemiSky = new THREE.Color(0xffffff)
-  const darkHemiGround = new THREE.Color(0x090f1d)
+  const darkHemiGround = new THREE.Color(0x050914)
   const lightHemiGround = new THREE.Color(0x9fb2ce)
 
   let lastAppliedBucket = -1
@@ -410,33 +435,22 @@ export function createStudioEnvironment(
   const applyTheme = (themeT: number) => {
     const t = Math.max(0, Math.min(1, themeT))
     skyUniforms.uTheme.value = t
-    curtainUniforms.uTheme.value = t
+    ridgeUniforms.uTheme.value = t
+    oceanUniforms.uTheme.value = t
 
     workingBg.copy(darkBg).lerp(lightBg, t)
     fog.color.copy(workingBg)
-    fog.density = THREE.MathUtils.lerp(0.0145, 0.0095, t)
+    fog.density = THREE.MathUtils.lerp(0.0085, 0.0065, t)
 
-    floorMat.color.copy(darkFloorColor).lerp(lightFloorColor, t)
-    floorMat.metalness = THREE.MathUtils.lerp(0.42, 0.16, t)
-    floorMat.roughness = THREE.MathUtils.lerp(0.28, 0.34, t)
-
-    architecturalConcreteMat.color.copy(darkConcreteColor).lerp(lightConcreteColor, t)
-    architecturalConcreteMat.roughness = THREE.MathUtils.lerp(0.78, 0.86, t)
-
-    centerBounceL.mat.opacity = centerBounceL.baseOpacity * (1 - t * 0.72)
-    centerBounceR.mat.opacity = centerBounceR.baseOpacity * (1 - t * 0.72)
-    aicodeBounce.mat.opacity = aicodeBounce.baseOpacity * (1 - t * 0.72)
-    qimuBounce.mat.opacity = qimuBounce.baseOpacity * (1 - t * 0.72)
+    starMat.opacity = THREE.MathUtils.lerp(0.9, 0.06, t)
 
     fillHemi.color.copy(darkHemiSky).lerp(lightHemiSky, t)
     fillHemi.groundColor.copy(darkHemiGround).lerp(lightHemiGround, t)
-    fillHemi.intensity = THREE.MathUtils.lerp(0.85, 1.45, t)
+    fillHemi.intensity = THREE.MathUtils.lerp(0.65, 1.35, t)
 
-    overheadKey.intensity = THREE.MathUtils.lerp(2.2, 2.75, t)
-    leftCyanRim.intensity = THREE.MathUtils.lerp(1.55, 1.05, t)
-    rightWarmRim.intensity = THREE.MathUtils.lerp(1.48, 1.0, t)
-    aicodePoint.intensity = THREE.MathUtils.lerp(12.0, 6.5, t)
-    qimuPoint.intensity = THREE.MathUtils.lerp(12.5, 6.8, t)
+    overheadKey.intensity = THREE.MathUtils.lerp(1.35, 1.85, t)
+    leftCyanRim.intensity = THREE.MathUtils.lerp(1.15, 0.85, t)
+    rightWarmRim.intensity = THREE.MathUtils.lerp(1.15, 0.85, t)
 
     const bucket = t > 0.5 ? 1 : 0
     if (bucket !== lastAppliedBucket) {
@@ -445,10 +459,19 @@ export function createStudioEnvironment(
     }
   }
 
+  const update = (elapsed: number, hoverBias: number) => {
+    skyUniforms.uTime.value = elapsed
+    skyUniforms.uHoverBias.value = hoverBias
+    oceanUniforms.uTime.value = elapsed
+    oceanUniforms.uHoverBias.value = hoverBias
+    starField.rotation.y = elapsed * 0.0022
+  }
+
   applyTheme(0)
 
   return {
     applyTheme,
+    update,
     dispose: () => {
       disposables.forEach((d) => d.dispose())
     },
