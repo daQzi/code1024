@@ -43,6 +43,28 @@ vi.mock('@/composables/useClipboard', () => ({
   useClipboard: () => ({ copyToClipboard }),
 }))
 
+vi.mock('@/api/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/auth')>()
+  return {
+    ...actual,
+    getPublicSettings: vi.fn().mockResolvedValue({
+      registration_enabled: true,
+      backend_mode_enabled: false,
+      email_verify_enabled: false,
+      promo_code_enabled: false,
+      invitation_code_enabled: false,
+      affiliate_enabled: false,
+      turnstile_enabled: false,
+      linuxdo_oauth_enabled: false,
+      github_oauth_enabled: false,
+      google_oauth_enabled: false,
+      oidc_oauth_enabled: false,
+      password_reset_enabled: false,
+      passkey_enabled: false,
+    }),
+  }
+})
+
 const i18n = createI18n({
   legacy: false,
   locale: 'zh',
@@ -50,6 +72,30 @@ const i18n = createI18n({
     zh: {
       ...messages,
       nav: { modelPlaza: '模型广场' },
+      common: { close: '关闭', optional: '可选' },
+      auth: {
+        v2: { loginTitle: '欢迎回来' },
+        signInToAccount: '登录您的账户以继续',
+        signUpToStart: '注册并开始使用 {siteName}',
+        signIn: '登录',
+        signingIn: '登录中...',
+        signUp: '注册',
+        createAccount: '创建账户',
+        processing: '处理中...',
+        continue: '继续',
+        emailLabel: '邮箱',
+        emailPlaceholder: "you{'@'}example.com",
+        passwordLabel: '密码',
+        passwordPlaceholder: '输入密码',
+        createPasswordPlaceholder: '至少 6 位密码',
+        passwordHint: '密码长度至少为 6 个字符',
+        confirmPassword: '确认密码',
+        confirmPasswordPlaceholder: '再次输入密码',
+        dontHaveAccount: '还没有账户？',
+        alreadyHaveAccount: '已有账户？',
+        forgotPassword: '忘记密码？',
+        oauthOrContinue: '或使用以下方式继续',
+      },
       glass: {
         nav: {
           skip: '跳到主要内容',
@@ -63,6 +109,10 @@ const i18n = createI18n({
           closeMenu: '关闭导航菜单',
           language: '语言',
           backTop: '回到顶部',
+        },
+        auth: {
+          showPassword: '显示密码',
+          hidePassword: '隐藏密码',
         },
         home: {
           copied: '已复制',
@@ -245,5 +295,50 @@ describe('SpatialPortalCanvas & ReferenceLanding', () => {
     expect(aicodePortal.text()).toContain('AICode')
     expect(aicodePortal.text()).toContain('进入 AICode')
     expect(aicodePortal.text()).not.toContain('中转站')
+  })
+
+  it('locks homepage dark mode and opens in-page login/register modal without navigating away', async () => {
+    const wrapper = mount(ReferenceLanding, {
+      global: {
+        plugins: [i18n],
+        stubs: {
+          RouterLink: RouterLinkStub,
+          SpatialPortalCanvas: { template: '<div />' },
+          PublicLocaleSwitcher: { template: '<div />' },
+          Icon: { template: '<span />' },
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.get('.rl-theme-shell').classes()).toContain('dark')
+    expect(wrapper.find('[data-testid="theme-toggle"]').exists()).toBe(false)
+
+    // Click topbar login CTA -> opens in-page auth modal (login mode)
+    await wrapper.get('.rl-nav-login').trigger('click')
+
+    await vi.waitFor(() => {
+      expect(document.body.querySelector('[data-testid="auth-portal-modal"]')).not.toBeNull()
+    })
+    expect(document.body.querySelector('[data-testid="auth-login-submit"]')).not.toBeNull()
+
+    // Switch tab inside modal to register mode
+    const regTab = document.body.querySelector<HTMLButtonElement>('[data-testid="auth-tab-register"]')
+    expect(regTab).not.toBeNull()
+    regTab?.click()
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="auth-register-submit"]')).not.toBeNull()
+
+    // Dismiss via close button
+    document.body.querySelector<HTMLButtonElement>('[data-testid="auth-modal-close"]')?.click()
+    await flushPromises()
+    expect(document.body.querySelector('[data-testid="auth-portal-modal"]')).toBeNull()
+
+    // Click AICode primary CTA -> opens modal in-page again
+    await wrapper.get('[data-testid="portal-aicode"] .sp-cta-aicode').trigger('click')
+    await vi.waitFor(() => {
+      expect(document.body.querySelector('[data-testid="auth-portal-modal"]')).not.toBeNull()
+    })
   })
 })

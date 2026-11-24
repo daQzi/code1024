@@ -222,21 +222,13 @@ describe('HomeView compact mode', () => {
     expect(qimuAnchor.text()).toContain('启幕影业画布')
   })
 
-  it('defaults to Dark Cinema Studio on system theme and toggles cleanly to light and dark', async () => {
+  it('locks the 3D landing portal to Dark Cinema Studio and hides the theme toggle', async () => {
     const wrapper = mountHome()
     await flushPromises()
 
     const shell = wrapper.get('.rl-theme-shell')
     expect(shell.classes()).toContain('dark')
-
-    const toggle = wrapper.get('[data-testid="theme-toggle"]')
-    await toggle.trigger('click')
-    expect(localStorage.getItem('theme')).toBe('light')
-    expect(shell.classes()).not.toContain('dark')
-
-    await toggle.trigger('click')
-    expect(localStorage.getItem('theme')).toBe('dark')
-    expect(shell.classes()).toContain('dark')
+    expect(wrapper.find('[data-testid="theme-toggle"]').exists()).toBe(false)
   })
 
   it('hides the model plaza link when the feature is disabled', () => {

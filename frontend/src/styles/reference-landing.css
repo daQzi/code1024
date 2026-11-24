@@ -867,28 +867,28 @@
 .reference-landing .sp-roll {
   display: inline-grid;
   overflow: hidden;
-  line-height: 1.25;
+  line-height: 1.35;
 }
 
 .reference-landing .sp-roll-main,
 .reference-landing .sp-roll-hover {
   grid-area: 1 / 1;
   display: block;
-  transition: transform 420ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: transform 360ms cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .reference-landing .sp-roll-hover {
-  transform: translateY(120%);
+  transform: translateY(150%);
 }
 
-.public-glass.reference-landing .glass-button:hover .sp-roll-main,
-.public-glass.reference-landing .glass-button:focus-visible .sp-roll-main {
-  transform: translateY(-120%);
-}
+@media (hover: hover) and (pointer: fine) {
+  .public-glass.reference-landing .glass-button:hover .sp-roll-main {
+    transform: translateY(-150%);
+  }
 
-.public-glass.reference-landing .glass-button:hover .sp-roll-hover,
-.public-glass.reference-landing .glass-button:focus-visible .sp-roll-hover {
-  transform: translateY(0);
+  .public-glass.reference-landing .glass-button:hover .sp-roll-hover {
+    transform: translateY(0);
+  }
 }
 
 .public-glass.reference-landing .glass-button.sp-cta-aicode {

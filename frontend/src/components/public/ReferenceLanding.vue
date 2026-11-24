@@ -1,10 +1,10 @@
 <template>
-  <div ref="landingRoot" class="rl-theme-shell" :class="{ dark: portalDark }">
+  <div ref="landingRoot" class="rl-theme-shell dark">
     <div class="public-glass reference-landing" :class="{ 'is-reduced-motion': reducedMotion }">
       <SpatialPortalCanvas
         :progress="scrollProgress"
         :hover-side="hoverSide"
-        :dark="portalDark"
+        :dark="true"
         :reduced-motion="reducedMotion"
         :aria-label="t('referenceLanding.portal.canvasLabel')"
       />
@@ -37,6 +37,7 @@
               :to="modelPlazaPath"
               class="rl-nav-plaza"
               data-testid="nav-model-plaza"
+              @click.capture="handleProtectedPlazaClick($event)"
             >
               <Icon name="grid" size="sm" aria-hidden="true" />
               <span>{{ t('nav.modelPlaza') }}</span>
@@ -56,16 +57,11 @@
               <Icon name="book" size="md" aria-hidden="true" />
             </a>
             <PublicLocaleSwitcher />
-            <button
-              class="glass-button rl-icon-button"
-              type="button"
-              data-testid="theme-toggle"
-              :aria-label="t(portalDark ? 'glass.nav.light' : 'glass.nav.dark')"
-              @click="togglePortalTheme"
+            <router-link
+              :to="entryPath"
+              class="glass-button rl-button rl-nav-login"
+              @click.capture="handleAuthEntryClick($event)"
             >
-              <Icon :name="portalDark ? 'sun' : 'moon'" size="md" aria-hidden="true" />
-            </button>
-            <router-link :to="entryPath" class="glass-button rl-button rl-nav-login">
               {{ t(isAuthenticated ? 'glass.nav.console' : 'glass.nav.login') }}
             </router-link>
             <button
@@ -100,7 +96,13 @@
             <span>{{ act.label }}</span>
             <Icon name="arrowRight" size="sm" aria-hidden="true" />
           </a>
-          <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="rl-mobile-plaza" data-testid="mobile-model-plaza">
+          <router-link
+            v-if="modelPlazaEnabled"
+            :to="modelPlazaPath"
+            class="rl-mobile-plaza"
+            data-testid="mobile-model-plaza"
+            @click.capture="handleProtectedPlazaClick($event)"
+          >
             <span>{{ t('nav.modelPlaza') }}</span>
             <Icon name="arrowRight" size="sm" aria-hidden="true" />
           </router-link>
@@ -112,10 +114,6 @@
             <span>{{ t('glass.nav.docs') }}</span>
             <Icon name="externalLink" size="sm" aria-hidden="true" />
           </a>
-          <button type="button" class="rl-mobile-theme" @click="togglePortalTheme">
-            <span>{{ t(portalDark ? 'glass.nav.light' : 'glass.nav.dark') }}</span>
-            <Icon :name="portalDark ? 'sun' : 'moon'" size="sm" aria-hidden="true" />
-          </button>
           <div class="rl-mobile-language">
             <span>{{ t('glass.nav.language') }}</span>
             <PublicLocaleSwitcher />
@@ -190,7 +188,11 @@
                     </div>
                   </div>
                   <div class="sp-dock-actions">
-                    <router-link :to="entryPath" class="glass-button sp-cta-aicode">
+                    <router-link
+                      :to="entryPath"
+                      class="glass-button sp-cta-aicode"
+                      @click.capture="handleAuthEntryClick($event)"
+                    >
                       <span class="sp-roll">
                         <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
                         <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
@@ -270,14 +272,23 @@
                   <span class="sp-stage-index">02 / 04</span>
                 </div>
                 <div class="sp-dock-actions">
-                  <router-link :to="entryPath" class="glass-button sp-cta-aicode">
+                  <router-link
+                    :to="entryPath"
+                    class="glass-button sp-cta-aicode"
+                    @click.capture="handleAuthEntryClick($event)"
+                  >
                     <span class="sp-roll">
                       <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
                       <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
                     </span>
                     <Icon name="arrowRight" size="sm" aria-hidden="true" />
                   </router-link>
-                  <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="glass-button">
+                  <router-link
+                    v-if="modelPlazaEnabled"
+                    :to="modelPlazaPath"
+                    class="glass-button"
+                    @click.capture="handleProtectedPlazaClick($event)"
+                  >
                     <Icon name="grid" size="sm" aria-hidden="true" />
                     <span>{{ modelPlazaLinkLabel }}</span>
                   </router-link>
@@ -337,7 +348,11 @@
             :aria-hidden="activeAct !== 'finale'"
           >
             <div class="sp-finale-portals">
-              <router-link :to="entryPath" class="glass-button rl-button sp-cta-aicode">
+              <router-link
+                :to="entryPath"
+                class="glass-button rl-button sp-cta-aicode"
+                @click.capture="handleAuthEntryClick($event)"
+              >
                 <span class="sp-roll">
                   <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
                   <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
@@ -364,7 +379,13 @@
                 <span>&copy; {{ currentYear }} {{ siteName }}</span>
               </div>
               <nav class="rl-footer-links" :aria-label="t('glass.home.footerExplore')">
-                <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath">{{ t('nav.modelPlaza') }}</router-link>
+                <router-link
+                  v-if="modelPlazaEnabled"
+                  :to="modelPlazaPath"
+                  @click.capture="handleProtectedPlazaClick($event)"
+                >
+                  {{ t('nav.modelPlaza') }}
+                </router-link>
                 <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">{{ t('glass.nav.docs') }}</a>
                 <a
                   v-for="link in ecosystemLinks"
@@ -388,6 +409,17 @@
       </main>
 
       <p class="rl-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ copyStatus }}</p>
+
+      <AuthPortalModal
+        v-if="authModalOpen"
+        :open="authModalOpen"
+        :mode="authModalMode"
+        :redirect-to="authModalRedirect"
+        :site-name="siteName"
+        :site-logo="siteLogo"
+        @close="closeAuthModal"
+        @update:mode="authModalMode = $event"
+      />
     </div>
   </div>
 </template>
@@ -400,8 +432,8 @@ import Icon from '@/components/icons/Icon.vue'
 import PublicBrandLogo from '@/components/common/PublicBrandLogo.vue'
 import PublicLocaleSwitcher from '@/components/public/PublicLocaleSwitcher.vue'
 import type { PortalHoverSide } from '@/components/public/three/createPortalEngine'
+import type { AuthModalMode } from '@/components/public/AuthPortalModal.vue'
 import { useClipboard } from '@/composables/useClipboard'
-import { useTheme } from '@/composables/useTheme'
 import { sanitizeUrl } from '@/utils/url'
 import { resolveVisibleTopbarLinks } from '@/utils/topbarLinks'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
@@ -410,17 +442,45 @@ import '@/styles/reference-landing.css'
 const SpatialPortalCanvas = defineAsyncComponent(
   () => import('@/components/public/SpatialPortalCanvas.vue'),
 )
+const AuthPortalModal = defineAsyncComponent(
+  () => import('@/components/public/AuthPortalModal.vue'),
+)
 
 const { t } = useI18n()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
-const { isDark, preference, setTheme } = useTheme()
 
-// Default the 3D landing portal to Dark Cinema Studio when system preference is unset.
-const portalDark = computed(() => (preference.value === 'system' ? true : isDark.value))
-function togglePortalTheme() {
-  setTheme(portalDark.value ? 'light' : 'dark')
+const authModalOpen = ref(false)
+const authModalMode = ref<AuthModalMode>('login')
+const authModalRedirect = ref('')
+
+function openAuthModal(mode: AuthModalMode = 'login', redirectTo = '') {
+  authModalMode.value = mode
+  authModalRedirect.value = redirectTo
+  authModalOpen.value = true
+}
+
+function closeAuthModal() {
+  authModalOpen.value = false
+}
+
+function isPlainLeftClick(event: MouseEvent): boolean {
+  return !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+}
+
+function handleAuthEntryClick(event: MouseEvent, redirectTo = '') {
+  if (isAuthenticated.value || !isPlainLeftClick(event)) return
+  event.preventDefault()
+  menuOpen.value = false
+  openAuthModal('login', redirectTo)
+}
+
+function handleProtectedPlazaClick(event: MouseEvent) {
+  if (!modelPlazaRequiresAuth.value || isAuthenticated.value || !isPlainLeftClick(event)) return
+  event.preventDefault()
+  menuOpen.value = false
+  openAuthModal('login', '/model-plaza')
 }
 
 const landingRoot = ref<HTMLElement | null>(null)
@@ -596,6 +656,12 @@ function syncMotionPreference() {
 }
 
 onMounted(() => {
+  if (!isAuthenticated.value && typeof window !== 'undefined') {
+    const authParam = new URLSearchParams(window.location.search).get('auth')
+    if (authParam === 'login' || authParam === 'register') {
+      openAuthModal(authParam)
+    }
+  }
   if (typeof window.matchMedia === 'function') {
     motionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
     syncMotionPreference()
