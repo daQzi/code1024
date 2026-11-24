@@ -69,7 +69,11 @@ const stories = computed(() => (['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8']
   text: t(`referenceLanding.stories.${id}Text`, { siteName: props.siteName }),
   tag: t(`referenceLanding.stories.${id}Tag`),
 })))
-const columns = computed(() => [stories.value, stories.value])
+const secondaryOrder = [3, 7, 1, 5, 2, 6, 0, 4] as const
+const columns = computed(() => [
+  stories.value,
+  secondaryOrder.map(index => stories.value[index]),
+])
 
 const readProgress = (column: ScrollColumn) => {
   const time = column.animation?.currentTime

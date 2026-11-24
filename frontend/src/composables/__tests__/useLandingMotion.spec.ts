@@ -123,13 +123,60 @@ describe('useLandingMotion', () => {
     observer.emit(scene.heading, true)
     expect(animate).toHaveBeenCalledOnce()
     expect(animate).toHaveBeenCalledWith([
-      { opacity: 0.35, transform: 'translateY(24px)' },
+      { opacity: 0.72, transform: 'translateY(14px)' },
       { opacity: 1, transform: 'translateY(0)' },
-    ], { duration: 600, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' })
+    ], { duration: 540, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' })
     expect(observer.unobserve).toHaveBeenCalledWith(scene.heading)
     expect(scene.heading.style.cssText).toBe('')
     expect(addListener.mock.calls.some(([type]) => type === 'scroll')).toBe(false)
     expect(scene.element.style.getPropertyValue('--hp-progress')).toBe('')
+  })
+
+  it('stages below-the-fold sections without inline styles, applies stagger delay, and clears on reduced motion', () => {
+    const scene = makeScene()
+    const below = addSection(scene.element)
+    below.setAttribute('data-reveal-delay', '140')
+    vi.spyOn(below, 'getBoundingClientRect').mockReturnValue({
+      top: window.innerHeight + 200,
+      bottom: window.innerHeight + 360,
+      height: 160,
+      left: 0,
+      right: 1200,
+      width: 1200,
+      x: 0,
+      y: window.innerHeight + 200,
+      toJSON: () => ({}),
+    } as DOMRect)
+    const { animate } = mockAnimation(below)
+    mountMotion(scene.element)
+    expect(below.hasAttribute('data-reveal-pending')).toBe(true)
+    expect(below.style.cssText).toBe('')
+
+    IntersectionMock.instances[0].emit(below, true)
+    expect(below.hasAttribute('data-reveal-pending')).toBe(false)
+    expect(animate).toHaveBeenCalledWith([
+      { opacity: 0, transform: 'translateY(20px)' },
+      { opacity: 1, transform: 'translateY(0)' },
+    ], { duration: 540, delay: 140, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'backwards' })
+
+    const staged = addSection(scene.element)
+    vi.spyOn(staged, 'getBoundingClientRect').mockReturnValue({
+      top: window.innerHeight + 400,
+      bottom: window.innerHeight + 560,
+      height: 160,
+      left: 0,
+      right: 1200,
+      width: 1200,
+      x: 0,
+      y: window.innerHeight + 400,
+      toJSON: () => ({}),
+    } as DOMRect)
+    mockAnimation(staged)
+    const { wrapper } = mountMotion(scene.element)
+    expect(staged.hasAttribute('data-reveal-pending')).toBe(true)
+    changePreference(true)
+    expect(staged.hasAttribute('data-reveal-pending')).toBe(false)
+    wrapper.unmount()
   })
 
   it('honors reduced motion before a root attaches and never replays an already seen section', () => {

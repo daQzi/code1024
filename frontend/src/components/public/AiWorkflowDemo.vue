@@ -1,5 +1,5 @@
 <template>
-  <figure ref="stage" class="ai-demo" :class="{ 'ai-demo--quiet': reduced, 'ai-demo--paused': !running }" :aria-label="t('glassDemo.label')">
+  <figure ref="stage" class="ai-demo" :class="{ 'ai-demo--quiet': reduced, 'ai-demo--paused': !running }" :aria-label="t('glassDemo.label')" @pointerenter="onPointerEnter" @pointerleave="onPointerLeave">
     <figcaption class="sr-only">{{ t('glassDemo.accessible') }}</figcaption>
     <div class="ai-demo-visual" aria-hidden="true">
       <div class="ai-demo-caption">
@@ -56,6 +56,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
+const emit = defineEmits<{ (event: 'scene-change', index: number): void }>()
 const scenes = ['codex','reasoning','api'] as const
 const stage = ref<HTMLElement | null>(null)
 const sceneIndex = ref(0)
@@ -64,6 +65,7 @@ const step = ref(0)
 const typed = ref(0)
 const reduced = ref(false)
 const running = ref(false)
+const hovered = ref(false)
 const key = computed(() => `glassDemo.${scenes[sceneIndex.value]}`)
 const command = computed(() => t(`${key.value}.command`))
 let elapsed = 0
@@ -77,7 +79,8 @@ const cycleDuration = 8800
 
 function renderFrame() {
   const withinCycle = elapsed % cycleDuration
-  sceneIndex.value = Math.floor(elapsed / cycleDuration) % scenes.length
+  const nextScene = Math.floor(elapsed / cycleDuration) % scenes.length
+  if (sceneIndex.value !== nextScene) sceneIndex.value = nextScene
   phase.value = withinCycle < 2000 ? 0 : withinCycle < 5000 ? 1 : 2
   typed.value = Math.min(command.value.length, Math.floor(Math.max(0,withinCycle - 250) / 1450 * command.value.length))
   step.value = Math.max(0, Math.min(3, Math.floor((withinCycle - 2000) / 950)))
@@ -94,15 +97,32 @@ function syncPlayback() {
   clearTimeout(timer)
   timer = undefined
   if (disposed) return
-  running.value = visible && !document.hidden && !reduced.value
+  running.value = visible && !document.hidden && !reduced.value && !hovered.value
   if (reduced.value) { phase.value = 2; typed.value = command.value.length; step.value = 3; return }
   if (running.value) { previousTime = performance.now(); timer = setTimeout(tick, 65) }
 }
 function onMotionChange() { reduced.value = motionPreference?.matches ?? false; syncPlayback() }
+function onPointerEnter() { hovered.value = true; syncPlayback() }
+function onPointerLeave() { hovered.value = false; syncPlayback() }
+function selectScene(index: number) {
+  const normalized = ((index % scenes.length) + scenes.length) % scenes.length
+  elapsed = normalized * cycleDuration
+  sceneIndex.value = normalized
+  if (reduced.value) {
+    phase.value = 2
+    typed.value = command.value.length
+    step.value = 3
+    return
+  }
+  previousTime = performance.now()
+  renderFrame()
+}
+watch(sceneIndex, value => emit('scene-change', value))
 // A static reduced-motion frame must still reflect a language change.
 watch(command, () => {
   if (reduced.value) typed.value = command.value.length
 })
+defineExpose({ selectScene })
 onMounted(() => {
   motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
   reduced.value = motionPreference.matches

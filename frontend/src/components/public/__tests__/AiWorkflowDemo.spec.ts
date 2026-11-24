@@ -148,6 +148,21 @@ describe('AiWorkflowDemo', () => {
     expect(wrapper!.find('button, input, a, [tabindex], [aria-live]').exists()).toBe(false)
   })
 
+  it('supports switching scenes programmatically, emits scene-change, and pauses on hover', async () => {
+    render('zh')
+    await setIntersecting(true)
+    ;(wrapper!.vm as unknown as { selectScene: (index: number) => void }).selectScene(2)
+    await nextTick()
+    expect(wrapper!.get('.ai-window-top').text()).toContain('Terminal')
+    expect(wrapper!.emitted('scene-change')?.at(-1)).toEqual([2])
+    await wrapper!.trigger('pointerenter')
+    expect(wrapper!.classes()).toContain('ai-demo--paused')
+    expect(vi.getTimerCount()).toBe(0)
+    await wrapper!.trigger('pointerleave')
+    expect(wrapper!.classes()).not.toContain('ai-demo--paused')
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
   it('keeps compiled dark-theme styles on the demo instead of the document root', () => {
     const { descriptor } = parse(demoSource)
     const style = compileStyle({ source: descriptor.styles[0].content, filename: 'AiWorkflowDemo.vue', id: 'data-v-demo', scoped: true })

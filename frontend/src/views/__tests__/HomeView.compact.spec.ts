@@ -439,4 +439,32 @@ describe('HomeView compact mode', () => {
     expect(contacts.every(link => link.attributes('href') === 'mailto:support@example.test')).toBe(true)
     expect(wrapper.find('a[href*="qq.com"], a[href^="tencent:"]').exists()).toBe(false)
   })
+
+  it('shows the model plaza link directly in the top navigation when enabled', () => {
+    const wrapper = mountHome({ model_plaza_enabled: true, model_plaza_require_auth: false })
+    const navLink = wrapper.get('[data-testid="nav-model-plaza"]')
+    expect(navLink.findComponent(RouterLinkStub).exists() || navLink.element.tagName === 'A').toBe(true)
+    expect(wrapper.findAllComponents(RouterLinkStub).some(link => link.attributes('data-testid') === 'nav-model-plaza' && link.props('to') === '/model-plaza')).toBe(true)
+  })
+
+  it('renders the interactive workflow demo switcher and closes mobile menu on outside click', async () => {
+    const wrapper = mountHome()
+    document.body.appendChild(wrapper.element)
+    const demoTabs = wrapper.findAll('.rl-demo-tab')
+    expect(demoTabs).toHaveLength(3)
+    expect(demoTabs[0].attributes('aria-pressed')).toBe('true')
+    await demoTabs[2].trigger('click')
+    expect(demoTabs[2].attributes('aria-pressed')).toBe('true')
+    expect(demoTabs[0].attributes('aria-pressed')).toBe('false')
+
+    const trigger = wrapper.get('[aria-controls="home-mobile-menu"]')
+    await trigger.trigger('click')
+    expect(wrapper.find('#home-mobile-menu').exists()).toBe(true)
+    const outside = document.createElement('div')
+    document.body.appendChild(outside)
+    outside.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await flushPromises()
+    expect(wrapper.find('#home-mobile-menu').exists()).toBe(false)
+    outside.remove()
+  })
 })

@@ -7,6 +7,7 @@ export function useLandingMotion(root: Ref<HTMLElement | null>) {
   const animations = new Set<Animation>()
   const revealed = new WeakSet<Element>()
   const pendingReveals = new Set<Element>()
+  const stagedTargets = new Set<Element>()
   let observed = new WeakSet<Element>()
   let revealObserver: IntersectionObserver | undefined
   let headerObserver: ResizeObserver | undefined
@@ -14,6 +15,10 @@ export function useLandingMotion(root: Ref<HTMLElement | null>) {
   let header: HTMLElement | null = null
 
   const finishReveals = () => {
+    stagedTargets.forEach(target => {
+      target.removeAttribute('data-reveal-pending')
+    })
+    stagedTargets.clear()
     // No fill or hidden inline styles: cancellation restores the visible base.
     animations.forEach(animation => {
       animation.onfinish = null
@@ -29,11 +34,20 @@ export function useLandingMotion(root: Ref<HTMLElement | null>) {
     element.style.setProperty('--hp-scroll-offset', `${height + 20}px`)
   }
   const playReveal = (target: Element) => {
+    const wasStaged = stagedTargets.delete(target) || target.hasAttribute('data-reveal-pending')
+    target.removeAttribute('data-reveal-pending')
     if (still.value || !element?.contains(target) || typeof target.animate !== 'function') return
+    const rawDelay = Number(target.getAttribute('data-reveal-delay') ?? 0)
+    const delay = Number.isFinite(rawDelay) && rawDelay > 0 ? Math.min(rawDelay, 420) : 0
+    const options: KeyframeAnimationOptions = {
+      duration: 540,
+      easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+      ...(delay > 0 ? { delay, fill: 'backwards' as FillMode } : {}),
+    }
     const animation = target.animate([
-      { opacity: 0.35, transform: 'translateY(24px)' },
+      wasStaged ? { opacity: 0, transform: 'translateY(20px)' } : { opacity: 0.72, transform: 'translateY(14px)' },
       { opacity: 1, transform: 'translateY(0)' }
-    ], { duration: 600, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' })
+    ], options)
     animations.add(animation)
     animation.onfinish = () => animations.delete(animation)
     animation.oncancel = () => animations.delete(animation)
@@ -43,6 +57,10 @@ export function useLandingMotion(root: Ref<HTMLElement | null>) {
     element.querySelectorAll('[data-reveal]').forEach(target => {
       if (revealed.has(target) || observed.has(target)) return
       observed.add(target)
+      if (!still.value && typeof target.animate === 'function' && target.getBoundingClientRect().top > window.innerHeight) {
+        target.setAttribute('data-reveal-pending', '')
+        stagedTargets.add(target)
+      }
       revealObserver?.observe(target)
     })
   }
@@ -89,11 +107,15 @@ export function useLandingMotion(root: Ref<HTMLElement | null>) {
         if (!entry.isIntersecting || !element?.contains(entry.target) || revealed.has(entry.target)) return
         revealed.add(entry.target)
         revealObserver?.unobserve(entry.target)
-        if (still.value) return
+        if (still.value) {
+          stagedTargets.delete(entry.target)
+          entry.target.removeAttribute('data-reveal-pending')
+          return
+        }
         if (document.hidden) pendingReveals.add(entry.target)
         else playReveal(entry.target)
       })
-    }, { threshold: 0.08, rootMargin: '0px 0px -36px 0px' })
+    }, { threshold: 0.04, rootMargin: '0px 0px -12px 0px' })
     observeReveals()
   }
   // Template refs can attach after mount; v-if sections can arrive on later renders.
