@@ -22,6 +22,17 @@ type CustomMenuItem struct {
 	HideOpenButton bool   `json:"hide_open_button,omitempty"`
 }
 
+// CustomTopbarLink represents an admin-configured external shortcut link shown in the top bar.
+type CustomTopbarLink struct {
+	ID         string `json:"id"`
+	Label      string `json:"label"`
+	URL        string `json:"url"`
+	Icon       string `json:"icon,omitempty"`
+	IconSVG    string `json:"icon_svg,omitempty"`
+	Visibility string `json:"visibility"` // "all", "user", or "admin"
+	SortOrder  int    `json:"sort_order"`
+}
+
 // CustomEndpoint represents an admin-configured API endpoint for quick copy.
 type CustomEndpoint struct {
 	Name        string `json:"name"`
@@ -165,8 +176,9 @@ type SystemSettings struct {
 	PurchaseSubscriptionURL     string           `json:"purchase_subscription_url"`
 	TableDefaultPageSize        int              `json:"table_default_page_size"`
 	TablePageSizeOptions        []int            `json:"table_page_size_options"`
-	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints             []CustomEndpoint `json:"custom_endpoints"`
+	CustomMenuItems             []CustomMenuItem   `json:"custom_menu_items"`
+	CustomTopbarLinks           []CustomTopbarLink `json:"custom_topbar_links"`
+	CustomEndpoints             []CustomEndpoint   `json:"custom_endpoints"`
 
 	DefaultConcurrency           int                          `json:"default_concurrency"`
 	DefaultBalance               float64                      `json:"default_balance"`
@@ -406,6 +418,7 @@ type PublicSettings struct {
 	TableDefaultPageSize                int                      `json:"table_default_page_size"`
 	TablePageSizeOptions                []int                    `json:"table_page_size_options"`
 	CustomMenuItems                     []CustomMenuItem         `json:"custom_menu_items"`
+	CustomTopbarLinks                   []CustomTopbarLink       `json:"custom_topbar_links"`
 	CustomEndpoints                     []CustomEndpoint         `json:"custom_endpoints"`
 	DingTalkOAuthEnabled                bool                     `json:"dingtalk_oauth_enabled"`
 	LinuxDoOAuthEnabled                 bool                     `json:"linuxdo_oauth_enabled"`
@@ -614,6 +627,35 @@ func ParseCustomMenuItems(raw string) []CustomMenuItem {
 func ParseUserVisibleMenuItems(raw string) []CustomMenuItem {
 	items := ParseCustomMenuItems(raw)
 	filtered := make([]CustomMenuItem, 0, len(items))
+	for _, item := range items {
+		if item.Visibility != "admin" {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
+}
+
+// ParseCustomTopbarLinks parses a JSON string into a slice of CustomTopbarLink.
+// Returns empty slice on empty/invalid input.
+func ParseCustomTopbarLinks(raw string) []CustomTopbarLink {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "[]" {
+		return []CustomTopbarLink{}
+	}
+	var items []CustomTopbarLink
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return []CustomTopbarLink{}
+	}
+	if items == nil {
+		return []CustomTopbarLink{}
+	}
+	return items
+}
+
+// ParseUserVisibleTopbarLinks parses custom topbar links and filters out admin-only entries.
+func ParseUserVisibleTopbarLinks(raw string) []CustomTopbarLink {
+	items := ParseCustomTopbarLinks(raw)
+	filtered := make([]CustomTopbarLink, 0, len(items))
 	for _, item := range items {
 		if item.Visibility != "admin" {
 			filtered = append(filtered, item)

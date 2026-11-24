@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -166,8 +167,9 @@ type UpdateSettingsRequest struct {
 	PurchaseSubscriptionURL     *string               `json:"purchase_subscription_url"`
 	TableDefaultPageSize        int                   `json:"table_default_page_size"`
 	TablePageSizeOptions        []int                 `json:"table_page_size_options"`
-	CustomMenuItems             *[]dto.CustomMenuItem `json:"custom_menu_items"`
-	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
+	CustomMenuItems             *[]dto.CustomMenuItem   `json:"custom_menu_items"`
+	CustomTopbarLinks           *[]dto.CustomTopbarLink `json:"custom_topbar_links"`
+	CustomEndpoints             *[]dto.CustomEndpoint   `json:"custom_endpoints"`
 
 	// 默认配置
 	DefaultConcurrency                        int                               `json:"default_concurrency"`
@@ -1369,6 +1371,15 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		customMenuJSON = string(menuBytes)
 	}
 
+	customTopbarLinksJSON, topbarStatus, topbarErrMsg := normalizeAndMarshalCustomTopbarLinks(
+		previousSettings.CustomTopbarLinks,
+		req.CustomTopbarLinks,
+	)
+	if topbarStatus != 0 {
+		response.Error(c, topbarStatus, topbarErrMsg)
+		return
+	}
+
 	// 自定义端点验证
 	const (
 		maxCustomEndpoints        = 10
@@ -1670,6 +1681,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TableDefaultPageSize:                   req.TableDefaultPageSize,
 		TablePageSizeOptions:                   req.TablePageSizeOptions,
 		CustomMenuItems:                        customMenuJSON,
+		CustomTopbarLinks:                      customTopbarLinksJSON,
 		CustomEndpoints:                        customEndpointsJSON,
 		DefaultConcurrency:                     req.DefaultConcurrency,
 		DefaultBalance:                         req.DefaultBalance,
@@ -2334,6 +2346,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		TableDefaultPageSize:                                   updatedSettings.TableDefaultPageSize,
 		TablePageSizeOptions:                                   updatedSettings.TablePageSizeOptions,
 		CustomMenuItems:                                        dto.ParseCustomMenuItems(updatedSettings.CustomMenuItems),
+		CustomTopbarLinks:                                      dto.ParseCustomTopbarLinks(updatedSettings.CustomTopbarLinks),
 		CustomEndpoints:                                        dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
 		DefaultConcurrency:                                     updatedSettings.DefaultConcurrency,
 		DefaultBalance:                                         updatedSettings.DefaultBalance,
@@ -2569,4 +2582,90 @@ func (h *SettingHandler) ensureUserAttributeDefinition(ctx context.Context, key,
 		return
 	}
 	slog.Info("dingtalk: created user attribute definition", "key", key, "name", name, "type", attrType)
+}
+
+func normalizeAndMarshalCustomTopbarLinks(previousRaw string, reqItems *[]dto.CustomTopbarLink) (string, int, string) {
+	if reqItems == nil {
+		return previousRaw, 0, ""
+	}
+	const (
+		maxCustomTopbarLinks   = 10
+		maxTopbarLinkLabelRune = 30
+		maxTopbarLinkURLLen    = 2048
+		maxTopbarLinkIconLen   = 32
+		maxTopbarLinkSVGLen    = 10 * 1024
+		maxTopbarLinkIDLen     = 32
+	)
+	items := append([]dto.CustomTopbarLink(nil), (*reqItems)...)
+	if len(items) > maxCustomTopbarLinks {
+		return "", http.StatusBadRequest, "Too many custom topbar links (max 10)"
+	}
+	if len(items) == 0 {
+		return "[]", 0, ""
+	}
+
+	seen := make(map[string]struct{}, len(items))
+	for i, item := range items {
+		item.Label = strings.TrimSpace(item.Label)
+		if item.Label == "" {
+			return "", http.StatusBadRequest, "Custom topbar link label is required"
+		}
+		if utf8.RuneCountInString(item.Label) > maxTopbarLinkLabelRune {
+			return "", http.StatusBadRequest, "Custom topbar link label is too long (max 30 characters)"
+		}
+
+		item.URL = strings.TrimSpace(item.URL)
+		if item.URL == "" {
+			return "", http.StatusBadRequest, "Custom topbar link URL is required"
+		}
+		if len(item.URL) > maxTopbarLinkURLLen {
+			return "", http.StatusBadRequest, "Custom topbar link URL is too long (max 2048 characters)"
+		}
+		if err := config.ValidateAbsoluteHTTPURL(item.URL); err != nil {
+			return "", http.StatusBadRequest, "Custom topbar link URL must be an absolute http(s) URL"
+		}
+
+		item.Icon = strings.TrimSpace(item.Icon)
+		if item.Icon != "" && (len(item.Icon) > maxTopbarLinkIconLen || !menuItemIDPattern.MatchString(item.Icon)) {
+			return "", http.StatusBadRequest, "Custom topbar link icon is invalid"
+		}
+
+		item.IconSVG = strings.TrimSpace(item.IconSVG)
+		if len(item.IconSVG) > maxTopbarLinkSVGLen {
+			return "", http.StatusBadRequest, "Custom topbar link icon SVG is too large (max 10KB)"
+		}
+
+		item.Visibility = strings.TrimSpace(item.Visibility)
+		if item.Visibility == "" {
+			item.Visibility = "all"
+		}
+		if item.Visibility != "all" && item.Visibility != "user" && item.Visibility != "admin" {
+			return "", http.StatusBadRequest, "Custom topbar link visibility must be 'all', 'user', or 'admin'"
+		}
+
+		item.ID = strings.TrimSpace(item.ID)
+		if item.ID == "" {
+			id, err := generateMenuItemID()
+			if err != nil {
+				return "", http.StatusInternalServerError, "Failed to generate topbar link ID"
+			}
+			item.ID = id
+		} else if len(item.ID) > maxTopbarLinkIDLen {
+			return "", http.StatusBadRequest, "Custom topbar link ID is too long (max 32 characters)"
+		} else if !menuItemIDPattern.MatchString(item.ID) {
+			return "", http.StatusBadRequest, "Custom topbar link ID contains invalid characters (only a-z, A-Z, 0-9, - and _ are allowed)"
+		}
+
+		if _, exists := seen[item.ID]; exists {
+			return "", http.StatusBadRequest, "Duplicate custom topbar link ID: " + item.ID
+		}
+		seen[item.ID] = struct{}{}
+		items[i] = item
+	}
+
+	encoded, err := json.Marshal(items)
+	if err != nil {
+		return "", http.StatusBadRequest, "Failed to serialize custom topbar links"
+	}
+	return string(encoded), 0, ""
 }

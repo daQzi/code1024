@@ -54,6 +54,27 @@
         <span class="topbar__link-text">{{ t('nav.modelPlaza') }}</span>
       </RouterLink>
 
+      <a
+        v-for="link in visibleTopbarLinks"
+        :key="link.id"
+        :href="link.url"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="topbar__link"
+        :title="link.label"
+        :aria-label="link.label"
+        data-testid="topbar-custom-link"
+      >
+        <span
+          v-if="link.iconSvg"
+          class="topbar__link-svg"
+          aria-hidden="true"
+          v-html="link.iconSvg"
+        />
+        <Icon v-else :name="link.iconName" size="sm" aria-hidden="true" />
+        <span class="topbar__link-text">{{ link.label }}</span>
+      </a>
+
       <LocaleSwitcher />
 
       <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled" />
@@ -179,6 +200,7 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
+import { resolveVisibleTopbarLinks } from '@/utils/topbarLinks'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveRouteMetaKeys } from '@/router/title'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
@@ -206,6 +228,15 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
+const visibleTopbarLinks = computed(() =>
+  resolveVisibleTopbarLinks({
+    publicLinks: appStore.cachedPublicSettings?.custom_topbar_links,
+    adminLinks: adminSettingsStore.customTopbarLinks,
+    adminLoaded: adminSettingsStore.loaded,
+    isAdmin: authStore.isAdmin,
+    isAuthenticated: Boolean(user.value),
+  })
+)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 
 const availableBalance = computed(() => Number(user.value?.balance || 0))
@@ -443,6 +474,7 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
 
 .topbar__link {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 6px;
   height: 32px;
@@ -460,6 +492,24 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
 .topbar__link:hover {
   color: var(--ui-text);
   background-color: var(--ui-line);
+}
+.topbar__link-svg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.topbar__link-svg :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.topbar__link-text {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .topbar__cmd {
@@ -840,6 +890,12 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
   }
   .topbar__user-chevron {
     display: inline-flex;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1120px) {
+  .topbar__link-text {
+    display: none;
   }
 }
 

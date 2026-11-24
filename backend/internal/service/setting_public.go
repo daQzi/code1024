@@ -194,6 +194,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyTableDefaultPageSize,
 		SettingKeyTablePageSizeOptions,
 		SettingKeyCustomMenuItems,
+		SettingKeyCustomTopbarLinks,
 		SettingKeyCustomEndpoints,
 		SettingKeyLinuxDoConnectEnabled,
 		SettingKeyDingTalkConnectEnabled,
@@ -338,6 +339,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		TableDefaultPageSize:                tableDefaultPageSize,
 		TablePageSizeOptions:                tablePageSizeOptions,
 		CustomMenuItems:                     settings[SettingKeyCustomMenuItems],
+		CustomTopbarLinks:                   settings[SettingKeyCustomTopbarLinks],
 		CustomEndpoints:                     settings[SettingKeyCustomEndpoints],
 		LinuxDoOAuthEnabled:                 linuxDoEnabled,
 		DingTalkOAuthEnabled:                dingTalkEnabled,
@@ -598,6 +600,7 @@ type PublicSettingsInjectionPayload struct {
 	TableDefaultPageSize                int                      `json:"table_default_page_size"`
 	TablePageSizeOptions                []int                    `json:"table_page_size_options"`
 	CustomMenuItems                     json.RawMessage          `json:"custom_menu_items"`
+	CustomTopbarLinks                   json.RawMessage          `json:"custom_topbar_links"`
 	CustomEndpoints                     json.RawMessage          `json:"custom_endpoints"`
 	LinuxDoOAuthEnabled                 bool                     `json:"linuxdo_oauth_enabled"`
 	DingTalkOAuthEnabled                bool                     `json:"dingtalk_oauth_enabled"`
@@ -693,6 +696,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		TableDefaultPageSize:                settings.TableDefaultPageSize,
 		TablePageSizeOptions:                settings.TablePageSizeOptions,
 		CustomMenuItems:                     filterUserVisibleMenuItems(settings.CustomMenuItems),
+		CustomTopbarLinks:                   filterUserVisibleTopbarLinks(settings.CustomTopbarLinks),
 		CustomEndpoints:                     safeRawJSONArray(settings.CustomEndpoints),
 		LinuxDoOAuthEnabled:                 settings.LinuxDoOAuthEnabled,
 		DingTalkOAuthEnabled:                settings.DingTalkOAuthEnabled,
@@ -736,6 +740,16 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 // filterUserVisibleMenuItems filters out admin-only menu items from a raw JSON
 // array string, returning only items with visibility != "admin".
 func filterUserVisibleMenuItems(raw string) json.RawMessage {
+	return filterNonAdminJSONItems(raw)
+}
+
+// filterUserVisibleTopbarLinks filters out admin-only topbar links from a raw JSON
+// array string, returning only items with visibility != "admin".
+func filterUserVisibleTopbarLinks(raw string) json.RawMessage {
+	return filterNonAdminJSONItems(raw)
+}
+
+func filterNonAdminJSONItems(raw string) json.RawMessage {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "[]" {
 		return json.RawMessage("[]")

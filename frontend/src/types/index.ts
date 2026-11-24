@@ -197,6 +197,16 @@ export interface CustomMenuItem {
   sort_order: number
 }
 
+export interface CustomTopbarLink {
+  id: string
+  label: string
+  url: string
+  icon?: string
+  icon_svg?: string
+  visibility: 'all' | 'user' | 'admin'
+  sort_order: number
+}
+
 export interface CustomEndpoint {
   name: string
   endpoint: string
@@ -247,6 +257,7 @@ export interface PublicSettings {
   table_default_page_size: number
   table_page_size_options: number[]
   custom_menu_items: CustomMenuItem[]
+  custom_topbar_links?: CustomTopbarLink[]
   custom_endpoints: CustomEndpoint[]
   linuxdo_oauth_enabled: boolean
   dingtalk_oauth_enabled?: boolean

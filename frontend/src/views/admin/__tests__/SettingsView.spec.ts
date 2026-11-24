@@ -395,6 +395,7 @@ const baseSettingsResponse = {
   table_page_size_options: [10, 20, 50, 100],
   backend_mode_enabled: false,
   custom_menu_items: [],
+  custom_topbar_links: [],
   custom_endpoints: [],
   frontend_url: "",
   smtp_host: "",
@@ -747,6 +748,64 @@ describe("admin SettingsView payment visible method controls", () => {
         { ...menuItems[1], hide_open_button: false },
       ],
     }));
+    wrapper.unmount();
+  });
+
+  it("loads, adds, configures preset icon, and saves custom topbar links", async () => {
+    getSettings.mockResolvedValue({
+      ...baseSettingsResponse,
+      custom_topbar_links: [
+        {
+          id: "canvas",
+          label: "画布入口",
+          url: "https://qimu.code1024.cc/",
+          icon: "palette",
+          icon_svg: "",
+          visibility: "all",
+          sort_order: 0,
+        },
+      ],
+    });
+    const wrapper = mountView();
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-testid="custom-topbar-link-item"]')).toHaveLength(1);
+    await wrapper.get('[data-testid="custom-topbar-link-add"]').trigger("click");
+
+    const items = wrapper.findAll('[data-testid="custom-topbar-link-item"]');
+    expect(items).toHaveLength(2);
+    await items[1].get('[data-testid="custom-topbar-link-label"]').setValue("商店入口");
+    await items[1].get('[data-testid="custom-topbar-link-url"]').setValue("https://ai.code1024.cc/");
+    await items[1].get('[data-testid="custom-topbar-link-visibility"]').setValue("user");
+    await items[1].get('[data-testid="custom-topbar-icon-shoppingBag"]').trigger("click");
+
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        custom_topbar_links: [
+          {
+            id: "canvas",
+            label: "画布入口",
+            url: "https://qimu.code1024.cc/",
+            icon: "palette",
+            icon_svg: "",
+            visibility: "all",
+            sort_order: 0,
+          },
+          {
+            id: "",
+            label: "商店入口",
+            url: "https://ai.code1024.cc/",
+            icon: "shoppingBag",
+            icon_svg: "",
+            visibility: "user",
+            sort_order: 1,
+          },
+        ],
+      }),
+    );
     wrapper.unmount();
   });
 

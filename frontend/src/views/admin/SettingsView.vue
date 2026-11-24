@@ -6721,6 +6721,209 @@
             </div>
           </div>
 
+          <!-- Custom Topbar Links -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.customTopbar.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.customTopbar.description") }}
+              </p>
+            </div>
+            <div class="space-y-4 p-6">
+              <div
+                v-for="(item, index) in form.custom_topbar_links"
+                :key="item.id || `topbar-${index}`"
+                data-testid="custom-topbar-link-item"
+                class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+              >
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex items-center gap-3">
+                    <span
+                      class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {{
+                        t("admin.settings.customTopbar.itemLabel", { n: index + 1 })
+                      }}
+                    </span>
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-200"
+                      :title="t('admin.settings.customTopbar.preview')"
+                    >
+                      <span
+                        v-if="item.icon_svg"
+                        class="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center [&>svg]:h-full [&>svg]:w-full"
+                        v-html="sanitizeSvg(item.icon_svg)"
+                      />
+                      <Icon
+                        v-else
+                        :name="resolveTopbarLinkIcon(item.icon)"
+                        size="xs"
+                      />
+                      <span class="max-w-[120px] truncate">{{
+                        item.label || t("admin.settings.customTopbar.namePlaceholder")
+                      }}</span>
+                    </span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      v-if="index > 0"
+                      type="button"
+                      class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+                      :title="t('admin.settings.customTopbar.moveUp')"
+                      @click="moveTopbarLink(index, -1)"
+                    >
+                      <Icon name="chevronUp" size="sm" />
+                    </button>
+                    <button
+                      v-if="index < form.custom_topbar_links.length - 1"
+                      type="button"
+                      class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+                      :title="t('admin.settings.customTopbar.moveDown')"
+                      @click="moveTopbarLink(index, 1)"
+                    >
+                      <Icon name="chevronDown" size="sm" />
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                      :title="t('admin.settings.customTopbar.remove')"
+                      @click="removeTopbarLink(index)"
+                    >
+                      <Icon name="trash" size="sm" />
+                    </button>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <!-- Label -->
+                  <div>
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customTopbar.name") }}
+                    </label>
+                    <input
+                      v-model="item.label"
+                      type="text"
+                      maxlength="30"
+                      data-testid="custom-topbar-link-label"
+                      class="input text-sm"
+                      :placeholder="t('admin.settings.customTopbar.namePlaceholder')"
+                    />
+                  </div>
+
+                  <!-- Visibility -->
+                  <div>
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customTopbar.visibility") }}
+                    </label>
+                    <select
+                      v-model="item.visibility"
+                      data-testid="custom-topbar-link-visibility"
+                      class="input text-sm"
+                    >
+                      <option value="all">
+                        {{ t("admin.settings.customTopbar.visibilityAll") }}
+                      </option>
+                      <option value="user">
+                        {{ t("admin.settings.customTopbar.visibilityUser") }}
+                      </option>
+                      <option value="admin">
+                        {{ t("admin.settings.customTopbar.visibilityAdmin") }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <!-- URL -->
+                  <div class="sm:col-span-2">
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customTopbar.url") }}
+                    </label>
+                    <input
+                      v-model="item.url"
+                      type="url"
+                      data-testid="custom-topbar-link-url"
+                      class="input font-mono text-sm"
+                      :placeholder="t('admin.settings.customTopbar.urlPlaceholder')"
+                    />
+                  </div>
+
+                  <!-- Preset Icon Picker -->
+                  <div class="sm:col-span-2">
+                    <label
+                      class="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customTopbar.presetIcon") }}
+                    </label>
+                    <div class="flex flex-wrap gap-1.5">
+                      <button
+                        v-for="preset in TOPBAR_LINK_PRESET_ICONS"
+                        :key="preset"
+                        type="button"
+                        :data-testid="`custom-topbar-icon-${preset}`"
+                        :aria-pressed="resolveTopbarLinkIcon(item.icon) === preset"
+                        class="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors"
+                        :class="
+                          resolveTopbarLinkIcon(item.icon) === preset
+                            ? 'border-primary-500 bg-primary-50 text-primary-700 dark:border-primary-400 dark:bg-primary-900/30 dark:text-primary-300'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:bg-dark-700'
+                        "
+                        :title="t(`admin.settings.customTopbar.icons.${preset}`)"
+                        @click="item.icon = preset"
+                      >
+                        <Icon :name="preset" size="xs" />
+                        <span>{{ t(`admin.settings.customTopbar.icons.${preset}`) }}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Custom SVG Icon -->
+                  <div class="sm:col-span-2">
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customTopbar.customSvg") }}
+                    </label>
+                    <ImageUpload
+                      :model-value="item.icon_svg"
+                      mode="svg"
+                      size="sm"
+                      :max-size="10 * 1024"
+                      :upload-label="t('admin.settings.customTopbar.uploadSvg')"
+                      :remove-label="t('admin.settings.customTopbar.removeSvg')"
+                      :hint="t('admin.settings.customTopbar.customSvgHint')"
+                      @update:model-value="(v: string) => (item.icon_svg = v)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Add topbar link button -->
+              <button
+                type="button"
+                data-testid="custom-topbar-link-add"
+                :disabled="form.custom_topbar_links.length >= 10"
+                class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-600 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:text-primary-400"
+                @click="addTopbarLink"
+              >
+                <Icon name="plus" size="sm" />
+                {{
+                  form.custom_topbar_links.length >= 10
+                    ? t("admin.settings.customTopbar.maxReached")
+                    : t("admin.settings.customTopbar.add")
+                }}
+              </button>
+            </div>
+          </div>
+
           <!-- Custom Menu Items -->
           <div class="card">
             <div
@@ -9008,6 +9211,7 @@ import type {
 } from "@/api/admin/settings";
 import type {
   AdminGroup,
+  CustomTopbarLink,
   LoginAgreementDocument,
   NotifyEmailEntry,
   Proxy,
@@ -9055,6 +9259,9 @@ import TotpStepUpDialog from "@/components/auth/TotpStepUpDialog.vue";
 import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
 import { formatBalanceRechargeMultiplier } from "@/utils/rechargeBonus";
+import { sanitizeSvg } from "@/utils/sanitize";
+import { TOPBAR_LINK_PRESET_ICONS, resolveTopbarLinkIcon } from "@/utils/topbarLinks";
+import { sanitizeUrl } from "@/utils/url";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
 import { normalizeVisibleMethod } from "@/components/payment/paymentFlow";
@@ -9720,6 +9927,7 @@ type SettingsForm = Omit<
   | "wechat_connect_mp_enabled"
   | "wechat_connect_mobile_enabled"
   | "openai_oauth_scheduling_rate_multiplier"
+  | "custom_topbar_links"
 > & {
   /** Form always binds a concrete boolean (SystemSettings marks this optional). */
   channel_monitor_hide_throughput: boolean;
@@ -9767,6 +9975,15 @@ type SettingsForm = Omit<
   // 系统全局平台限额 map；form 内始终归一化为全部平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
   account_scheduling_thresholds: ReturnType<typeof normalizeAccountSchedulingThresholdsMap>;
+  custom_topbar_links: Array<{
+    id: string;
+    label: string;
+    url: string;
+    icon: string;
+    icon_svg: string;
+    visibility: "all" | "user" | "admin";
+    sort_order: number;
+  }>;
 };
 
 const schedulingThresholdPlatforms = SCHEDULING_THRESHOLD_PLATFORMS;
@@ -9861,6 +10078,15 @@ const form = reactive<SettingsForm>({
     sort_order: number;
     hide_open_button?: boolean;
     section_key?: string;
+  }>,
+  custom_topbar_links: [] as Array<{
+    id: string;
+    label: string;
+    url: string;
+    icon: string;
+    icon_svg: string;
+    visibility: "all" | "user" | "admin";
+    sort_order: number;
   }>,
   custom_endpoints: [] as Array<{
     name: string;
@@ -10879,6 +11105,55 @@ function moveMenuItem(index: number, direction: -1 | 1) {
   });
 }
 
+// Custom topbar link management
+function normalizeTopbarLinksForForm(items?: CustomTopbarLink[]) {
+  if (!Array.isArray(items)) return [];
+  return items.map((item, idx) => ({
+    id: item.id || "",
+    label: item.label || "",
+    url: item.url || "",
+    icon: resolveTopbarLinkIcon(item.icon),
+    icon_svg: item.icon_svg || "",
+    visibility:
+      item.visibility === "user" || item.visibility === "admin"
+        ? item.visibility
+        : ("all" as const),
+    sort_order: Number.isFinite(item.sort_order) ? item.sort_order : idx,
+  }));
+}
+
+function addTopbarLink() {
+  if (form.custom_topbar_links.length >= 10) return;
+  form.custom_topbar_links.push({
+    id: "",
+    label: "",
+    url: "",
+    icon: "externalLink",
+    icon_svg: "",
+    visibility: "all",
+    sort_order: form.custom_topbar_links.length,
+  });
+}
+
+function removeTopbarLink(index: number) {
+  form.custom_topbar_links.splice(index, 1);
+  form.custom_topbar_links.forEach((item, i) => {
+    item.sort_order = i;
+  });
+}
+
+function moveTopbarLink(index: number, direction: -1 | 1) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= form.custom_topbar_links.length) return;
+  const items = form.custom_topbar_links;
+  const temp = items[index];
+  items[index] = items[targetIndex];
+  items[targetIndex] = temp;
+  items.forEach((item, i) => {
+    item.sort_order = i;
+  });
+}
+
 // Custom endpoint management
 function addEndpoint() {
   form.custom_endpoints.push({ name: "", endpoint: "", description: "" });
@@ -11065,6 +11340,7 @@ async function loadSettings() {
     if (settings.openai_oauth_scheduling_rate_multiplier === null) {
       form.openai_oauth_scheduling_rate_multiplier = null;
     }
+    form.custom_topbar_links = normalizeTopbarLinksForForm(settings.custom_topbar_links);
     syncCaptchaProviderSelection();
     if (!form.claude_oauth_system_prompt_blocks?.trim()) {
       form.claude_oauth_system_prompt_blocks =
@@ -11457,6 +11733,21 @@ async function saveSettings() {
     // Optional URL fields: auto-clear invalid values so they don't cause backend 400 errors
     if (!isValidHttpUrl(form.frontend_url)) form.frontend_url = "";
     if (!isValidHttpUrl(form.doc_url)) form.doc_url = "";
+    for (let i = 0; i < form.custom_topbar_links.length; i++) {
+      const link = form.custom_topbar_links[i];
+      if (!link.label.trim()) {
+        appStore.showError(
+          t("admin.settings.customTopbar.validationLabelRequired", { n: i + 1 }),
+        );
+        return;
+      }
+      if (!sanitizeUrl(link.url)) {
+        appStore.showError(
+          t("admin.settings.customTopbar.validationUrlInvalid", { n: i + 1 }),
+        );
+        return;
+      }
+    }
     syncWeChatConnectMode();
     const wechatStoredMode = deriveWeChatConnectStoredMode(
       form.wechat_connect_open_enabled,
@@ -11532,6 +11823,15 @@ async function saveSettings() {
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
       custom_menu_items: form.custom_menu_items,
+      custom_topbar_links: form.custom_topbar_links.map((item, idx) => ({
+        id: item.id.trim(),
+        label: item.label.trim(),
+        url: item.url.trim(),
+        icon: resolveTopbarLinkIcon(item.icon),
+        icon_svg: item.icon_svg.trim(),
+        visibility: item.visibility,
+        sort_order: idx,
+      })),
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,
       smtp_host: form.smtp_host,
@@ -11860,6 +12160,7 @@ async function saveSettings() {
     if (updated.openai_oauth_scheduling_rate_multiplier === null) {
       form.openai_oauth_scheduling_rate_multiplier = null;
     }
+    form.custom_topbar_links = normalizeTopbarLinksForForm(updated.custom_topbar_links);
     Object.assign(authSourceDefaults, buildAuthSourceDefaultsState(updated));
     form.default_platform_quotas = normalizePlatformQuotasMap(updated.default_platform_quotas);
     form.account_scheduling_thresholds = normalizeAccountSchedulingThresholdsMap(

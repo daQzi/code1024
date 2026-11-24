@@ -334,3 +334,31 @@ func TestSettingService_GetPublicSettings_MCPEnabledFollowsExplicitPublicURL(t *
 		require.Contains(t, string(encoded), fmt.Sprintf(`"mcp_enabled":%t`, tc.want))
 	}
 }
+
+func TestSettingService_GetPublicSettings_FiltersAdminOnlyTopbarLinks(t *testing.T) {
+	rawLinks := `[{"id":"canvas","label":"画布入口","url":"https://qimu.code1024.cc/","icon":"palette","visibility":"all","sort_order":0},{"id":"store","label":"商店入口","url":"https://ai.code1024.cc/","icon":"shoppingBag","visibility":"user","sort_order":1},{"id":"ops","label":"运维后台","url":"https://ops.code1024.cc/","icon":"terminal","visibility":"admin","sort_order":2}]`
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyCustomTopbarLinks: rawLinks,
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, rawLinks, settings.CustomTopbarLinks)
+
+	raw, err := svc.GetPublicSettingsForInjection(context.Background())
+	require.NoError(t, err)
+	payload, ok := raw.(*PublicSettingsInjectionPayload)
+	require.True(t, ok)
+
+	var injected []struct {
+		ID         string `json:"id"`
+		Visibility string `json:"visibility"`
+	}
+	require.NoError(t, json.Unmarshal(payload.CustomTopbarLinks, &injected))
+	require.Len(t, injected, 2)
+	require.Equal(t, "canvas", injected[0].ID)
+	require.Equal(t, "store", injected[1].ID)
+}

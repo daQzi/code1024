@@ -50,6 +50,28 @@
           <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
         </router-link>
 
+        <!-- Custom Topbar Website Links -->
+        <a
+          v-for="link in visibleTopbarLinks"
+          :key="link.id"
+          :href="link.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          :title="link.label"
+          :aria-label="link.label"
+          data-testid="topbar-custom-link"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+        >
+          <span
+            v-if="link.iconSvg"
+            class="inline-flex h-4 w-4 shrink-0 items-center justify-center [&>svg]:h-full [&>svg]:w-full"
+            aria-hidden="true"
+            v-html="link.iconSvg"
+          />
+          <Icon v-else :name="link.iconName" size="sm" aria-hidden="true" />
+          <span class="hidden max-w-[140px] truncate sm:inline">{{ link.label }}</span>
+        </a>
+
         <!-- Language Switcher -->
         <LocaleSwitcher />
 
@@ -262,6 +284,7 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
+import { resolveVisibleTopbarLinks } from '@/utils/topbarLinks'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveRouteMetaKeys } from '@/router/title'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
@@ -280,6 +303,15 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
+const visibleTopbarLinks = computed(() =>
+  resolveVisibleTopbarLinks({
+    publicLinks: appStore.cachedPublicSettings?.custom_topbar_links,
+    adminLinks: adminSettingsStore.customTopbarLinks,
+    adminLoaded: adminSettingsStore.loaded,
+    isAdmin: authStore.isAdmin,
+    isAuthenticated: Boolean(user.value),
+  })
+)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 const availableBalance = computed(() => Number(user.value?.balance || 0))
 const frozenBalance = computed(() => Number(user.value?.frozen_balance || 0))

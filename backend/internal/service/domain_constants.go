@@ -388,7 +388,11 @@ const (
 	SettingKeyTableDefaultPageSize        = "table_default_page_size"       // 表格默认每页条数
 	SettingKeyTablePageSizeOptions        = "table_page_size_options"       // 表格可选每页条数（JSON 数组）
 	SettingKeyCustomMenuItems             = "custom_menu_items"             // 自定义菜单项（JSON 数组）
+	SettingKeyCustomTopbarLinks           = "custom_topbar_links"           // 顶部快捷入口（JSON 数组）
 	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
+
+	// DefaultCustomTopbarLinksJSON 顶部快捷入口默认预置项（画布入口、商店入口）
+	DefaultCustomTopbarLinksJSON = `[{"id":"canvas","label":"画布入口","url":"https://qimu.code1024.cc/","icon":"palette","icon_svg":"","visibility":"all","sort_order":0},{"id":"store","label":"商店入口","url":"https://ai.code1024.cc/","icon":"shoppingBag","icon_svg":"","visibility":"all","sort_order":1}]`
 
 	// 默认配置
 	SettingKeyDefaultConcurrency   = "default_concurrency"    // 新用户默认并发量

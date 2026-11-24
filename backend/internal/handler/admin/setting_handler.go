@@ -260,6 +260,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		TableDefaultPageSize:                                   settings.TableDefaultPageSize,
 		TablePageSizeOptions:                                   settings.TablePageSizeOptions,
 		CustomMenuItems:                                        dto.ParseCustomMenuItems(settings.CustomMenuItems),
+		CustomTopbarLinks:                                      dto.ParseCustomTopbarLinks(settings.CustomTopbarLinks),
 		CustomEndpoints:                                        dto.ParseCustomEndpoints(settings.CustomEndpoints),
 		DefaultConcurrency:                                     settings.DefaultConcurrency,
 		DefaultBalance:                                         settings.DefaultBalance,
