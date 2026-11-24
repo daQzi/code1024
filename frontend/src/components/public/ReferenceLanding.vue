@@ -1,399 +1,562 @@
 <template>
-  <div ref="landingRoot" class="public-glass reference-landing">
-    <GatewayPrismBackdrop />
-    <div ref="progressBar" class="rl-reading-progress" aria-hidden="true" />
-    <a class="rl-skip" href="#home-main">{{ t('glass.nav.skip') }}</a>
-    <header ref="headerRef" class="rl-header hp__top" :class="{ 'rl-header--scrolled': isScrolled }" @keydown.esc="closeMenu">
-      <nav class="glass-panel rl-nav rl-container" :aria-label="t('glass.nav.navigation')">
-        <router-link to="/" class="rl-brand"><PublicBrandLogo :src="siteLogo || '/logo.svg'" /><span>{{ siteName }}</span></router-link>
-        <div class="rl-nav-links">
+  <div ref="landingRoot" class="rl-theme-shell" :class="{ dark: portalDark }">
+    <div class="public-glass reference-landing" :class="{ 'is-reduced-motion': reducedMotion }">
+      <SpatialPortalCanvas
+        :progress="scrollProgress"
+        :hover-side="hoverSide"
+        :dark="portalDark"
+        :reduced-motion="reducedMotion"
+        :aria-label="t('referenceLanding.portal.canvasLabel')"
+      />
+
+      <div class="rl-reading-progress" :style="{ '--rl-progress': String(scrollProgress) }" aria-hidden="true" />
+      <a class="rl-skip" href="#home-main">{{ t('glass.nav.skip') }}</a>
+
+      <header ref="headerRef" class="rl-header hp__top" :class="{ 'rl-header--scrolled': isScrolled }" @keydown.esc="closeMenu">
+        <nav class="glass-panel rl-nav rl-container" :aria-label="t('glass.nav.navigation')">
+          <router-link to="/" class="rl-brand" @click="scrollToAct('act-portal', $event)">
+            <PublicBrandLogo :src="siteLogo || '/logo.svg'" />
+            <span>{{ siteName }}</span>
+          </router-link>
+
+          <div class="rl-nav-links">
+            <a
+              v-for="act in acts"
+              :key="act.id"
+              :href="`#${act.id}`"
+              :class="{ 'is-active': activeAct === act.key }"
+              :aria-current="activeAct === act.key ? 'location' : undefined"
+              @click="scrollToAct(act.id, $event)"
+            >
+              {{ act.label }}
+            </a>
+            <router-link
+              v-if="modelPlazaEnabled"
+              :to="modelPlazaPath"
+              class="rl-nav-plaza"
+              data-testid="nav-model-plaza"
+            >
+              <Icon name="grid" size="sm" aria-hidden="true" />
+              <span>{{ t('nav.modelPlaza') }}</span>
+            </router-link>
+          </div>
+
+          <div class="rl-nav-actions">
+            <a
+              v-if="docUrl"
+              :href="docUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="glass-button rl-icon-button rl-nav-docs"
+              :aria-label="t('glass.nav.docs')"
+              :title="t('glass.nav.docs')"
+            >
+              <Icon name="book" size="md" aria-hidden="true" />
+            </a>
+            <PublicLocaleSwitcher />
+            <button
+              class="glass-button rl-icon-button"
+              type="button"
+              data-testid="theme-toggle"
+              :aria-label="t(portalDark ? 'glass.nav.light' : 'glass.nav.dark')"
+              @click="togglePortalTheme"
+            >
+              <Icon :name="portalDark ? 'sun' : 'moon'" size="md" aria-hidden="true" />
+            </button>
+            <router-link :to="entryPath" class="glass-button glass-button--primary rl-button rl-nav-login">
+              {{ t(isAuthenticated ? 'glass.nav.console' : 'glass.nav.login') }}
+            </router-link>
+            <button
+              ref="menuButton"
+              class="glass-button rl-icon-button rl-menu-toggle"
+              type="button"
+              :aria-expanded="menuOpen"
+              aria-controls="home-mobile-menu"
+              :aria-label="t(menuOpen ? 'glass.nav.closeMenu' : 'glass.nav.openMenu')"
+              @click="menuOpen = !menuOpen"
+            >
+              <Icon :name="menuOpen ? 'x' : 'menu'" size="md" aria-hidden="true" />
+            </button>
+          </div>
+        </nav>
+
+        <nav
+          v-if="menuOpen"
+          id="home-mobile-menu"
+          class="glass-panel rl-mobile-nav rl-container"
+          :aria-label="t('glass.nav.navigation')"
+          @click="closeMenu"
+        >
           <a
-            v-for="item in navigation"
-            :key="item.id"
-            :href="`#${item.id}`"
-            :class="{ 'is-active': activeSection === item.id }"
-            :aria-current="activeSection === item.id ? 'location' : undefined"
-            @click="scrollToSection(item.id, $event)"
-          >{{ item.label }}</a>
-          <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="rl-nav-plaza" data-testid="nav-model-plaza">
-            <Icon name="grid" size="sm" aria-hidden="true" />
+            v-for="act in acts"
+            :key="act.id"
+            :href="`#${act.id}`"
+            :class="{ 'is-active': activeAct === act.key }"
+            :aria-current="activeAct === act.key ? 'location' : undefined"
+            @click="scrollToAct(act.id, $event)"
+          >
+            <span>{{ act.label }}</span>
+            <Icon name="arrowRight" size="sm" aria-hidden="true" />
+          </a>
+          <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="rl-mobile-plaza" data-testid="mobile-model-plaza">
             <span>{{ t('nav.modelPlaza') }}</span>
+            <Icon name="arrowRight" size="sm" aria-hidden="true" />
           </router-link>
-          <a v-if="canvasLink" :href="canvasLink.url" target="_blank" rel="noopener noreferrer" class="rl-nav-plaza rl-nav-ecosystem">
-            <span v-if="canvasLink.iconSvg" class="rl-nav-custom-icon" aria-hidden="true" v-html="canvasLink.iconSvg" /><Icon v-else name="palette" size="sm" aria-hidden="true" /><span>{{ canvasLink.label }}</span>
+          <a :href="qimuUrl" target="_blank" rel="noopener noreferrer">
+            <span>{{ qimuLabel }}</span>
+            <Icon name="externalLink" size="sm" aria-hidden="true" />
           </a>
-        </div>
-        <div class="rl-nav-actions">
-          <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="glass-button rl-icon-button rl-nav-docs" :aria-label="t('glass.nav.docs')" :title="t('glass.nav.docs')"><Icon name="book" size="md" aria-hidden="true" /></a>
-          <PublicLocaleSwitcher />
-          <button class="glass-button rl-icon-button" type="button" :aria-label="t(isDark ? 'glass.nav.light' : 'glass.nav.dark')" @click="toggleTheme"><Icon :name="isDark ? 'sun' : 'moon'" size="md" aria-hidden="true" /></button>
-          <router-link :to="entryPath" class="glass-button glass-button--primary rl-button rl-button--dark rl-nav-login">{{ t(isAuthenticated ? 'glass.nav.console' : 'glass.nav.login') }}</router-link>
-          <button ref="menuButton" class="glass-button rl-icon-button rl-menu-toggle" type="button" :aria-expanded="menuOpen" aria-controls="home-mobile-menu" :aria-label="t(menuOpen ? 'glass.nav.closeMenu' : 'glass.nav.openMenu')" @click="menuOpen = !menuOpen"><Icon :name="menuOpen ? 'x' : 'menu'" size="md" aria-hidden="true" /></button>
-        </div>
-      </nav>
-      <nav v-if="menuOpen" id="home-mobile-menu" class="glass-panel rl-mobile-nav rl-container" :aria-label="t('glass.nav.navigation')" @click="closeMenu">
-        <a
-          v-for="item in navigation"
-          :key="item.id"
-          :href="`#${item.id}`"
-          :class="{ 'is-active': activeSection === item.id }"
-          :aria-current="activeSection === item.id ? 'location' : undefined"
-          @click="scrollToSection(item.id, $event)"
-        >{{ item.label }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></a>
-        <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="rl-mobile-plaza" data-testid="mobile-model-plaza">{{ t('nav.modelPlaza') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link>
-        <a v-if="canvasLink" :href="canvasLink.url" target="_blank" rel="noopener noreferrer">{{ canvasLink.label }}<Icon name="externalLink" size="sm" aria-hidden="true" /></a>
-        <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">{{ t('glass.nav.docs') }}<Icon name="externalLink" size="sm" aria-hidden="true" /></a>
-        <button type="button" class="rl-mobile-theme" @click="toggleTheme">{{ t(isDark ? 'glass.nav.light' : 'glass.nav.dark') }}<Icon :name="isDark ? 'sun' : 'moon'" size="sm" aria-hidden="true" /></button>
-        <div class="rl-mobile-language"><span>{{ t('glass.nav.language') }}</span><PublicLocaleSwitcher /></div>
-      </nav>
-    </header>
-
-    <main id="home-main">
-      <section ref="heroSection" class="rl-hero rl-container" aria-labelledby="home-title">
-        <div class="rl-hero-copy">
-          <span class="glass-control rl-eyebrow">{{ t('referenceLanding.hero.eyebrow') }}</span>
-          <h1 id="home-title">{{ t('referenceLanding.hero.title') }}<span>{{ t('referenceLanding.hero.accent') }}</span></h1>
-          <p class="rl-hero-description">{{ t('referenceLanding.hero.description') }}</p>
-          <div class="rl-hero-actions">
-            <router-link :to="entryPath" class="glass-button glass-button--primary rl-button rl-button--dark">{{ t(isAuthenticated ? 'referenceLanding.hero.authenticated' : 'referenceLanding.hero.primary') }}<Icon name="arrowRight" size="md" aria-hidden="true" /></router-link>
-            <a href="#studio" class="glass-button rl-button rl-button--outline" @click="scrollToSection('studio', $event)">{{ t('referenceLanding.hero.secondary') }}<Icon name="chevronRight" size="sm" aria-hidden="true" /></a>
-          </div>
-          <div class="rl-hero-ports" aria-label="OpenAI Claude Gemini">
-            <span>OpenAI</span><span>Claude</span><span>Gemini</span><span>{{ t('referenceLanding.hero.multimodal') }}</span>
-          </div>
-          <p v-if="registrationEnabled && !isAuthenticated" class="rl-register">{{ t('referenceLanding.hero.registerLead') }} <router-link to="/register">{{ t('referenceLanding.hero.register') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></p>
-          <div class="glass-panel rl-hero-endpoint"><div><span>{{ t('referenceLanding.hero.endpoint') }}</span><code>{{ apiBaseUrl }}</code></div><button class="glass-button rl-icon-button" :class="{ 'is-copied': copiedTarget === 'hero-address' }" type="button" :aria-label="t(copiedTarget === 'hero-address' ? 'glass.home.copied' : 'referenceLanding.hero.copy')" @click="copyValue(apiBaseUrl, 'hero-address')"><Icon :name="copiedTarget === 'hero-address' ? 'check' : 'copy'" size="md" aria-hidden="true" /></button></div>
-          <p class="rl-hero-footnote">{{ t('referenceLanding.hero.footnote') }}</p>
-        </div>
-
-        <HeroGatewayPrism :site-name="siteName" :canvas-url="canvasLink?.url" :canvas-label="canvasLink?.label" />
-
-      </section>
-
-      <UnifiedCoreTheater :site-name="siteName" :canvas-url="canvasLink?.url" :canvas-label="canvasLink?.label" :doc-url="docUrl" />
-
-      <section id="ecosystem" class="rl-section rl-container rl-ecosystem" aria-labelledby="ecosystem-title">
-        <div class="rl-section-heading" data-reveal><h2 id="ecosystem-title">{{ t('referenceLanding.ecosystem.title') }} <span>{{ t('referenceLanding.ecosystem.accent') }}</span></h2><p>{{ t('referenceLanding.ecosystem.description') }}</p></div>
-        <div class="rl-ecosystem-grid">
-          <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="glass-panel rl-ecosystem-card" data-reveal>
-            <span class="rl-ecosystem-icon"><Icon name="book" size="lg" aria-hidden="true" /></span><h3>{{ t('referenceLanding.ecosystem.docsTitle') }}</h3><p>{{ t('referenceLanding.ecosystem.docsDescription') }}</p><span class="rl-text-link">{{ t('glass.nav.docs') }}<Icon name="externalLink" size="sm" aria-hidden="true" /></span>
+          <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">
+            <span>{{ t('glass.nav.docs') }}</span>
+            <Icon name="externalLink" size="sm" aria-hidden="true" />
           </a>
-          <a v-for="(link, index) in ecosystemLinks" :key="link.id" :href="link.url" target="_blank" rel="noopener noreferrer" class="glass-panel rl-ecosystem-card" data-reveal :data-reveal-delay="index * 70">
-            <span class="rl-ecosystem-icon rl-ecosystem-icon--custom"><span v-if="link.iconSvg" class="rl-custom-icon" aria-hidden="true" v-html="link.iconSvg" /><Icon v-else :name="link.iconName" size="lg" aria-hidden="true" /></span><h3>{{ link.label }}</h3><p>{{ t(link.id === 'canvas' ? 'referenceLanding.ecosystem.canvasDescription' : 'referenceLanding.ecosystem.linkDescription') }}</p><span class="rl-text-link">{{ t('referenceLanding.ecosystem.open') }}<Icon name="externalLink" size="sm" aria-hidden="true" /></span>
-          </a>
-          <router-link :to="entryPath" class="glass-panel rl-ecosystem-card" data-reveal data-reveal-delay="140">
-            <span class="rl-ecosystem-icon"><Icon name="grid" size="lg" aria-hidden="true" /></span><h3>{{ t('referenceLanding.ecosystem.consoleTitle') }}</h3><p>{{ t('referenceLanding.ecosystem.consoleDescription') }}</p><span class="rl-text-link">{{ t(isAuthenticated ? 'glass.nav.console' : 'glass.nav.login') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></span>
-          </router-link>
-          <div class="rl-ecosystem-more" data-reveal data-reveal-delay="210"><Icon name="plus" size="lg" aria-hidden="true" /><span>{{ t('referenceLanding.ecosystem.more') }}</span></div>
-        </div>
-      </section>
-
-      <section id="capabilities" class="rl-section rl-container" aria-labelledby="features-title">
-        <div class="rl-section-heading" data-reveal><h2 id="features-title">{{ t('referenceLanding.features.title') }} <span>{{ t('referenceLanding.features.accent') }}</span></h2><p>{{ t('referenceLanding.features.description') }}</p></div>
-        <div class="rl-features" :class="{ 'rl-features--two': !modelPlazaEnabled }">
-          <article v-if="modelPlazaEnabled" class="glass-panel" data-testid="model-feature" data-reveal data-reveal-delay="0"><Icon name="cube" size="xl" aria-hidden="true" /><h3>{{ t('referenceLanding.features.modelTitle') }}</h3><p>{{ t('referenceLanding.features.modelDescription') }}</p><router-link :to="modelPlazaPath" class="rl-text-link">{{ modelPlazaLinkLabel }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></article>
-          <article class="glass-panel" data-testid="keys-feature" data-reveal :data-reveal-delay="modelPlazaEnabled ? 80 : 0"><Icon name="key" size="xl" aria-hidden="true" /><h3>{{ t('referenceLanding.features.keyTitle') }}</h3><p>{{ t('referenceLanding.features.keyDescription') }}</p><router-link :to="protectedPath('/keys')" class="rl-text-link">{{ t('glass.home.keysAction') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></article>
-          <article class="glass-panel" data-testid="usage-feature" data-reveal :data-reveal-delay="modelPlazaEnabled ? 160 : 80"><Icon name="chart" size="xl" aria-hidden="true" /><h3>{{ t('referenceLanding.features.usageTitle') }}</h3><p>{{ t('referenceLanding.features.usageDescription') }}</p><router-link :to="protectedPath('/usage')" class="rl-text-link">{{ t('glass.home.usageAction') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></article>
-        </div>
-      </section>
-
-      <section id="quota" class="rl-quota-section" aria-labelledby="quota-title">
-        <div class="glass-panel rl-container rl-quota-layout">
-          <div class="rl-quota-intro" data-reveal><h2 id="quota-title">{{ t('referenceLanding.quota.title') }}<span>{{ t('referenceLanding.quota.accent') }}</span></h2><p>{{ t('referenceLanding.quota.description') }}</p><router-link :to="protectedPath('/dashboard')" class="glass-button glass-button--primary rl-button rl-button--dark">{{ t('referenceLanding.quota.action') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></div>
-          <div class="rl-quota-rules" data-reveal>
-            <article v-for="rule in quotaRules" :key="rule.id"><div class="rl-quota-rule-heading"><h3>{{ rule.title }}</h3><span>{{ rule.scope }}</span></div><p>{{ rule.description }}</p></article>
-            <p class="rl-quota-note"><Icon name="infoCircle" size="md" aria-hidden="true" />{{ t('referenceLanding.quota.note') }}</p>
+          <button type="button" class="rl-mobile-theme" @click="togglePortalTheme">
+            <span>{{ t(portalDark ? 'glass.nav.light' : 'glass.nav.dark') }}</span>
+            <Icon :name="portalDark ? 'sun' : 'moon'" size="sm" aria-hidden="true" />
+          </button>
+          <div class="rl-mobile-language">
+            <span>{{ t('glass.nav.language') }}</span>
+            <PublicLocaleSwitcher />
           </div>
+        </nav>
+      </header>
+
+      <!-- Vertical 4-Act Spatial Rail -->
+      <aside class="sp-rail" :aria-label="t('referenceLanding.portal.railLabel')">
+        <div class="sp-rail-track" aria-hidden="true">
+          <span class="sp-rail-fill" :style="{ transform: `scaleY(${scrollProgress})` }" />
         </div>
-      </section>
+        <button
+          v-for="act in acts"
+          :key="act.id"
+          type="button"
+          class="sp-rail-dot"
+          :class="{ 'is-active': activeAct === act.key }"
+          :aria-label="act.label"
+          :aria-current="activeAct === act.key ? 'step' : undefined"
+          @click="scrollToAct(act.id)"
+        >
+          <span class="sp-rail-tooltip">{{ act.label }}</span>
+        </button>
+      </aside>
 
-      <section id="connection" class="rl-section rl-container rl-connection" aria-labelledby="connection-title">
-        <div class="rl-connect-intro" data-reveal>
-          <h2 id="connection-title">{{ t('referenceLanding.connection.title') }}<span>{{ t('referenceLanding.connection.accent') }}</span></h2>
-          <p>{{ t('referenceLanding.connection.description') }}</p>
-          <div class="glass-panel rl-tabs" role="tablist" :aria-label="t('glass.home.connectionTabs')" @keydown="handleTabKey($event, 'connection')"><button v-for="tab in connectionTabs" :id="`connection-tab-${tab}`" :key="tab" type="button" role="tab" :aria-selected="connectionMode === tab" :aria-controls="`connection-panel-${tab}`" :tabindex="connectionMode === tab ? 0 : -1" @click="connectionMode = tab"><Icon :name="tab === 'client' ? 'grid' : 'terminal'" size="sm" aria-hidden="true" />{{ t(`glass.home.${tab}Tab`) }}</button></div>
-          <p class="rl-protocol-note">{{ t('glass.home.protocolNote') }}</p>
-          <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="rl-text-link">{{ t('glass.nav.docs') }}<Icon name="externalLink" size="sm" aria-hidden="true" /></a>
+      <main id="home-main" ref="trackRef" class="sp-main">
+        <!-- Invisible scroll landmarks matching 3D camera curve stops -->
+        <div class="sp-anchors" aria-hidden="true">
+          <div id="act-portal" class="sp-anchor sp-anchor--portal" />
+          <div id="act-aicode" class="sp-anchor sp-anchor--aicode" />
+          <div id="act-qimu" class="sp-anchor sp-anchor--qimu" />
+          <div id="act-finale" class="sp-anchor sp-anchor--finale" />
         </div>
-        <div class="rl-connect-panels" data-reveal>
-          <div v-show="connectionMode === 'client'" id="connection-panel-client" class="glass-panel rl-config-panel" role="tabpanel" aria-labelledby="connection-tab-client" tabindex="0">
-            <h3>{{ t('glass.home.clientTitle') }}</h3>
-            <p>{{ t('glass.home.clientDescription') }}</p>
-            <dl class="rl-config-list">
-              <div><dt>{{ t('glass.home.baseUrlLabel') }}<small>Base URL</small></dt><dd><div class="rl-copy-row"><code>{{ apiBaseUrl }}</code><button class="glass-button rl-icon-button" :class="{ 'is-copied': copiedTarget === 'address' }" type="button" :aria-label="t(copiedTarget === 'address' ? 'glass.home.copied' : 'glass.home.copyAddress')" @click="copyValue(apiBaseUrl, 'address')"><Icon :name="copiedTarget === 'address' ? 'check' : 'copy'" size="md" aria-hidden="true" /></button></div><p>{{ t('glass.home.baseUrlNote') }}</p></dd></div>
-              <div><dt>{{ t('glass.home.keyLabel') }}<small>API Key</small></dt><dd><strong>{{ t('glass.home.keyValue') }}</strong><p>{{ t('glass.home.keyNote') }}</p><router-link :to="protectedPath('/keys')" class="rl-text-link">{{ t('glass.home.keyAction') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></dd></div>
-              <div><dt>{{ t('glass.home.modelLabel') }}<small>Model</small></dt><dd><strong>{{ t('glass.home.modelValue') }}</strong><p>{{ t('glass.home.modelNote') }}</p><router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="rl-text-link">{{ modelPlazaLinkLabel }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link><p v-else>{{ t(appStore.publicSettingsLoaded ? 'glass.home.modelUnavailable' : 'glass.home.modelLoading') }}</p></dd></div>
-            </dl>
-          </div>
-          <div v-show="connectionMode === 'developer'" id="connection-panel-developer" class="glass-panel rl-code-panel" role="tabpanel" aria-labelledby="connection-tab-developer" tabindex="0">
-            <h3>{{ t('glass.home.developerTitle') }}</h3><p>{{ t('glass.home.developerDescription') }}</p>
-            <div class="rl-editor-bar"><div class="rl-code-tabs" role="tablist" :aria-label="t('glass.home.codeTabs')" @keydown="handleTabKey($event, 'code')"><button v-for="language in codeLanguages" :id="`code-tab-${language}`" :key="language" type="button" role="tab" :aria-selected="codeLanguage === language" :aria-controls="`code-panel-${language}`" :tabindex="codeLanguage === language ? 0 : -1" @click="codeLanguage = language">{{ language === 'python' ? 'Python' : 'curl · Bash' }}</button></div><button class="rl-code-copy" :class="{ 'is-copied': copiedTarget === 'code' }" type="button" @click="copyValue(codeExample, 'code')"><Icon :name="copiedTarget === 'code' ? 'check' : 'copy'" size="sm" aria-hidden="true" />{{ t(copiedTarget === 'code' ? 'glass.home.copied' : 'glass.home.copyCode') }}</button></div>
-            <pre v-for="language in codeLanguages" v-show="codeLanguage === language" :id="`code-panel-${language}`" :key="language" class="rl-code" role="tabpanel" :aria-labelledby="`code-tab-${language}`" tabindex="0"><code><template v-for="(token, tokenIndex) in highlightedCodeExamples[language]" :key="tokenIndex"><span v-if="token.type" :class="`rl-tok-${token.type}`">{{ token.text }}</span><template v-else>{{ token.text }}</template></template></code></pre>
-            <div class="rl-code-notes"><p>{{ t(codeLanguage === 'python' ? 'glass.home.pythonSetup' : 'glass.home.curlSetup') }}</p><details><summary>{{ t('glass.home.environmentTitle') }}<Icon name="chevronDown" size="sm" aria-hidden="true" /></summary><p>{{ t('glass.home.environmentDescription') }}</p><h4>{{ t('glass.home.shellLabel') }}</h4><pre><code>export OPENAI_API_KEY='YOUR_API_KEY'
-export MODEL_ID='YOUR_MODEL_ID'</code></pre><h4>{{ t('glass.home.powershellLabel') }}</h4><pre><code>$env:OPENAI_API_KEY='YOUR_API_KEY'
-$env:MODEL_ID='YOUR_MODEL_ID'</code></pre></details></div>
-          </div>
+
+        <div class="sp-sticky-hud">
+          <!-- ACT 1: Optical Dual Portal Hero (0%) -->
+          <section
+            class="sp-act sp-act--portal"
+            :class="{ 'is-active': activeAct === 'portal' }"
+            :aria-hidden="activeAct !== 'portal'"
+            aria-labelledby="home-title"
+          >
+            <div class="sp-hero-brand">
+              <span class="glass-control sp-brand-pill">{{ t('referenceLanding.portal.tagline') }}</span>
+              <h1 id="home-title">{{ siteName }}</h1>
+            </div>
+
+            <div class="sp-dual-docks rl-container">
+              <article
+                class="glass-panel sp-portal-dock sp-portal-dock--aicode"
+                data-testid="portal-aicode"
+                @pointerenter="hoverSide = 'aicode'"
+                @pointerleave="hoverSide = null"
+              >
+                <div class="sp-dock-head">
+                  <span class="sp-dot sp-dot--aicode" aria-hidden="true" />
+                  <div>
+                    <h2>{{ t('referenceLanding.portal.aicodeTitle') }}</h2>
+                    <span class="sp-dock-tags">{{ t('referenceLanding.portal.aicodeTag') }}</span>
+                  </div>
+                </div>
+                <div class="sp-dock-actions">
+                  <router-link :to="entryPath" class="glass-button glass-button--primary sp-cta-aicode">
+                    <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                    <Icon name="arrowRight" size="sm" aria-hidden="true" />
+                  </router-link>
+                  <button
+                    type="button"
+                    class="glass-button rl-icon-button sp-copy-btn"
+                    :class="{ 'is-copied': copiedTarget === 'hero-address' }"
+                    :aria-label="t(copiedTarget === 'hero-address' ? 'glass.home.copied' : 'referenceLanding.portal.copyApi')"
+                    :title="apiBaseUrl"
+                    @click="copyValue(apiBaseUrl, 'hero-address')"
+                  >
+                    <Icon :name="copiedTarget === 'hero-address' ? 'check' : 'copy'" size="md" aria-hidden="true" />
+                  </button>
+                </div>
+              </article>
+
+              <article
+                class="glass-panel sp-portal-dock sp-portal-dock--qimu"
+                data-testid="portal-qimu"
+                @pointerenter="hoverSide = 'qimu'"
+                @pointerleave="hoverSide = null"
+              >
+                <div class="sp-dock-head">
+                  <span class="sp-dot sp-dot--qimu" aria-hidden="true" />
+                  <div>
+                    <h2>{{ t('referenceLanding.portal.qimuTitle') }}</h2>
+                    <span class="sp-dock-tags">{{ t('referenceLanding.portal.qimuTag') }}</span>
+                  </div>
+                </div>
+                <div class="sp-dock-actions">
+                  <a
+                    :href="qimuUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="glass-button sp-cta-qimu"
+                  >
+                    <span>{{ qimuLabel }}</span>
+                    <Icon name="externalLink" size="sm" aria-hidden="true" />
+                  </a>
+                </div>
+              </article>
+            </div>
+
+            <button
+              type="button"
+              class="sp-scroll-cue"
+              @click="scrollToAct('act-aicode')"
+            >
+              <span>{{ t('referenceLanding.portal.scrollHint') }}</span>
+              <Icon name="chevronDown" size="sm" aria-hidden="true" />
+            </button>
+          </section>
+
+          <!-- ACT 2: AICode 3D Quantum Compute & Multi-Modal Core (35%) -->
+          <section
+            class="sp-act sp-act--stage sp-act--aicode"
+            :class="{ 'is-active': activeAct === 'aicode' }"
+            :aria-hidden="activeAct !== 'aicode'"
+          >
+            <div class="rl-container sp-stage-bar sp-stage-bar--left">
+              <div class="glass-panel sp-stage-dock sp-portal-dock--aicode">
+                <div class="sp-dock-head">
+                  <span class="sp-dot sp-dot--aicode" aria-hidden="true" />
+                  <div>
+                    <h2>{{ t('referenceLanding.portal.aicodeTitle') }}</h2>
+                    <span class="sp-dock-tags">{{ t('referenceLanding.portal.aicodeTag') }}</span>
+                  </div>
+                </div>
+                <div class="sp-dock-actions">
+                  <router-link :to="entryPath" class="glass-button glass-button--primary sp-cta-aicode">
+                    <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                    <Icon name="arrowRight" size="sm" aria-hidden="true" />
+                  </router-link>
+                  <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="glass-button">
+                    <Icon name="grid" size="sm" aria-hidden="true" />
+                    <span>{{ modelPlazaLinkLabel }}</span>
+                  </router-link>
+                  <button
+                    type="button"
+                    class="glass-button rl-icon-button sp-copy-btn"
+                    :class="{ 'is-copied': copiedTarget === 'stage-address' }"
+                    :aria-label="t(copiedTarget === 'stage-address' ? 'glass.home.copied' : 'referenceLanding.portal.copyApi')"
+                    :title="apiBaseUrl"
+                    @click="copyValue(apiBaseUrl, 'stage-address')"
+                  >
+                    <Icon :name="copiedTarget === 'stage-address' ? 'check' : 'copy'" size="md" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ACT 3: Qimu Cinema, Manju & Poster Studio (72%) -->
+          <section
+            class="sp-act sp-act--stage sp-act--qimu"
+            :class="{ 'is-active': activeAct === 'qimu' }"
+            :aria-hidden="activeAct !== 'qimu'"
+          >
+            <div class="rl-container sp-stage-bar sp-stage-bar--right">
+              <div class="glass-panel sp-stage-dock sp-portal-dock--qimu">
+                <div class="sp-dock-head">
+                  <span class="sp-dot sp-dot--qimu" aria-hidden="true" />
+                  <div>
+                    <h2>{{ t('referenceLanding.portal.qimuTitle') }}</h2>
+                    <span class="sp-dock-tags">{{ t('referenceLanding.portal.qimuTag') }}</span>
+                  </div>
+                </div>
+                <div class="sp-dock-actions">
+                  <a
+                    :href="qimuUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="glass-button sp-cta-qimu"
+                  >
+                    <span>{{ qimuLabel }}</span>
+                    <Icon name="externalLink" size="sm" aria-hidden="true" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ACT 4: Dual-Core Panorama Finale & Minimal Footer (100%) -->
+          <section
+            class="sp-act sp-act--finale"
+            :class="{ 'is-active': activeAct === 'finale' }"
+            :aria-hidden="activeAct !== 'finale'"
+          >
+            <div class="sp-finale-portals">
+              <router-link :to="entryPath" class="glass-button glass-button--primary rl-button sp-cta-aicode">
+                <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                <Icon name="arrowRight" size="md" aria-hidden="true" />
+              </router-link>
+              <a
+                :href="qimuUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="glass-button rl-button sp-cta-qimu"
+              >
+                <span>{{ qimuLabel }}</span>
+                <Icon name="externalLink" size="md" aria-hidden="true" />
+              </a>
+            </div>
+
+            <footer class="glass-panel rl-footer-bar rl-container">
+              <div class="rl-footer-brand">
+                <PublicBrandLogo :src="siteLogo || '/logo.svg'" />
+                <span>&copy; {{ currentYear }} {{ siteName }}</span>
+              </div>
+              <nav class="rl-footer-links" :aria-label="t('glass.home.footerExplore')">
+                <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath">{{ t('nav.modelPlaza') }}</router-link>
+                <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">{{ t('glass.nav.docs') }}</a>
+                <a
+                  v-for="link in ecosystemLinks"
+                  :key="link.id"
+                  :href="link.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {{ link.label }}
+                </a>
+                <a v-if="supportEmail" :href="`mailto:${supportEmail}`">{{ supportContact }}</a>
+                <span v-else-if="supportContact" class="rl-footer-contact-text">{{ supportContact }}</span>
+              </nav>
+              <a href="#home-main" class="rl-back-top" @click="scrollToAct('act-portal', $event)">
+                <span>{{ t('glass.nav.backTop') }}</span>
+                <Icon name="arrowUp" size="sm" aria-hidden="true" />
+              </a>
+            </footer>
+          </section>
         </div>
-      </section>
+      </main>
 
-      <section id="quick-start" class="rl-section rl-container rl-start" aria-labelledby="start-title">
-        <div class="rl-section-heading" data-reveal><h2 id="start-title">{{ t('referenceLanding.start.title') }}</h2><p>{{ t('referenceLanding.start.description') }}</p></div>
-        <ol class="rl-steps"><li v-for="(step, index) in steps" :key="step.id" data-reveal :data-reveal-delay="index * 70"><span class="rl-step-number" aria-hidden="true">{{ index + 1 }}</span><h3>{{ step.title }}</h3><p>{{ step.desc }}</p><div class="rl-step-links"><router-link :to="step.to" class="rl-text-link">{{ step.action }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link><router-link v-if="step.id === 'account' && registrationEnabled && !isAuthenticated" to="/register" class="rl-text-link">{{ t('glass.home.steps.registerAction') }}</router-link></div></li></ol>
-        <div v-if="paymentEnabled" class="rl-billing"><div><h3>{{ t('glass.home.billingTitle') }}</h3><p>{{ t('glass.home.paymentAvailable') }}</p></div><router-link :to="protectedPath('/purchase')" class="rl-text-link">{{ t('glass.home.paymentAction') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></div>
-      </section>
-
-      <section id="questions" class="rl-section rl-container rl-questions" aria-labelledby="questions-title">
-        <div data-reveal><h2 id="questions-title">{{ t('referenceLanding.faq.title') }}<span>{{ t('referenceLanding.faq.accent') }}</span></h2><p>{{ t('referenceLanding.faq.description') }}</p><p v-if="supportContact">{{ supportContact }}</p></div>
-        <div class="glass-panel rl-faq-list" data-reveal><details v-for="faq in faqs" :key="faq.id"><summary>{{ faq.q }}<Icon name="plus" size="md" aria-hidden="true" /></summary><p>{{ faq.a }}</p></details></div>
-      </section>
-    </main>
-
-    <footer class="rl-footer"><div class="rl-container"><div class="rl-footer-top"><div><router-link to="/" class="rl-brand"><PublicBrandLogo :src="siteLogo || '/logo.svg'" /><span>{{ siteName }}</span></router-link><p>{{ t('referenceLanding.footer.note') }}</p></div><nav :aria-label="t('glass.home.footerExplore')"><a href="#connection" @click="scrollToSection('connection', $event)">{{ t('referenceLanding.nav.connection') }}</a><a href="#quota" @click="scrollToSection('quota', $event)">{{ t('referenceLanding.nav.quota') }}</a><router-link v-if="modelPlazaEnabled" :to="modelPlazaPath">{{ t('nav.modelPlaza') }}</router-link><a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">{{ t('glass.nav.docs') }}</a></nav><div class="rl-footer-contact"><span>{{ t('referenceLanding.footer.help') }}</span><a v-if="supportEmail" :href="`mailto:${supportEmail}`">{{ supportContact }}</a><span v-else-if="supportContact">{{ supportContact }}</span></div></div><div class="rl-footer-bottom"><span>&copy; {{ currentYear }} {{ siteName }}</span><p>{{ t('referenceLanding.footer.legal') }}</p><a href="#home-main" class="rl-back-top" @click="scrollToSection('home-main', $event)">{{ t('glass.nav.backTop') }}<Icon name="arrowUp" size="sm" aria-hidden="true" /></a></div></div></footer>
-    <p class="rl-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ copyStatus }}</p>
+      <p class="rl-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ copyStatus }}</p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore } from '@/stores'
 import Icon from '@/components/icons/Icon.vue'
-import GatewayPrismBackdrop from '@/components/public/GatewayPrismBackdrop.vue'
-import HeroGatewayPrism from '@/components/public/HeroGatewayPrism.vue'
-import UnifiedCoreTheater from '@/components/public/UnifiedCoreTheater.vue'
 import PublicBrandLogo from '@/components/common/PublicBrandLogo.vue'
 import PublicLocaleSwitcher from '@/components/public/PublicLocaleSwitcher.vue'
+import type { PortalHoverSide } from '@/components/public/three/createPortalEngine'
 import { useClipboard } from '@/composables/useClipboard'
-import { useLandingMotion } from '@/composables/useLandingMotion'
 import { useTheme } from '@/composables/useTheme'
 import { sanitizeUrl } from '@/utils/url'
 import { resolveVisibleTopbarLinks } from '@/utils/topbarLinks'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import '@/styles/reference-landing.css'
 
+const SpatialPortalCanvas = defineAsyncComponent(
+  () => import('@/components/public/SpatialPortalCanvas.vue'),
+)
+
 const { t } = useI18n()
 const authStore = useAuthStore()
 const appStore = useAppStore()
-const supportEmail = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportContact.value) ? supportContact.value : '')
-const supportContact = computed(() => appStore.cachedPublicSettings?.contact_info?.trim() || appStore.contactInfo?.trim() || '')
 const { copyToClipboard } = useClipboard()
-const { isDark, toggleTheme } = useTheme()
+const { isDark, preference, setTheme } = useTheme()
+
+// Default the 3D landing portal to Dark Cinema Studio when system preference is unset.
+const portalDark = computed(() => (preference.value === 'system' ? true : isDark.value))
+function togglePortalTheme() {
+  setTheme(portalDark.value ? 'light' : 'dark')
+}
+
 const landingRoot = ref<HTMLElement | null>(null)
 const headerRef = ref<HTMLElement | null>(null)
-const heroSection = ref<HTMLElement | null>(null)
-const progressBar = ref<HTMLElement | null>(null)
-useLandingMotion(landingRoot)
-const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
-const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
+const trackRef = ref<HTMLElement | null>(null)
+
+const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Code1024')
+const siteLogo = computed(() =>
+  sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', {
+    allowRelative: true,
+    allowDataUrl: true,
+  }),
+)
 const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
-const customLinks = computed(() => resolveVisibleTopbarLinks({
-  publicLinks: appStore.cachedPublicSettings?.custom_topbar_links,
-  isAdmin: authStore.isAdmin,
-  isAuthenticated: authStore.isAuthenticated,
-}))
-const canvasLink = computed(() => customLinks.value.find(link => link.id === 'canvas'))
+const supportContact = computed(() => appStore.cachedPublicSettings?.contact_info?.trim() || appStore.contactInfo?.trim() || '')
+const supportEmail = computed(() =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supportContact.value) ? supportContact.value : '',
+)
+
+const customLinks = computed(() =>
+  resolveVisibleTopbarLinks({
+    publicLinks: appStore.cachedPublicSettings?.custom_topbar_links,
+    isAdmin: authStore.isAdmin,
+    isAuthenticated: authStore.isAuthenticated,
+  }),
+)
+const canvasLink = computed(() =>
+  customLinks.value.find((link) => link.id === 'canvas' || /qimu/i.test(link.url)),
+)
+const qimuUrl = computed(() => canvasLink.value?.url || 'https://qimu.code1024.cc/')
+const qimuLabel = computed(() => canvasLink.value?.label || t('referenceLanding.portal.qimuAction'))
 const ecosystemLinks = computed(() => customLinks.value.slice(0, 5))
+
 const isAuthenticated = computed(() => authStore.isAuthenticated)
-const entryPath = computed(() => isAuthenticated.value ? authStore.isAdmin ? '/admin/dashboard' : '/dashboard' : '/login')
-const registrationEnabled = computed(() => appStore.cachedPublicSettings?.registration_enabled === true && appStore.cachedPublicSettings?.backend_mode_enabled !== true)
-const invitationRequired = computed(() => appStore.cachedPublicSettings?.invitation_code_enabled === true)
-const paymentEnabled = computed(() => appStore.cachedPublicSettings?.payment_enabled === true && appStore.cachedPublicSettings?.payment_balance_disabled !== true && appStore.cachedPublicSettings?.backend_mode_enabled !== true)
+const entryPath = computed(() =>
+  isAuthenticated.value ? (authStore.isAdmin ? '/admin/dashboard' : '/dashboard') : '/login',
+)
 const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const modelPlazaRequiresAuth = computed(() => appStore.cachedPublicSettings?.model_plaza_require_auth === true)
-const modelPlazaPath = computed(() => modelPlazaRequiresAuth.value ? protectedPath('/model-plaza') : '/model-plaza')
-const modelPlazaLinkLabel = computed(() => t(modelPlazaRequiresAuth.value && !isAuthenticated.value ? 'glass.home.modelLoginAction' : 'glass.home.modelsAction'))
+const modelPlazaPath = computed(() =>
+  modelPlazaRequiresAuth.value ? protectedPath('/model-plaza') : '/model-plaza',
+)
+const modelPlazaLinkLabel = computed(() =>
+  t(modelPlazaRequiresAuth.value && !isAuthenticated.value ? 'glass.home.modelLoginAction' : 'glass.home.modelsAction'),
+)
+
 const apiBaseUrl = computed(() => {
   const configured = sanitizeUrl(appStore.cachedPublicSettings?.api_base_url?.trim() || appStore.apiBaseUrl?.trim() || '')
   return (configured || window.location.origin).replace(/\/+$/, '')
 })
 const currentYear = new Date().getFullYear()
-function protectedPath(path: string) { return isAuthenticated.value ? path : `/login?redirect=${encodeURIComponent(path)}` }
-const navigation = computed(() => ['capabilities', 'quota', 'connection', 'questions'].map((id, index) => ({ id, label: t(`referenceLanding.nav.${['features', 'quota', 'connection', 'questions'][index]}`) })))
-const activeSection = ref('')
-const isScrolled = ref(false)
-function scrollToSection(id: string, event: MouseEvent) {
-  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
-  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-  const behavior: 'auto' | 'smooth' = reduced ? 'auto' : 'smooth'
-  if (id === 'home-main') {
-    event.preventDefault()
-    activeSection.value = ''
-    window.scrollTo?.({ top: 0, behavior })
-    return
-  }
-  const target = document.getElementById(id)
-  if (!target) return
-  event.preventDefault()
-  activeSection.value = id
-  target.scrollIntoView?.({ behavior, block: 'start' })
+
+function protectedPath(path: string) {
+  return isAuthenticated.value ? path : `/login?redirect=${encodeURIComponent(path)}`
 }
+
+type ActKey = 'portal' | 'aicode' | 'qimu' | 'finale'
+type ActId = 'act-portal' | 'act-aicode' | 'act-qimu' | 'act-finale'
+
+const acts = computed<Array<{ key: ActKey; id: ActId; progress: number; label: string }>>(() => [
+  { key: 'portal', id: 'act-portal', progress: 0, label: t('referenceLanding.portal.acts.overview') },
+  { key: 'aicode', id: 'act-aicode', progress: 0.35, label: t('referenceLanding.portal.acts.aicode') },
+  { key: 'qimu', id: 'act-qimu', progress: 0.72, label: t('referenceLanding.portal.acts.qimu') },
+  { key: 'finale', id: 'act-finale', progress: 1, label: t('referenceLanding.portal.acts.panorama') },
+])
+
+const scrollProgress = ref(0)
+const isScrolled = ref(false)
+const hoverSide = ref<PortalHoverSide>(null)
+const reducedMotion = ref(false)
+
+const activeAct = computed<ActKey>(() => {
+  const p = scrollProgress.value
+  if (p < 0.18) return 'portal'
+  if (p < 0.54) return 'aicode'
+  if (p < 0.86) return 'qimu'
+  return 'finale'
+})
+
+function scrollToAct(id: ActId, event?: MouseEvent) {
+  if (event && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)) return
+  event?.preventDefault()
+  const targetAct = acts.value.find((a) => a.id === id)
+  if (!targetAct) return
+
+  const trackEl = trackRef.value
+  const docMax = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+  const trackMax = trackEl ? Math.max(0, trackEl.offsetHeight - window.innerHeight) : docMax
+  const maxScroll = Math.max(docMax, trackMax)
+  const targetY = Math.round(targetAct.progress * maxScroll)
+
+  scrollProgress.value = targetAct.progress
+  window.scrollTo?.({
+    top: targetY,
+    behavior: reducedMotion.value ? 'auto' : 'smooth',
+  })
+}
+
 const menuOpen = ref(false)
 const menuButton = ref<HTMLButtonElement | null>(null)
-function closeMenu(event?: Event) { menuOpen.value = false; if (event instanceof KeyboardEvent) menuButton.value?.focus() }
+function closeMenu(event?: Event) {
+  menuOpen.value = false
+  if (event instanceof KeyboardEvent) menuButton.value?.focus()
+}
 function handleOutsidePointer(event: PointerEvent) {
   if (!menuOpen.value) return
   if (event.target instanceof Node && headerRef.value?.contains(event.target)) return
   menuOpen.value = false
 }
-watch(menuOpen, open => {
+watch(menuOpen, (open) => {
   if (open) document.addEventListener('pointerdown', handleOutsidePointer)
   else document.removeEventListener('pointerdown', handleOutsidePointer)
 })
-const quotaRules = computed(() => ['account', 'subscription', 'key'].map(id => ({ id, title: t(`referenceLanding.quota.${id}Title`), scope: t(`referenceLanding.quota.${id}Scope`), description: t(`referenceLanding.quota.${id}Description`) })))
 
-const connectionTabs = ['client', 'developer'] as const
-const connectionMode = ref<(typeof connectionTabs)[number]>('client')
-const codeLanguages = ['python', 'curl'] as const
-const codeLanguage = ref<(typeof codeLanguages)[number]>('python')
-async function handleTabKey(event: KeyboardEvent, group: 'connection' | 'code') {
-  if (event.altKey || event.ctrlKey || event.metaKey || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-  const tabs = Array.from((event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-  const current = tabs.indexOf(document.activeElement as HTMLButtonElement)
-  const index = current >= 0 ? current : tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true')
-  const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
-  event.preventDefault()
-  if (group === 'connection') connectionMode.value = connectionTabs[next]
-  else codeLanguage.value = codeLanguages[next]
-  await nextTick()
-  tabs[next]?.focus()
-}
-const codeExamples = computed(() => ({
-  python: `import os
-from openai import OpenAI
-
-client = OpenAI(
-    base_url=${JSON.stringify(apiBaseUrl.value)},
-    api_key=os.environ["OPENAI_API_KEY"]
-)
-
-response = client.chat.completions.create(
-    model=os.environ["MODEL_ID"],
-    messages=[
-        {"role": "user", "content": "Hello!"}
-    ]
-)
-
-print(response.choices[0].message.content)`,
-  curl: String.raw`curl '${apiBaseUrl.value.replace(/'/g, "'\\''")}/chat/completions' \
-  -H "Authorization: Bearer $OPENAI_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"model\": \"$MODEL_ID\",
-    \"messages\": [
-      {\"role\": \"user\", \"content\": \"Hello!\"}
-    ]
-  }"`
-}))
-const codeExample = computed(() => codeExamples.value[codeLanguage.value])
-interface CodeToken {
-  type: string
-  text: string
-}
-function tokenizeCode(source: string, language: (typeof codeLanguages)[number]): CodeToken[] {
-  const pattern = language === 'python'
-    ? /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\b(?:import|from)\b|\b(?:OpenAI|create|print)\b|\b(?:base_url|api_key|model|messages|os|environ)\b|\b\d+\b/g
-    : /'(?:[^']*)'|"(?:\\.|[^"\\])*"|\bcurl\b|(?<=\s)-[Hd]\b|\\$/gm
-  const tokens: CodeToken[] = []
-  let lastIndex = 0
-  for (const match of source.matchAll(pattern)) {
-    const matchIndex = match.index ?? 0
-    if (matchIndex > lastIndex) tokens.push({ type: '', text: source.slice(lastIndex, matchIndex) })
-    const value = match[0]
-    let type = ''
-    if (value.startsWith('"') || value.startsWith("'")) type = 'string'
-    else if (value === 'import' || value === 'from' || value === 'curl') type = 'keyword'
-    else if (value.startsWith('-')) type = 'flag'
-    else if (value === '\\') type = 'punct'
-    else if (language === 'python' && (value === 'OpenAI' || value === 'create' || value === 'print')) type = 'func'
-    else if (language === 'python' && /^\d+$/.test(value)) type = 'num'
-    else if (language === 'python') type = 'var'
-    tokens.push({ type, text: value })
-    lastIndex = matchIndex + value.length
-  }
-  if (lastIndex < source.length) tokens.push({ type: '', text: source.slice(lastIndex) })
-  return tokens
-}
-const highlightedCodeExamples = computed(() => ({
-  python: tokenizeCode(codeExamples.value.python, 'python'),
-  curl: tokenizeCode(codeExamples.value.curl, 'curl'),
-}))
 const copiedTarget = ref('')
 const copyStatus = ref('')
 let copyTimer: ReturnType<typeof setTimeout> | undefined
-let sectionObserver: IntersectionObserver | undefined
-let scrollFrame = 0
-let scrollProgressEnabled = false
-function syncScrollState() {
-  scrollFrame = 0
-  const scrollY = window.scrollY || document.documentElement.scrollTop || 0
-  isScrolled.value = scrollY > 18
-  if (!scrollProgressEnabled || !progressBar.value) return
-  const maxScroll = document.documentElement.scrollHeight - window.innerHeight
-  const ratio = maxScroll > 0 ? Math.min(1, Math.max(0, scrollY / maxScroll)) : 0
-  progressBar.value.style.setProperty('--rl-progress', String(ratio))
-}
-function onWindowScroll() {
-  if (scrollFrame) return
-  scrollFrame = window.requestAnimationFrame(syncScrollState)
-}
-onMounted(() => {
-  const supportsCssTimeline = typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('animation-timeline', 'scroll(root block)')
-  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
-  scrollProgressEnabled = !supportsCssTimeline && !reducedMotion
-  syncScrollState()
-  window.addEventListener('scroll', onWindowScroll, { passive: true })
-  if (typeof IntersectionObserver !== 'undefined') {
-    const visibleSections = new Map<string, number>()
-    sectionObserver = new IntersectionObserver(entries => {
-      for (const entry of entries) {
-        const id = entry.target.id
-        if (!id) continue
-        if (entry.isIntersecting) visibleSections.set(id, entry.intersectionRatio)
-        else visibleSections.delete(id)
-      }
-      if (visibleSections.size === 0) {
-        if ((window.scrollY || 0) < 260) activeSection.value = ''
-        return
-      }
-      const orderedIds = ['studio', 'capabilities', 'connection', 'questions']
-      const firstVisible = orderedIds.find(id => visibleSections.has(id))
-      if (firstVisible) activeSection.value = firstVisible
-    }, { rootMargin: '-22% 0px -55% 0px', threshold: [0, 0.15, 0.4] })
-    for (const id of ['studio', 'capabilities', 'connection', 'questions']) {
-      const sectionEl = document.getElementById(id)
-      if (sectionEl) sectionObserver.observe(sectionEl)
-    }
-    if (heroSection.value) sectionObserver.observe(heroSection.value)
-  }
-})
-async function copyValue(value: string, target: 'hero-address' | 'address' | 'code') {
+
+async function copyValue(value: string, target: 'hero-address' | 'stage-address') {
   copyStatus.value = ''
   const trigger = document.activeElement as HTMLElement | null
-  const message = t(target === 'code' ? 'glass.home.codeCopied' : 'glass.home.addressCopied')
+  const message = t('glass.home.addressCopied')
   const success = await copyToClipboard(value, message)
   if (trigger?.isConnected) trigger.focus({ preventScroll: true })
   copiedTarget.value = success ? target : ''
   copyStatus.value = success ? message : t('glass.home.copyFailed')
   if (copyTimer) clearTimeout(copyTimer)
-  copyTimer = setTimeout(() => { copiedTarget.value = ''; copyStatus.value = '' }, 3000)
+  copyTimer = setTimeout(() => {
+    copiedTarget.value = ''
+    copyStatus.value = ''
+  }, 3000)
 }
+
+let scrollFrame = 0
+let motionMedia: MediaQueryList | undefined
+
+function syncScroll() {
+  scrollFrame = 0
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0
+  isScrolled.value = scrollY > 18
+  const maxScroll = document.documentElement.scrollHeight - window.innerHeight
+  if (maxScroll > 0) {
+    scrollProgress.value = Math.min(1, Math.max(0, scrollY / maxScroll))
+  }
+}
+
+function onWindowScroll() {
+  if (scrollFrame) return
+  scrollFrame = window.requestAnimationFrame(syncScroll)
+}
+
+function syncMotionPreference() {
+  reducedMotion.value = motionMedia?.matches ?? false
+}
+
+onMounted(() => {
+  if (typeof window.matchMedia === 'function') {
+    motionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
+    syncMotionPreference()
+    motionMedia.addEventListener?.('change', syncMotionPreference)
+  }
+  syncScroll()
+  window.addEventListener('scroll', onWindowScroll, { passive: true })
+  window.addEventListener('resize', onWindowScroll, { passive: true })
+})
+
 onBeforeUnmount(() => {
   if (copyTimer) clearTimeout(copyTimer)
   document.removeEventListener('pointerdown', handleOutsidePointer)
   window.removeEventListener('scroll', onWindowScroll)
+  window.removeEventListener('resize', onWindowScroll)
+  motionMedia?.removeEventListener?.('change', syncMotionPreference)
   if (scrollFrame) window.cancelAnimationFrame(scrollFrame)
-  sectionObserver?.disconnect()
 })
-const accountDescription = computed(() => t(!appStore.publicSettingsLoaded ? 'glass.home.steps.accountLoading' : !registrationEnabled.value ? 'glass.home.steps.accountClosed' : invitationRequired.value ? 'glass.home.steps.accountInvite' : 'glass.home.steps.accountOpen'))
-const steps = computed(() => [
-  { id: 'account', title: t('glass.home.steps.accountTitle'), desc: accountDescription.value, to: entryPath.value, action: t(isAuthenticated.value ? 'glass.nav.console' : 'glass.home.steps.accountAction') },
-  { id: 'model', title: t('glass.home.steps.modelTitle'), desc: t('glass.home.steps.modelDescription'), to: modelPlazaEnabled.value ? modelPlazaPath.value : entryPath.value, action: modelPlazaEnabled.value ? modelPlazaLinkLabel.value : t('glass.home.steps.modelAction') },
-  { id: 'key', title: t('glass.home.steps.keyTitle'), desc: t('glass.home.steps.keyDescription'), to: protectedPath('/keys'), action: t('glass.home.steps.keyAction') },
-  { id: 'connect', title: t('glass.home.steps.connectTitle'), desc: t('glass.home.steps.connectDescription'), to: protectedPath('/usage'), action: t('glass.home.steps.usageAction') },
-])
-const faqs = computed(() => [
-  ...['account', 'official', 'quota', 'tools'].map(id => ({ id, q: t(`referenceLanding.faq.${id}Q`), a: t(`referenceLanding.faq.${id}A`) })),
-  { id: 'invite', q: t('glass.home.faq.inviteQ'), a: t(!appStore.publicSettingsLoaded ? 'glass.home.faq.registrationLoading' : !registrationEnabled.value ? 'glass.home.faq.registrationClosed' : invitationRequired.value ? 'glass.home.faq.inviteRequired' : 'glass.home.faq.inviteNotRequired') },
-  { id: 'errors', q: t('glass.home.faq.errorsQ'), a: t('glass.home.faq.errorsA') },
-])
 </script>

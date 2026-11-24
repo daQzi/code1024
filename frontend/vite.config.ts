@@ -140,6 +140,11 @@ export default defineConfig(({ mode }) => {
               return 'vendor-stripe'
             }
 
+            // Three.js 仅在首页 3D 舞台按需加载，与控制台/登录页解耦。
+            if (id.includes('/three/')) {
+              return 'vendor-three'
+            }
+
             // 其他小型第三方库合并
             return 'vendor-misc'
           }

@@ -1,0 +1,188 @@
+<template>
+  <div
+    ref="stageRef"
+    class="sp-stage"
+    :class="[
+      dark ? 'is-dark' : 'is-light',
+      hoverSide ? `is-hover-${hoverSide}` : '',
+      { 'is-fallback': fallbackActive, 'is-ready': engineReady },
+    ]"
+    aria-hidden="true"
+  >
+    <div class="sp-fallback" />
+    <canvas v-if="!fallbackActive" ref="canvasRef" class="sp-canvas" />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { PortalEngineController, PortalHoverSide } from './three/createPortalEngine'
+
+const props = defineProps<{
+  progress: number
+  hoverSide: PortalHoverSide
+  dark: boolean
+  reducedMotion: boolean
+}>()
+
+const emit = defineEmits<{
+  ready: []
+  fallback: []
+}>()
+
+const stageRef = ref<HTMLElement | null>(null)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const fallbackActive = ref(false)
+const engineReady = ref(false)
+
+let controller: PortalEngineController | null = null
+let resizeObserver: ResizeObserver | null = null
+let unmounted = false
+
+function probeWebGL(): boolean {
+  if (typeof document === 'undefined') return false
+  try {
+    const probe = document.createElement('canvas')
+    return Boolean(probe.getContext('webgl2') || probe.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
+
+watch(
+  () => props.progress,
+  (val) => {
+    controller?.setProgress(val)
+  },
+)
+
+watch(
+  () => props.hoverSide,
+  (val) => {
+    controller?.setHoverSide(val)
+  },
+)
+
+watch(
+  () => props.dark,
+  (val) => {
+    controller?.setDark(val)
+  },
+)
+
+watch(
+  () => props.reducedMotion,
+  (val) => {
+    controller?.setReducedMotion(val)
+  },
+)
+
+onMounted(async () => {
+  const canvas = canvasRef.value
+  if (!canvas || !probeWebGL()) {
+    fallbackActive.value = true
+    emit('fallback')
+    return
+  }
+
+  try {
+    const { createPortalEngine } = await import('./three/createPortalEngine')
+    if (unmounted) return
+
+    controller = createPortalEngine({
+      canvas,
+      initialDark: props.dark,
+      reducedMotion: props.reducedMotion,
+    })
+    controller.setProgress(props.progress)
+    controller.setHoverSide(props.hoverSide)
+
+    engineReady.value = true
+    emit('ready')
+
+    const syncSize = () => {
+      const target = stageRef.value
+      if (!target || !controller) return
+      controller.resize(target.clientWidth || window.innerWidth, target.clientHeight || window.innerHeight)
+    }
+
+    if (typeof ResizeObserver !== 'undefined' && stageRef.value) {
+      resizeObserver = new ResizeObserver(syncSize)
+      resizeObserver.observe(stageRef.value)
+    } else {
+      window.addEventListener('resize', syncSize, { passive: true })
+    }
+  } catch {
+    fallbackActive.value = true
+    emit('fallback')
+  }
+})
+
+onBeforeUnmount(() => {
+  unmounted = true
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  controller?.dispose()
+  controller = null
+})
+</script>
+
+<style scoped>
+.sp-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  contain: layout paint size;
+  pointer-events: none;
+  background: #04070f;
+  transition: background-color 480ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sp-stage.is-light {
+  background: #dde6f4;
+}
+
+.sp-canvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sp-stage.is-ready .sp-canvas {
+  opacity: 1;
+}
+
+.sp-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 1;
+  transition: opacity 520ms ease;
+  background:
+    radial-gradient(65% 58% at 22% 48%, rgb(45 212 191 / 0.22) 0%, transparent 62%),
+    radial-gradient(62% 56% at 78% 48%, rgb(251 191 36 / 0.2) 0%, transparent 60%),
+    radial-gradient(48% 42% at 50% 45%, rgb(129 140 248 / 0.22) 0%, transparent 66%),
+    linear-gradient(170deg, #04070f 0%, #091124 55%, #04070f 100%);
+}
+
+.sp-stage.is-light .sp-fallback {
+  background:
+    radial-gradient(68% 60% at 20% 45%, rgb(110 231 215 / 0.42) 0%, transparent 62%),
+    radial-gradient(65% 58% at 80% 45%, rgb(251 191 36 / 0.26) 0%, transparent 60%),
+    radial-gradient(50% 45% at 50% 40%, rgb(147 197 253 / 0.4) 0%, transparent 66%),
+    linear-gradient(170deg, #dde6f4 0%, #cad7ec 100%);
+}
+
+.sp-stage.is-hover-aicode .sp-fallback {
+  filter: saturate(1.15);
+}
+
+.sp-stage.is-ready .sp-fallback {
+  opacity: 0;
+}
+</style>
