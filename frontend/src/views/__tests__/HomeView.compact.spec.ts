@@ -208,7 +208,7 @@ describe('HomeView compact mode', () => {
     const hero = wrapper.get('section[aria-labelledby="home-title"]')
 
     expect(hero.findComponent(RouterLinkStub).props('to')).toBe(destination)
-    expect(hero.get('a[href="#connection"]').text()).toContain('referenceLanding.hero.secondary')
+    expect(hero.get('a[href="#studio"]').text()).toContain('referenceLanding.hero.secondary')
     expect(wrapper.find('#connection').exists()).toBe(true)
     wrapper.unmount()
   })

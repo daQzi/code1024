@@ -1,6 +1,6 @@
 <template>
   <div ref="landingRoot" class="public-glass reference-landing">
-    <PublicBackdrop />
+    <GatewayPrismBackdrop />
     <div ref="progressBar" class="rl-reading-progress" aria-hidden="true" />
     <a class="rl-skip" href="#home-main">{{ t('glass.nav.skip') }}</a>
     <header ref="headerRef" class="rl-header hp__top" :class="{ 'rl-header--scrolled': isScrolled }" @keydown.esc="closeMenu">
@@ -19,8 +19,12 @@
             <Icon name="grid" size="sm" aria-hidden="true" />
             <span>{{ t('nav.modelPlaza') }}</span>
           </router-link>
+          <a v-if="canvasLink" :href="canvasLink.url" target="_blank" rel="noopener noreferrer" class="rl-nav-plaza rl-nav-ecosystem">
+            <span v-if="canvasLink.iconSvg" class="rl-nav-custom-icon" aria-hidden="true" v-html="canvasLink.iconSvg" /><Icon v-else name="palette" size="sm" aria-hidden="true" /><span>{{ canvasLink.label }}</span>
+          </a>
         </div>
         <div class="rl-nav-actions">
+          <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="glass-button rl-icon-button rl-nav-docs" :aria-label="t('glass.nav.docs')" :title="t('glass.nav.docs')"><Icon name="book" size="md" aria-hidden="true" /></a>
           <PublicLocaleSwitcher />
           <button class="glass-button rl-icon-button" type="button" :aria-label="t(isDark ? 'glass.nav.light' : 'glass.nav.dark')" @click="toggleTheme"><Icon :name="isDark ? 'sun' : 'moon'" size="md" aria-hidden="true" /></button>
           <router-link :to="entryPath" class="glass-button glass-button--primary rl-button rl-button--dark rl-nav-login">{{ t(isAuthenticated ? 'glass.nav.console' : 'glass.nav.login') }}</router-link>
@@ -37,6 +41,8 @@
           @click="scrollToSection(item.id, $event)"
         >{{ item.label }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></a>
         <router-link v-if="modelPlazaEnabled" :to="modelPlazaPath" class="rl-mobile-plaza" data-testid="mobile-model-plaza">{{ t('nav.modelPlaza') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link>
+        <a v-if="canvasLink" :href="canvasLink.url" target="_blank" rel="noopener noreferrer">{{ canvasLink.label }}<Icon name="externalLink" size="sm" aria-hidden="true" /></a>
+        <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer">{{ t('glass.nav.docs') }}<Icon name="externalLink" size="sm" aria-hidden="true" /></a>
         <button type="button" class="rl-mobile-theme" @click="toggleTheme">{{ t(isDark ? 'glass.nav.light' : 'glass.nav.dark') }}<Icon :name="isDark ? 'sun' : 'moon'" size="sm" aria-hidden="true" /></button>
         <div class="rl-mobile-language"><span>{{ t('glass.nav.language') }}</span><PublicLocaleSwitcher /></div>
       </nav>
@@ -45,50 +51,40 @@
     <main id="home-main">
       <section ref="heroSection" class="rl-hero rl-container" aria-labelledby="home-title">
         <div class="rl-hero-copy">
+          <span class="glass-control rl-eyebrow">{{ t('referenceLanding.hero.eyebrow') }}</span>
           <h1 id="home-title">{{ t('referenceLanding.hero.title') }}<span>{{ t('referenceLanding.hero.accent') }}</span></h1>
           <p class="rl-hero-description">{{ t('referenceLanding.hero.description') }}</p>
           <div class="rl-hero-actions">
             <router-link :to="entryPath" class="glass-button glass-button--primary rl-button rl-button--dark">{{ t(isAuthenticated ? 'referenceLanding.hero.authenticated' : 'referenceLanding.hero.primary') }}<Icon name="arrowRight" size="md" aria-hidden="true" /></router-link>
-            <a href="#connection" class="glass-button rl-button rl-button--outline" @click="scrollToSection('connection', $event)">{{ t('referenceLanding.hero.secondary') }}<Icon name="chevronRight" size="sm" aria-hidden="true" /></a>
+            <a href="#studio" class="glass-button rl-button rl-button--outline" @click="scrollToSection('studio', $event)">{{ t('referenceLanding.hero.secondary') }}<Icon name="chevronRight" size="sm" aria-hidden="true" /></a>
+          </div>
+          <div class="rl-hero-ports" aria-label="OpenAI Claude Gemini">
+            <span>OpenAI</span><span>Claude</span><span>Gemini</span><span>{{ t('referenceLanding.hero.multimodal') }}</span>
           </div>
           <p v-if="registrationEnabled && !isAuthenticated" class="rl-register">{{ t('referenceLanding.hero.registerLead') }} <router-link to="/register">{{ t('referenceLanding.hero.register') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></router-link></p>
           <div class="glass-panel rl-hero-endpoint"><div><span>{{ t('referenceLanding.hero.endpoint') }}</span><code>{{ apiBaseUrl }}</code></div><button class="glass-button rl-icon-button" :class="{ 'is-copied': copiedTarget === 'hero-address' }" type="button" :aria-label="t(copiedTarget === 'hero-address' ? 'glass.home.copied' : 'referenceLanding.hero.copy')" @click="copyValue(apiBaseUrl, 'hero-address')"><Icon :name="copiedTarget === 'hero-address' ? 'check' : 'copy'" size="md" aria-hidden="true" /></button></div>
           <p class="rl-hero-footnote">{{ t('referenceLanding.hero.footnote') }}</p>
         </div>
 
-        <LandingStoryMarquee :site-name="siteName" />
+        <HeroGatewayPrism :site-name="siteName" :canvas-url="canvasLink?.url" :canvas-label="canvasLink?.label" />
 
       </section>
 
-      <section class="rl-section rl-container rl-showcase" aria-labelledby="showcase-title">
-        <div class="rl-section-heading" data-reveal>
-          <span class="glass-control rl-eyebrow">{{ t('glassDemo.example') }}</span>
-          <h2 id="showcase-title">{{ t('glassDemo.label') }}</h2>
-          <p>{{ t('glass.home.heroDescription') }}</p>
-          <div class="glass-panel rl-demo-tabs" role="group" :aria-label="t('glassDemo.example')">
-            <button
-              v-for="(scene, index) in demoScenes"
-              :key="scene.id"
-              type="button"
-              class="rl-demo-tab"
-              :class="{ 'is-active': activeDemoScene === index }"
-              :aria-pressed="activeDemoScene === index"
-              @click="selectDemoScene(index)"
-            >
-              <Icon :name="scene.icon" size="sm" aria-hidden="true" />
-              <span>{{ scene.label }}</span>
-            </button>
-          </div>
-        </div>
-        <div class="rl-showcase-stage" data-reveal data-reveal-delay="80">
-          <AiWorkflowDemo ref="workflowDemo" @scene-change="activeDemoScene = $event" />
-        </div>
-      </section>
+      <UnifiedCoreTheater :site-name="siteName" :canvas-url="canvasLink?.url" :canvas-label="canvasLink?.label" :doc-url="docUrl" />
 
-      <section class="rl-section rl-container rl-challenges" aria-labelledby="challenges-title">
-        <div class="rl-section-heading" data-reveal><h2 id="challenges-title">{{ t('referenceLanding.challenges.title') }} <span>{{ t('referenceLanding.challenges.accent') }}</span></h2><p>{{ t('referenceLanding.challenges.description') }}</p></div>
-        <div class="rl-challenge-grid">
-          <article v-for="(problem, index) in challenges" :key="problem.id" class="glass-panel rl-challenge" data-reveal :data-reveal-delay="index * 70"><span class="glass-control rl-feature-icon"><Icon :name="problem.icon" size="md" aria-hidden="true" /></span><h3>{{ problem.title }}</h3><p>{{ problem.description }}</p></article>
+      <section id="ecosystem" class="rl-section rl-container rl-ecosystem" aria-labelledby="ecosystem-title">
+        <div class="rl-section-heading" data-reveal><h2 id="ecosystem-title">{{ t('referenceLanding.ecosystem.title') }} <span>{{ t('referenceLanding.ecosystem.accent') }}</span></h2><p>{{ t('referenceLanding.ecosystem.description') }}</p></div>
+        <div class="rl-ecosystem-grid">
+          <a v-if="docUrl" :href="docUrl" target="_blank" rel="noopener noreferrer" class="glass-panel rl-ecosystem-card" data-reveal>
+            <span class="rl-ecosystem-icon"><Icon name="book" size="lg" aria-hidden="true" /></span><h3>{{ t('referenceLanding.ecosystem.docsTitle') }}</h3><p>{{ t('referenceLanding.ecosystem.docsDescription') }}</p><span class="rl-text-link">{{ t('glass.nav.docs') }}<Icon name="externalLink" size="sm" aria-hidden="true" /></span>
+          </a>
+          <a v-for="(link, index) in ecosystemLinks" :key="link.id" :href="link.url" target="_blank" rel="noopener noreferrer" class="glass-panel rl-ecosystem-card" data-reveal :data-reveal-delay="index * 70">
+            <span class="rl-ecosystem-icon rl-ecosystem-icon--custom"><span v-if="link.iconSvg" class="rl-custom-icon" aria-hidden="true" v-html="link.iconSvg" /><Icon v-else :name="link.iconName" size="lg" aria-hidden="true" /></span><h3>{{ link.label }}</h3><p>{{ t(link.id === 'canvas' ? 'referenceLanding.ecosystem.canvasDescription' : 'referenceLanding.ecosystem.linkDescription') }}</p><span class="rl-text-link">{{ t('referenceLanding.ecosystem.open') }}<Icon name="externalLink" size="sm" aria-hidden="true" /></span>
+          </a>
+          <router-link :to="entryPath" class="glass-panel rl-ecosystem-card" data-reveal data-reveal-delay="140">
+            <span class="rl-ecosystem-icon"><Icon name="grid" size="lg" aria-hidden="true" /></span><h3>{{ t('referenceLanding.ecosystem.consoleTitle') }}</h3><p>{{ t('referenceLanding.ecosystem.consoleDescription') }}</p><span class="rl-text-link">{{ t(isAuthenticated ? 'glass.nav.console' : 'glass.nav.login') }}<Icon name="arrowRight" size="sm" aria-hidden="true" /></span>
+          </router-link>
+          <div class="rl-ecosystem-more" data-reveal data-reveal-delay="210"><Icon name="plus" size="lg" aria-hidden="true" /><span>{{ t('referenceLanding.ecosystem.more') }}</span></div>
         </div>
       </section>
 
@@ -162,15 +158,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore } from '@/stores'
 import Icon from '@/components/icons/Icon.vue'
-import AiWorkflowDemo from '@/components/public/AiWorkflowDemo.vue'
-import PublicBackdrop from '@/components/public/PublicBackdrop.vue'
-import LandingStoryMarquee from '@/components/public/LandingStoryMarquee.vue'
+import GatewayPrismBackdrop from '@/components/public/GatewayPrismBackdrop.vue'
+import HeroGatewayPrism from '@/components/public/HeroGatewayPrism.vue'
+import UnifiedCoreTheater from '@/components/public/UnifiedCoreTheater.vue'
 import PublicBrandLogo from '@/components/common/PublicBrandLogo.vue'
 import PublicLocaleSwitcher from '@/components/public/PublicLocaleSwitcher.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useLandingMotion } from '@/composables/useLandingMotion'
 import { useTheme } from '@/composables/useTheme'
 import { sanitizeUrl } from '@/utils/url'
+import { resolveVisibleTopbarLinks } from '@/utils/topbarLinks'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import '@/styles/reference-landing.css'
 
@@ -185,11 +182,17 @@ const landingRoot = ref<HTMLElement | null>(null)
 const headerRef = ref<HTMLElement | null>(null)
 const heroSection = ref<HTMLElement | null>(null)
 const progressBar = ref<HTMLElement | null>(null)
-const workflowDemo = ref<InstanceType<typeof AiWorkflowDemo> | null>(null)
 useLandingMotion(landingRoot)
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const docUrl = computed(() => sanitizeUrl(appStore.cachedPublicSettings?.doc_url || appStore.docUrl || ''))
+const customLinks = computed(() => resolveVisibleTopbarLinks({
+  publicLinks: appStore.cachedPublicSettings?.custom_topbar_links,
+  isAdmin: authStore.isAdmin,
+  isAuthenticated: authStore.isAuthenticated,
+}))
+const canvasLink = computed(() => customLinks.value.find(link => link.id === 'canvas'))
+const ecosystemLinks = computed(() => customLinks.value.slice(0, 5))
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const entryPath = computed(() => isAuthenticated.value ? authStore.isAdmin ? '/admin/dashboard' : '/dashboard' : '/login')
 const registrationEnabled = computed(() => appStore.cachedPublicSettings?.registration_enabled === true && appStore.cachedPublicSettings?.backend_mode_enabled !== true)
@@ -208,16 +211,6 @@ function protectedPath(path: string) { return isAuthenticated.value ? path : `/l
 const navigation = computed(() => ['capabilities', 'quota', 'connection', 'questions'].map((id, index) => ({ id, label: t(`referenceLanding.nav.${['features', 'quota', 'connection', 'questions'][index]}`) })))
 const activeSection = ref('')
 const isScrolled = ref(false)
-const activeDemoScene = ref(0)
-const demoScenes = computed(() => ([
-  { id: 'codex', icon: 'terminal' },
-  { id: 'reasoning', icon: 'sparkles' },
-  { id: 'api', icon: 'bolt' },
-] as const).map(scene => ({ ...scene, label: t(`glassDemo.${scene.id}.tag`) })))
-function selectDemoScene(index: number) {
-  activeDemoScene.value = index
-  workflowDemo.value?.selectScene?.(index)
-}
 function scrollToSection(id: string, event: MouseEvent) {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
@@ -246,10 +239,6 @@ watch(menuOpen, open => {
   if (open) document.addEventListener('pointerdown', handleOutsidePointer)
   else document.removeEventListener('pointerdown', handleOutsidePointer)
 })
-const challenges = computed(() => ([
-  { id: 'setup', icon: 'link' }, { id: 'budget', icon: 'chart' },
-  { id: 'projects', icon: 'key' }, { id: 'records', icon: 'search' },
-] as const).map(item => ({ ...item, title: t(`referenceLanding.challenges.${item.id}Title`), description: t(`referenceLanding.challenges.${item.id}Description`) })))
 const quotaRules = computed(() => ['account', 'subscription', 'key'].map(id => ({ id, title: t(`referenceLanding.quota.${id}Title`), scope: t(`referenceLanding.quota.${id}Scope`), description: t(`referenceLanding.quota.${id}Description`) })))
 
 const connectionTabs = ['client', 'developer'] as const
@@ -366,11 +355,11 @@ onMounted(() => {
         if ((window.scrollY || 0) < 260) activeSection.value = ''
         return
       }
-      const orderedIds = ['capabilities', 'quota', 'connection', 'questions']
+      const orderedIds = ['studio', 'capabilities', 'connection', 'questions']
       const firstVisible = orderedIds.find(id => visibleSections.has(id))
       if (firstVisible) activeSection.value = firstVisible
     }, { rootMargin: '-22% 0px -55% 0px', threshold: [0, 0.15, 0.4] })
-    for (const id of ['capabilities', 'quota', 'connection', 'questions']) {
+    for (const id of ['studio', 'capabilities', 'connection', 'questions']) {
       const sectionEl = document.getElementById(id)
       if (sectionEl) sectionObserver.observe(sectionEl)
     }

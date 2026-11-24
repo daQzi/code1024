@@ -449,3 +449,64 @@
 .reference-landing .rl-stories--static .rl-story-column[aria-hidden='true'],
 .reference-landing .rl-stories--static .rl-story-set[aria-hidden='true'] { display:none; }
 .reference-landing .rl-stories--static .rl-story-card { min-height:0; }
+
+/* The gateway home keeps the existing glass language, with optics as its one
+   distinctive motif. Coding stays cyan/teal; only cinema uses amber light. */
+.reference-landing .rl-hero { grid-template-columns:minmax(0,.93fr) minmax(0,1.07fr); min-height:790px; gap:48px; padding-block:52px 68px; }
+.reference-landing .rl-hero-copy { padding-block:24px; }
+.reference-landing .rl-hero-copy > .rl-eyebrow { margin-bottom:20px; padding:6px 13px; line-height:1.6; text-align:left; }
+.reference-landing .rl-hero h1 { font-size:clamp(3.1rem,4.25vw,4rem); letter-spacing:-.055em; }
+.reference-landing .rl-hero-description { margin-top:24px; font-size:1rem; }
+.reference-landing .rl-hero-ports { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:20px; }
+.reference-landing .rl-hero-ports > span { display:inline-flex; align-items:center; min-height:27px; padding:4px 9px; border:1px solid var(--rl-line); border-radius:999px; background:rgb(255 255 255 / .16); color:var(--rl-muted); font-size:.625rem; font-weight:600; line-height:1.5; }
+.reference-landing .rl-hero-ports > span:last-child { border-color:transparent; background:transparent; padding-inline:4px; font-weight:500; }
+.dark .reference-landing .rl-hero-ports > span { background:rgb(255 255 255 / .04); }
+.dark .reference-landing .rl-hero-ports > span:last-child { background:transparent; }
+.reference-landing .rl-hero-endpoint { margin-top:20px; padding-block:8px; }
+.reference-landing .rl-hero-footnote { margin-top:12px; }
+.reference-landing .rl-ecosystem-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:42px; }
+.reference-landing .rl-ecosystem-card { display:flex; flex-direction:column; min-width:0; padding:26px; border-radius:26px; transition:transform 220ms var(--ui-ease-out),border-color 180ms ease,box-shadow 220ms var(--ui-ease-out); }
+.reference-landing .rl-ecosystem-icon { display:grid; place-items:center; width:44px; height:44px; margin-bottom:22px; border:1px solid var(--glass-control-edge); border-radius:14px; background:var(--glass-control-fill); color:var(--glass-action-ink); }
+.reference-landing .rl-ecosystem-icon--custom { color:#b45309; border-color:rgb(217 119 6 / .18); background:rgb(245 158 11 / .1); }
+.dark .reference-landing .rl-ecosystem-icon--custom { color:#fbbf24; }
+.reference-landing .rl-ecosystem-card > p { margin-top:10px; color:var(--rl-muted); font-size:.8125rem; line-height:1.8; }
+.reference-landing .rl-ecosystem-card > .rl-text-link { margin-top:auto; padding-top:18px; }
+.reference-landing .rl-custom-icon { display:flex; width:24px; height:24px; }
+.reference-landing .rl-custom-icon svg { width:100%; height:100%; }
+.reference-landing .rl-nav-custom-icon { display:flex; width:16px; height:16px; }
+.reference-landing .rl-nav-custom-icon svg { width:100%; height:100%; }
+.reference-landing .rl-ecosystem-more { display:flex; align-items:center; justify-content:center; gap:12px; min-height:110px; padding:24px; border:1px dashed var(--rl-line); border-radius:26px; color:var(--rl-muted); font-size:.8125rem; }
+.reference-landing .rl-ecosystem-more svg { color:var(--rl-accent); }
+@media (hover:hover) {
+  .reference-landing .rl-ecosystem-card:hover { transform:translateY(-4px); border-color:var(--glass-control-edge); box-shadow:var(--ui-shadow-3); }
+}
+@media (min-width:901px) and (max-width:1250px) {
+  .reference-landing .rl-nav-ecosystem { display:none !important; }
+}
+@media (max-width:1100px) {
+  .reference-landing .rl-hero { grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr); gap:28px; min-height:700px; }
+  .reference-landing .rl-hero h1 { font-size:2.8rem; }
+}
+@media (max-width:900px) {
+  .reference-landing .rl-hero { grid-template-columns:1fr; min-height:0; gap:28px; padding-block:64px 48px; }
+  .reference-landing .rl-hero-copy { max-width:670px; padding-block:0; }
+  .reference-landing .rl-hero h1 { font-size:clamp(3rem,7.6vw,4.25rem); }
+  .reference-landing .rl-hero-description { max-width:40rem; }
+  .reference-landing .rl-ecosystem-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:640px) {
+  .reference-landing .rl-hero { gap:22px; padding-block:36px 22px; }
+  .reference-landing .rl-hero h1 { font-size:clamp(2.65rem,11vw,3.5rem); line-height:1.16; }
+  .reference-landing .rl-hero-copy > .rl-eyebrow { font-size:.6875rem; margin-bottom:16px; }
+  .reference-landing .rl-hero-description { margin-top:20px; }
+  .reference-landing .rl-hero-ports { margin-top:16px; }
+  .reference-landing .rl-nav-docs { display:none; }
+  .reference-landing .rl-ecosystem-grid { grid-template-columns:1fr; gap:14px; margin-top:28px; }
+  .reference-landing .rl-ecosystem-card { padding:22px; border-radius:22px; }
+  .reference-landing .rl-ecosystem-icon { margin-bottom:16px; }
+  .reference-landing .rl-ecosystem-more { min-height:84px; border-radius:22px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .reference-landing .rl-ecosystem-card { transition:none; }
+  .reference-landing .rl-ecosystem-card:hover { transform:none; }
+}

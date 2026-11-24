@@ -1,16 +1,63 @@
 export default {
   referenceLanding: {
-    nav: { features: '产品能力', quota: '额度说明', connection: '如何接入', questions: '常见问题' },
+    nav: { studio: '创作舞台', features: '产品能力', quota: '额度说明', connection: '如何接入', questions: '常见问题' },
     hero: {
-      title: '让 GPT，', accent: '融入你的工作。',
-      description: '一个 API 入口，连接熟悉的工具与自己的应用。密钥、额度和调用记录，在一个账户里管理。',
-      primary: '开始使用', authenticated: '进入控制台', secondary: '查看接入指南',
+      eyebrow: '一个入口，连接编码与创作的无限可能',
+      title: '把每一次灵感，', accent: '变成代码与大片。',
+      description: '面向开发者与创作者的 AI 聚合网关。统一接入多种模型与协议，从编写代码、生成图像到分镜与影片创作，让想法在这里开始。',
+      primary: '进入 AI 网关', authenticated: '进入控制台', secondary: '探索创作舞台',
       register: '创建账户', registerLead: '第一次使用？',
-      footnote: '支持自定义 API 的客户端 · OpenAI 兼容 SDK',
+      multimodal: '文本 · 图像 · 视频 · 语音',
+      footnote: '兼容熟悉的客户端、CLI 与 SDK · 从 API 到创作生态',
       connection: '从这里连接', endpoint: 'API 服务地址', copy: '复制服务地址',
       endpointNote: '填写站点根地址，具体请求路径按工具说明配置。',
       keyTitle: '一个项目，一把密钥', keyDescription: '按用途管理访问与用量限制。',
       quotaTitle: '看清自己的额度', quotaDescription: '账户额度与实际消耗，都有记录。', quotaAction: '查看我的额度',
+    },
+    prism: {
+      badge: '聚合创作引擎', modeLabel: '切换首屏展示模式', ariaLabel: '模型协议经过网关棱镜，连接编码工具与影视创作画布',
+      modes: { all: '全部', code: '编码', cinema: '影视' },
+      canvasPort: '影策创作画布', openCanvas: '打开创作画布',
+      summary: {
+        all: '多协议汇入一个网关，分光连接编码与影视创作。',
+        code: '连接 Claude Code、Codex 与 SDK，让模型进入你的开发工作流。',
+        cinema: '从剧本、分镜到时间线，在影策画布中组织你的影片创作。',
+      },
+    },
+    theater: {
+      eyebrow: 'CODE × CINEMA × GATEWAY', title: '不止调用模型。让创作真正发生。',
+      description: '一个连续的舞台，从开发工作流到影视画布，再回到统一的 AI 能力入口。',
+      modeLabel: '选择创作舞台场景', scrollHint: '向下滚动，继续下一幕', tapHint: '点击上方，切换场景', status: 'READY TO CREATE',
+      openCanvas: '进入影策创作画布', canvasEmpty: '画布入口可在后台“自定义导航链接”中配置。',
+      scenes: {
+        code: {
+          tab: '编码实验室', title: '代码，是创作的第一束光。',
+          description: '让熟悉的 CLI、SDK 与开发工具连接模型能力。一个网关入口，管理密钥、调用与用量，把更多时间留给构建。',
+          feature1: 'OpenAI、Claude、Gemini 多协议接入', feature2: 'Codex、Claude Code 与自定义 SDK', feature3: '按项目隔离密钥、额度和调用记录',
+          ariaLabel: '动态代码编辑器与协议光路连接开发引擎', caption: '从一行提示，到可运行的作品。',
+        },
+        cinema: {
+          tab: '影视画布', title: '从一个故事，到每一个镜头。',
+          description: '剧场与画布合为一体。在影策中组织剧本、角色、场景、分镜、3D 预演与时间线，把零散的灵感变成可视化的影片工作流。',
+          feature1: '剧本、分镜与角色场景资产管理', feature2: '无限画布、3D 预演与镜头时间线', feature3: '从创意构思到生成任务的完整创作入口',
+          ariaLabel: '影策影视画布中的取景器、故事节点和动态时间线', caption: '故事、分镜与画布，在同一个舞台相遇。',
+        },
+        gateway: {
+          tab: '聚合网关', title: '复杂的能力，简单的入口。',
+          description: '多模型、多协议与多模态能力在这里汇聚。编码工具、自己的应用和创作生态，都从清晰的一站式入口出发。',
+          feature1: '文本、图像、视频与语音模型能力', feature2: '统一服务地址与清晰的接入文档', feature3: '模型、密钥、额度和使用记录集中管理',
+          ariaLabel: '多种模型协议经过中央网关连接开发和影视工作流', caption: '一个网关，通往更多创作可能。',
+        },
+      },
+    },
+    ecosystem: {
+      title: '从网关出发，', accent: '连接整个创作生态。',
+      description: '开发文档、模型广场、影策画布与更多服务，在这里保留清晰的入口。',
+      docsTitle: '开发与接入文档', docsDescription: '查看接口、CLI、SDK 与插件接入说明，把模型能力接入自己的工作流。',
+      canvasDescription: '进入影策，在无限画布中组织剧本、分镜、资产与影片创作。',
+      linkDescription: '跳转到已配置的生态服务，继续使用你需要的工具。',
+      consoleTitle: '账户与项目管理', consoleDescription: '管理 API 密钥、额度、订阅与使用记录，清楚掌握每一次调用。',
+      open: '打开入口', more: '更多能力，持续接入',
     },
     features: {
       title: '需要的能力，', accent: '都在一处。',
@@ -67,11 +114,11 @@ export default {
     faq: {
       title: '开始之前，', accent: '你可能想知道。',
       description: '没有找到答案？发邮件给我们。',
-      accountQ: '这里提供的是什么服务？', accountA: '本站提供 GPT API 接入与用量管理。你可以把 API 密钥配置到支持自定义服务地址的工具，或通过 SDK 接入自己的应用。具体可用模型以账户为准。',
+      accountQ: '这里提供的是什么服务？', accountA: '本站提供多模型、多协议的 AI API 网关与用量管理，并保留文档和影视创作生态入口。具体模型、协议和计费以账户及文档说明为准；外部创作服务的账户与数据规则以对应服务为准。',
       officialQ: '这里的额度与 ChatGPT 官方订阅相同吗？', officialA: '不是同一套产品和计费规则。本站的账户、密钥与订阅额度以控制台显示为准，不能等同于 ChatGPT Plus 或 Pro 的官方额度份额。',
       quotaQ: '为每个人设置的额度，可以自行改高吗？', quotaA: '平台为用户设置的额度由管理员管理。你可以调整自己 API 密钥的限额，但不能通过修改密钥来提高平台分配的用户额度。',
       toolsQ: '可以连接哪些工具？', toolsA: '可使用支持自定义 API 地址的客户端或 OpenAI 兼容 SDK。Codex 等工具的协议和配置格式可能不同，请按控制台中的对应接入说明设置。',
     },
-    footer: { note: '连接 GPT。管理用量。专注你的工作。', help: '接入与账户帮助', legal: '实际模型、额度与计费以账户配置为准。' },
+    footer: { note: '连接模型。激发创意。构建下一件作品。', help: '接入与账户帮助', legal: '实际模型、额度与计费以账户配置为准。外部生态服务遵循各自的账户与数据规则。' },
   },
 }

@@ -1,16 +1,63 @@
 export default {
   referenceLanding: {
-    nav: { features: 'Features', quota: 'Usage limits', connection: 'Connect', questions: 'FAQ' },
+    nav: { studio: 'Creative stage', features: 'Features', quota: 'Usage limits', connection: 'Connect', questions: 'FAQ' },
     hero: {
-      title: 'Bring GPT', accent: 'into your workflow.',
-      description: 'One API endpoint for your favourite tools and your own applications. Manage keys, limits and usage from a single account.',
-      primary: 'Get started', authenticated: 'Open console', secondary: 'Connection guide',
+      eyebrow: 'One gateway for code, cinema and everything between',
+      title: 'Turn every idea', accent: 'into code and cinema.',
+      description: 'An AI gateway for developers and creators. Connect models and protocols, then move from code and images to storyboards and filmmaking in one creative destination.',
+      primary: 'Enter AI gateway', authenticated: 'Open console', secondary: 'Explore the creative stage',
       register: 'Create an account', registerLead: 'New here?',
-      footnote: 'Clients with custom API support · OpenAI-compatible SDKs',
+      multimodal: 'Text · Image · Video · Audio',
+      footnote: 'Familiar clients, CLI and SDKs · One API and a growing creative ecosystem',
       connection: 'Your connection starts here', endpoint: 'API base URL', copy: 'Copy service address',
       endpointNote: 'Use the site root. Follow your tool’s instructions for request paths.',
       keyTitle: 'A key for each project', keyDescription: 'Manage access and usage limits by purpose.',
       quotaTitle: 'Know your available quota', quotaDescription: 'See account limits alongside actual usage.', quotaAction: 'View my limits',
+    },
+    prism: {
+      badge: 'Creative gateway', modeLabel: 'Choose hero display mode', ariaLabel: 'Model protocols pass through a gateway prism into coding tools and a cinema canvas',
+      modes: { all: 'All', code: 'Code', cinema: 'Cinema' },
+      canvasPort: 'Qimu cinema canvas', openCanvas: 'Open creative canvas',
+      summary: {
+        all: 'Protocols converge at one gateway, then branch into code and cinema.',
+        code: 'Connect Claude Code, Codex and SDKs to bring models into your development workflow.',
+        cinema: 'Organize scripts, storyboards and timelines in the Qimu creative canvas.',
+      },
+    },
+    theater: {
+      eyebrow: 'CODE × CINEMA × GATEWAY', title: 'More than model calls. Make something real.',
+      description: 'One continuous stage, from developer workflows to a cinema canvas and a unified AI gateway.',
+      modeLabel: 'Choose creative stage scene', scrollHint: 'Scroll for the next scene', tapHint: 'Choose a scene above', status: 'READY TO CREATE',
+      openCanvas: 'Open Qimu creative canvas', canvasEmpty: 'Configure the canvas link in Custom navigation links in the admin settings.',
+      scenes: {
+        code: {
+          tab: 'Coding lab', title: 'Code is the first ray of an idea.',
+          description: 'Connect familiar CLI tools, SDKs and applications to model capabilities. Manage keys, requests and usage through one gateway, and spend more time building.',
+          feature1: 'OpenAI, Claude and Gemini protocols', feature2: 'Codex, Claude Code and custom SDKs', feature3: 'Project keys, limits and request history',
+          ariaLabel: 'An animated code editor connected to a developer engine by optical paths', caption: 'From one prompt to working software.',
+        },
+        cinema: {
+          tab: 'Cinema canvas', title: 'From a story to every shot.',
+          description: 'The theater and canvas are one. Organize scripts, characters, scenes, storyboards, 3D previews and timelines in Qimu, turning scattered ideas into a visual filmmaking workflow.',
+          feature1: 'Script, storyboard, character and scene assets', feature2: 'Infinite canvas, 3D previews and timelines', feature3: 'A creative path from concept to generation tasks',
+          ariaLabel: 'A Qimu cinema canvas with a viewfinder, story nodes and animated timeline', caption: 'Story, storyboard and canvas share one stage.',
+        },
+        gateway: {
+          tab: 'AI gateway', title: 'Complex capabilities. One clear entry.',
+          description: 'Models, protocols and modalities converge here. Developer tools, your own applications and creative services all begin at one clear destination.',
+          feature1: 'Text, image, video and audio capabilities', feature2: 'A consistent API address and clear documentation', feature3: 'Models, keys, limits and usage in one console',
+          ariaLabel: 'Model protocols converge at a gateway and branch into code and cinema workflows', caption: 'One gateway. More ways to create.',
+        },
+      },
+    },
+    ecosystem: {
+      title: 'Start at the gateway.', accent: 'Explore the creative ecosystem.',
+      description: 'Clear entrances to documentation, models, the Qimu canvas and the services that come next.',
+      docsTitle: 'Developer documentation', docsDescription: 'Explore APIs, CLI, SDK and plugin guides to connect models with your own workflow.',
+      canvasDescription: 'Open Qimu to organize scripts, storyboards, assets and filmmaking on an infinite canvas.',
+      linkDescription: 'Open a configured ecosystem service and continue with the tool you need.',
+      consoleTitle: 'Account and projects', consoleDescription: 'Manage API keys, limits, subscriptions and request history with a clear view of every call.',
+      open: 'Open service', more: 'More capabilities to come',
     },
     features: {
       title: 'The essentials,', accent: 'in one place.',
@@ -67,11 +114,11 @@ export default {
     faq: {
       title: 'Before you start,', accent: 'a few answers.',
       description: 'Still need a hand? Send us an email.',
-      accountQ: 'What does this service provide?', accountA: 'This platform provides GPT API access and usage management. Configure your key in a tool that supports a custom API endpoint, or use an SDK in your own application. Available models depend on your account.',
+      accountQ: 'What does this service provide?', accountA: 'This platform provides a multi-model, multi-protocol AI API gateway with usage management, documentation and creative ecosystem links. Models, protocols and billing depend on your account and the documentation. External creative services follow their own account and data policies.',
       officialQ: 'Are these the same limits as an official ChatGPT subscription?', officialA: 'These are separate products with different billing rules. Your account, key and subscription limits are shown in the console. They do not represent a share of an official ChatGPT Plus or Pro quota.',
       quotaQ: 'Can a user raise their own account limit?', quotaA: 'Platform-assigned user limits are managed by an administrator. You can adjust your own API key limits, but doing so does not increase the limit assigned to your account.',
       toolsQ: 'Which tools can I connect?', toolsA: 'Use a client that supports a custom API endpoint or an OpenAI-compatible SDK. Tools such as Codex may use different protocols or configuration formats. Follow the relevant connection instructions in the console.',
     },
-    footer: { note: 'Connect GPT. Manage usage. Focus on your work.', help: 'Connection and account support', legal: 'Models, limits and billing depend on your account configuration.' },
+    footer: { note: 'Connect models. Spark ideas. Build what comes next.', help: 'Connection and account support', legal: 'Models, limits and billing depend on your account. External ecosystem services follow their own account and data policies.' },
   },
 }
