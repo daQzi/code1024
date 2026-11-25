@@ -1,6 +1,23 @@
 <template>
   <section class="space-y-5">
-    <p class="max-w-3xl text-xs leading-5 text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.metricsScope') }}</p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <p class="max-w-3xl text-xs leading-5 text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.metricsScope') }}</p>
+      <div class="flex flex-wrap items-center gap-1.5" role="group" :aria-label="t('modelPlaza.catalog.recentStatusTitle')">
+        <button
+          v-for="win in WINDOW_OPTIONS"
+          :key="win"
+          type="button"
+          class="min-w-[44px] rounded-xl border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500"
+          :class="selectedWindow === win
+            ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300'
+            : 'border-gray-200 bg-white/70 text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:border-dark-600 dark:bg-dark-900/40 dark:text-dark-300 dark:hover:border-dark-500 dark:hover:text-white'"
+          :aria-pressed="selectedWindow === win"
+          @click="selectedWindow = win"
+        >
+          {{ t(`modelPlaza.catalog.windows.${win}`) }}
+        </button>
+      </div>
+    </div>
     <div v-if="loading" role="status" class="py-12 text-center text-sm text-gray-500">{{ t('modelPlaza.loading') }}</div>
     <div v-else-if="failed" role="alert" class="rounded-xl border border-gray-200 p-6 text-sm dark:border-dark-700">
       {{ t('modelPlaza.loadFailed') }}
@@ -42,13 +59,16 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, type ChartOptions } from 'chart.js'
 import { Line } from 'vue-chartjs'
-import { getModelPlazaPerformance, type ModelPlazaGroup, type PlazaMetrics, type PlazaMetricsPoint } from '@/api/modelPlaza'
+import { getModelPlazaPerformance, type ModelPlazaGroup, type PlazaMetrics, type PlazaMetricsPoint, type PlazaMetricsWindow } from '@/api/modelPlaza'
 import { useModelPerformanceUpdates } from '@/composables/useModelPerformanceUpdates'
+
+const WINDOW_OPTIONS: readonly PlazaMetricsWindow[] = ['1h', '90m', '3h', '6h', '12h', '24h']
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend)
 const props = defineProps<{ modelId: string; groups: ModelPlazaGroup[] }>()
 const { t, locale } = useI18n()
 const route = useRoute()
+const selectedWindow = ref<PlazaMetricsWindow>('24h')
 const metrics = ref<PlazaMetrics | null>(null)
 const loading = ref(true)
 const failed = ref(false)
@@ -62,12 +82,14 @@ async function refresh(background = false) {
   refreshing = true
   if (!background) { loading.value = true; failed.value = false; metrics.value = null }
   try {
-    const result = await getModelPlazaPerformance(props.modelId, request.signal, Number(route.query.group_id) || undefined)
+    const result = selectedWindow.value !== '24h'
+      ? await getModelPlazaPerformance(props.modelId, request.signal, Number(route.query.group_id) || undefined, selectedWindow.value)
+      : await getModelPlazaPerformance(props.modelId, request.signal, Number(route.query.group_id) || undefined)
     if (!request.signal.aborted) { metrics.value = result; failed.value = false }
   } catch { if (!request.signal.aborted) failed.value = true }
   finally { if (!request.signal.aborted) { loading.value = false; refreshing = false } }
 }
-watch([() => props.modelId, revision, () => route.query.group_id], () => { void refresh() }, { immediate: true })
+watch([() => props.modelId, revision, () => route.query.group_id, selectedWindow], () => { void refresh() }, { immediate: true })
 useModelPerformanceUpdates(() => ({ ids: [props.modelId], groupId: Number(route.query.group_id) || undefined }), scopeChanged => { void refresh(!scopeChanged) })
 onBeforeUnmount(() => controller?.abort())
 const summary = computed(() => metrics.value?.points.find(p => p.group_id === 0 && !p.bucket))
@@ -75,11 +97,13 @@ const groupTotals = computed(() => metrics.value?.points.filter(p => p.group_id 
 const groupNames = computed(() => new Map(props.groups.map(group => [group.id, group.name])))
 const series = computed(() => {
   if (!metrics.value) return []
-  const points = new Map(metrics.value.points.filter(p => p.group_id === 0 && p.bucket).map(p => [Date.parse(p.bucket!), p]))
-  const hour = 3600000
-  const end = Math.floor(Date.parse(metrics.value.end) / hour) * hour
-  return Array.from({ length: 24 }, (_, index) => {
-    const time = end - (23 - index) * hour
+  const stepMs = Math.max(60000, (metrics.value.bucket_seconds ?? 3600) * 1000)
+  const points = new Map(metrics.value.points.filter(p => p.group_id === 0 && p.bucket).map(p => [Math.floor(Date.parse(p.bucket!) / stepMs) * stepMs, p]))
+  const endAligned = Math.floor(Date.parse(metrics.value.end) / stepMs) * stepMs
+  const startAligned = Math.floor(Date.parse(metrics.value.start) / stepMs) * stepMs
+  const count = Math.min(24, Math.max(12, Math.round((endAligned - startAligned) / stepMs)))
+  return Array.from({ length: count }, (_, index) => {
+    const time = endAligned - (count - 1 - index) * stepMs
     return { bucket: new Date(time).toISOString(), average_ms: points.get(time)?.average_ms ?? null }
   })
 })

@@ -31,5 +31,15 @@ func TestModelPlazaMetricsScopesAndNullableValues(t *testing.T) {
 	points, err = repo.ReadModelMetrics(context.Background(), "vendor/model", "openai", nil, start, end)
 	require.NoError(t, err)
 	require.Empty(t, points)
+
+	// Sub-hour 90m window uses 5m (300s) bucket interval as 4th query argument.
+	start90 := end.Add(-90 * time.Minute)
+	mock.ExpectQuery(plazaMetricsSubHourQuery).WithArgs(start90, end, sqlmock.AnyArg(), float64(300)).WillReturnRows(
+		sqlmock.NewRows(columns).AddRow(0, nil, 10, 9, 1200, 1800, 80, 40))
+	subPoints, err := repo.ReadModelMetrics(context.Background(), "vendor/model", "openai", []int64{4}, start90, end)
+	require.NoError(t, err)
+	require.Len(t, subPoints, 1)
+	require.Equal(t, int64(9), subPoints[0].Successes)
+
 	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -27,14 +27,40 @@
         </div>
         <p class="font-mono text-sm tabular-nums text-gray-800 dark:text-dark-200">{{ priceSummary(entry) }}</p>
         <div class="border-t border-gray-100 pt-3 dark:border-dark-700">
-          <ModelHealthBar :recent="metrics[entry.key]?.recent" :end="metricsEnd" class="mb-3" />
-          <dl v-if="metrics[entry.key]?.requests" class="grid grid-cols-2 gap-3 text-xs" :title="t('modelPlaza.catalog.summaryScope')">
-            <div><dt class="text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.successRate') }}</dt><dd class="mt-1 font-medium tabular-nums text-gray-800 dark:text-dark-200">{{ successRate(metrics[entry.key]!) }}</dd></div>
-            <div><dt class="text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.average') }}</dt><dd class="mt-1 font-medium tabular-nums text-gray-800 dark:text-dark-200">{{ duration(metrics[entry.key]!.average_ms) }}</dd></div>
-            <div v-if="metrics[entry.key]!.first_token_ms != null"><dt class="text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.firstToken') }}</dt><dd class="mt-1 tabular-nums">{{ duration(metrics[entry.key]!.first_token_ms) }}</dd></div>
-            <div v-if="metrics[entry.key]!.tokens_per_second != null"><dt class="text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.throughput') }}</dt><dd class="mt-1 tabular-nums">{{ metrics[entry.key]!.tokens_per_second?.toFixed(1) }} Token/s</dd></div>
-          </dl>
-          <p v-else class="text-xs text-gray-500 dark:text-dark-400" :title="t('modelPlaza.catalog.summaryScope')">{{ metricsStatus }}</p>
+          <div class="grid grid-cols-3 gap-2 text-xs" :title="t('modelPlaza.catalog.summaryScope')">
+            <div>
+              <dt class="text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.healthStatus') }}</dt>
+              <dd class="mt-0.5 font-semibold tabular-nums" :class="healthRateClass(metrics[entry.key])">
+                {{ metrics[entry.key]?.requests ? successRate(metrics[entry.key]!) : '—' }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.firstToken') }}</dt>
+              <dd class="mt-0.5 font-medium tabular-nums text-gray-800 dark:text-dark-200">
+                {{ metrics[entry.key]?.requests ? duration(metrics[entry.key]!.first_token_ms) : '—' }}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-gray-500 dark:text-dark-400">{{ t('modelPlaza.catalog.throughput') }}</dt>
+              <dd class="mt-0.5 font-medium tabular-nums text-gray-800 dark:text-dark-200">
+                {{ metrics[entry.key]?.tokens_per_second != null ? `${metrics[entry.key]!.tokens_per_second!.toFixed(1)} t/s` : '—' }}
+              </dd>
+            </div>
+          </div>
+          <ModelHealthBar
+            :recent="metrics[entry.key]?.recent"
+            :start="metricsStart"
+            :end="metricsEnd"
+            :bucket-seconds="metricsBucketSeconds"
+            class="my-2.5"
+          />
+          <div class="flex items-center justify-between gap-2 text-[11px] text-gray-400 dark:text-dark-400">
+            <span>{{ t(`modelPlaza.catalog.windowRange.${activeWindow}`) }}</span>
+            <span v-if="metrics[entry.key]?.requests && metrics[entry.key]?.average_ms != null" class="tabular-nums">
+              {{ t('modelPlaza.catalog.average') }} {{ duration(metrics[entry.key]!.average_ms) }}
+            </span>
+            <span v-else>{{ metricsStatus }}</span>
+          </div>
           <p v-if="metricsFailed && metrics[entry.key]?.requests" class="mt-2 text-xs text-amber-700 dark:text-amber-400">{{ t('modelPlaza.catalog.metricsFailed') }}</p>
         </div>
         <div v-if="entry.model.protocols?.length" class="flex flex-wrap gap-1.5"><span v-for="protocol in entry.model.protocols" :key="protocol" class="rounded border border-gray-200 px-2 py-0.5 text-xs text-gray-500 dark:border-dark-600">{{ protocol }}</span></div>
@@ -90,13 +116,24 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { getModelPlazaPerformanceSummaries, type ModelPlazaGroup, type PlazaModel, type PlazaMetricsPoint } from '@/api/modelPlaza'
+import { getModelPlazaPerformanceSummaries, type ModelPlazaGroup, type PlazaMetricsWindow, type PlazaModel, type PlazaMetricsPoint } from '@/api/modelPlaza'
 import Icon from '@/components/icons/Icon.vue'
 import { platformLabel, platformBadgeLightClass } from '@/utils/platformColors'
 import { useModelPerformanceUpdates } from '@/composables/useModelPerformanceUpdates'
 import ModelHealthBar from './ModelHealthBar.vue'
 
-const props = withDefaults(defineProps<{ groups: ModelPlazaGroup[]; view?: 'cards' | 'table'; groupId?: number }>(), { view: 'cards' })
+const props = withDefaults(
+  defineProps<{
+    groups: ModelPlazaGroup[]
+    view?: 'cards' | 'table'
+    groupId?: number
+    window?: PlazaMetricsWindow
+  }>(),
+  { view: 'cards', window: '24h' },
+)
+const emit = defineEmits<{
+  'metrics-updated': [endIso: string]
+}>()
 const { t } = useI18n()
 const route = useRoute()
 const page = ref(1)
@@ -104,7 +141,10 @@ const pageSize = 24
 const metrics = ref<Record<string, PlazaMetricsPoint>>({})
 const metricsLoading = ref(false)
 const metricsFailed = ref(false)
+const metricsStart = ref<string>()
 const metricsEnd = ref<string>()
+const metricsBucketSeconds = ref<number>()
+const activeWindow = computed<PlazaMetricsWindow>(() => props.window ?? '24h')
 const copiedModelKey = ref<string | null>(null)
 let copiedResetTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -171,12 +211,21 @@ async function refresh(background = false) {
   metricsLoading.value = ids.length > 0
   if (!ids.length) return
   try {
-    const result = await getModelPlazaPerformanceSummaries(ids, request.signal, props.groupId)
-    if (!request.signal.aborted) { metrics.value = result.models; metricsEnd.value = result.end; metricsFailed.value = false }
+    const result = activeWindow.value !== '24h'
+      ? await getModelPlazaPerformanceSummaries(ids, request.signal, props.groupId, activeWindow.value)
+      : await getModelPlazaPerformanceSummaries(ids, request.signal, props.groupId)
+    if (!request.signal.aborted) {
+      metrics.value = result.models
+      metricsStart.value = result.start
+      metricsEnd.value = result.end
+      metricsBucketSeconds.value = result.bucket_seconds
+      metricsFailed.value = false
+      emit('metrics-updated', result.end || new Date().toISOString())
+    }
   } catch { if (!request.signal.aborted) metricsFailed.value = true }
   finally { if (!request.signal.aborted) metricsLoading.value = false }
 }
-watch([() => metricIDs.value.join(','), () => props.groupId], () => { void refresh() }, { immediate: true })
+watch([() => metricIDs.value.join(','), () => props.groupId, activeWindow], () => { void refresh() }, { immediate: true })
 useModelPerformanceUpdates(() => ({ ids: metricIDs.value, groupId: props.groupId }), scopeChanged => { void refresh(!scopeChanged) })
 onBeforeUnmount(() => {
   controller?.abort()
@@ -188,6 +237,13 @@ onBeforeUnmount(() => {
 const metricsStatus = computed(() => t(metricsLoading.value ? 'common.loading' : metricsFailed.value ? 'modelPlaza.catalog.metricsFailed' : 'modelPlaza.catalog.noMetrics'))
 function duration(value: number | null) { return value == null ? '—' : `${(value / 1000).toFixed(2)} s` }
 function successRate(point: PlazaMetricsPoint) { return `${(100 * point.successes / point.requests).toFixed(1)}%` }
+function healthRateClass(point?: PlazaMetricsPoint) {
+  if (!point?.requests) return 'text-gray-400 dark:text-dark-400'
+  const rate = point.successes / point.requests
+  if (rate >= 0.95) return 'text-emerald-600 dark:text-emerald-400'
+  if (rate >= 0.8) return 'text-amber-500 dark:text-amber-400'
+  return 'text-red-500 dark:text-red-400'
+}
 function detailLocation(id: string) {
   return { name: 'ModelPlazaDetail', params: { modelId: id }, query: { ...(route.query.embedded === '1' ? { embedded: '1' } : {}), ...(props.groupId ? { group_id: String(props.groupId) } : {}) } }
 }

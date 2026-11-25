@@ -121,4 +121,20 @@ describe('model catalog navigation', () => {
     expect(wrapper.find('[role="tooltip"]').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('requests window-scoped summaries when non-default window such as 90m is selected', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [
+      { path: '/model-plaza', component: { template: '<div />' } },
+      { path: '/model-plaza/models/:modelId', name: 'ModelPlazaDetail', component: { template: '<div />' } }
+    ] })
+    await router.push('/model-plaza')
+    const wrapper = mount(PlazaModelCatalog, {
+      props: { groups: [group(1, 'mdl_win')], window: '90m' },
+      global: { plugins: [router] }
+    })
+    await flushPromises()
+    expect(getModelPlazaPerformanceSummaries).toHaveBeenLastCalledWith(['mdl_win'], expect.any(AbortSignal), undefined, '90m')
+    expect(wrapper.text()).toContain('modelPlaza.catalog.windowRange.90m')
+    wrapper.unmount()
+  })
 })

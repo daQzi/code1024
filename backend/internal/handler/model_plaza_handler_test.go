@@ -335,6 +335,23 @@ func TestModelPlazaHandler_SelectedGroupRestrictsCatalogAndMetrics(t *testing.T)
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/model-plaza/performance?group_id=3&ids="+plazaModelID("openai", "model"), nil))
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	require.Equal(t, []int64{3}, metrics.groups)
+
+	w90 := httptest.NewRecorder()
+	r.ServeHTTP(w90, httptest.NewRequest(http.MethodGet, "/model-plaza/performance?window=90m&group_id=3&ids="+plazaModelID("openai", "model"), nil))
+	require.Equal(t, http.StatusOK, w90.Code, w90.Body.String())
+	var sumBody struct {
+		Data struct {
+			Window        string `json:"window"`
+			BucketSeconds int64  `json:"bucket_seconds"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w90.Body.Bytes(), &sumBody))
+	require.Equal(t, "90m", sumBody.Data.Window)
+	require.Equal(t, int64(300), sumBody.Data.BucketSeconds)
+
+	wBad := httptest.NewRecorder()
+	r.ServeHTTP(wBad, httptest.NewRequest(http.MethodGet, "/model-plaza/performance?window=99h&group_id=3&ids="+plazaModelID("openai", "model"), nil))
+	require.Equal(t, http.StatusBadRequest, wBad.Code, wBad.Body.String())
 }
 
 func TestModelPlazaHandler_VaryKeepsCORSOrigin(t *testing.T) {

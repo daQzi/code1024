@@ -327,7 +327,7 @@ async function handleLogout() {
   } catch (error) {
     console.error('Logout error:', error)
   }
-  await router.push('/login')
+  await router.push('/home')
 }
 
 function handleReplayGuide() {

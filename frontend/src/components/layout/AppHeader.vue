@@ -397,7 +397,7 @@ async function handleLogout() {
     // Ignore logout errors - still redirect to login
     console.error('Logout error:', error)
   }
-  await router.push('/login')
+  await router.push('/home')
 }
 
 function handleReplayGuide() {

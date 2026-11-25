@@ -760,9 +760,12 @@ function syncMotionPreference() {
 
 onMounted(() => {
   if (!isAuthenticated.value && typeof window !== 'undefined') {
-    const authParam = new URLSearchParams(window.location.search).get('auth')
+    const params = new URLSearchParams(window.location.search)
+    const authParam = params.get('auth')
+    const rawRedirect = params.get('redirect') || ''
+    const safeRedirect = rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') ? rawRedirect : ''
     if (authParam === 'login' || authParam === 'register') {
-      openAuthModal(authParam)
+      openAuthModal(authParam, safeRedirect)
     }
   }
   if (typeof window.matchMedia === 'function') {

@@ -1,5 +1,10 @@
 <template>
-  <div class="shell-bg" :data-ambient-mode="shouldMountWebGL ? 'webgl' : 'css'" aria-hidden="true">
+  <div
+    class="shell-bg"
+    :data-ambient-mode="shouldMountWebGL ? 'webgl' : 'css'"
+    :data-fx-mode="fxMode"
+    aria-hidden="true"
+  >
     <div class="shell-bg__blob shell-bg__blob--a" />
     <div class="shell-bg__blob shell-bg__blob--b" />
     <div class="shell-bg__blob shell-bg__blob--c" />
@@ -8,6 +13,12 @@
       v-if="shouldMountWebGL"
       ref="canvasRef"
       class="shell-bg__canvas"
+      :class="{ 'is-ready': engineReady }"
+    />
+    <canvas
+      v-if="shouldMountWebGL"
+      ref="particlesCanvasRef"
+      class="shell-bg__particles"
       :class="{ 'is-ready': engineReady }"
     />
     <div class="shell-bg__grid" />
@@ -20,6 +31,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useTheme } from '@/composables/useTheme'
 import { useAmbientBackdrop } from '@/composables/useAmbientBackdrop'
 import type { AmbientBackdropController } from './createAmbientBackdropEngine'
+import type { AmbientParticlesController } from './createAmbientParticlesEngine'
 
 const props = withDefaults(
   defineProps<{
@@ -31,15 +43,17 @@ const props = withDefaults(
 )
 
 const { isDark } = useTheme()
-const { ambientEnabled } = useAmbientBackdrop()
+const { fxMode, ambientEnabled } = useAmbientBackdrop()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const particlesCanvasRef = ref<HTMLCanvasElement | null>(null)
 const engineReady = ref(false)
 const webglSupported = ref(false)
 const reducedMotion = ref(false)
 const isNarrowViewport = ref(false)
 
 let controller: AmbientBackdropController | null = null
+let particlesController: AmbientParticlesController | null = null
 let resizeObserver: ResizeObserver | null = null
 let motionMedia: MediaQueryList | undefined
 let viewportMedia: MediaQueryList | undefined
@@ -74,6 +88,8 @@ function disposeEngine() {
   resizeObserver = null
   controller?.dispose()
   controller = null
+  particlesController?.dispose()
+  particlesController = null
 }
 
 async function startEngine() {
@@ -81,10 +97,14 @@ async function startEngine() {
   await nextTick()
   if (unmounted || token !== mountToken || !shouldMountWebGL.value) return
   const canvas = canvasRef.value
+  const particlesCanvas = particlesCanvasRef.value
   if (!canvas) return
 
   try {
-    const { createAmbientBackdropEngine } = await import('./createAmbientBackdropEngine')
+    const [{ createAmbientBackdropEngine }, { createAmbientParticlesEngine }] = await Promise.all([
+      import('./createAmbientBackdropEngine'),
+      import('./createAmbientParticlesEngine'),
+    ])
     if (unmounted || token !== mountToken || !shouldMountWebGL.value) return
 
     controller = createAmbientBackdropEngine({
@@ -92,13 +112,21 @@ async function startEngine() {
       initialDark: isDark.value,
       initialMood: resolveMoodForPath(props.routePath),
     })
+
+    if (particlesCanvas) {
+      particlesController = createAmbientParticlesEngine({
+        canvas: particlesCanvas,
+        initialDark: isDark.value,
+      })
+    }
+
     engineReady.value = true
 
     const syncSize = () => {
-      if (!controller) return
       const w = canvas.parentElement?.clientWidth || window.innerWidth || 1440
       const h = canvas.parentElement?.clientHeight || window.innerHeight || 900
-      controller.resize(w, h)
+      controller?.resize(w, h)
+      particlesController?.resize(w, h)
     }
 
     if (typeof ResizeObserver !== 'undefined' && canvas.parentElement) {
@@ -122,6 +150,7 @@ watch(shouldMountWebGL, (active) => {
 
 watch(isDark, (dark) => {
   controller?.setDark(dark)
+  particlesController?.setDark(dark)
 })
 
 watch(
@@ -174,10 +203,10 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
-.shell-bg__canvas {
+.shell-bg__canvas,
+.shell-bg__particles {
   position: absolute;
   inset: 0;
-  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
@@ -185,7 +214,16 @@ onBeforeUnmount(() => {
   transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.shell-bg__canvas.is-ready {
+.shell-bg__canvas {
+  z-index: 1;
+}
+
+.shell-bg__particles {
+  z-index: 2;
+}
+
+.shell-bg__canvas.is-ready,
+.shell-bg__particles.is-ready {
   opacity: 1;
 }
 
@@ -238,21 +276,21 @@ onBeforeUnmount(() => {
 .shell-bg__grid {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 3;
   background-image:
     linear-gradient(to right, var(--ui-line-soft) 1px, transparent 1px),
     linear-gradient(to bottom, var(--ui-line-soft) 1px, transparent 1px);
   background-size: 56px 56px;
   -webkit-mask-image: radial-gradient(120% 90% at 30% 0%, #000 0%, transparent 72%);
   mask-image: radial-gradient(120% 90% at 30% 0%, #000 0%, transparent 72%);
-  opacity: 0.55;
+  opacity: 0.48;
 }
 
 /* 颗粒：让大面积渐变不出现色带 */
 .shell-bg__grain {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 4;
   opacity: 0.14;
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");

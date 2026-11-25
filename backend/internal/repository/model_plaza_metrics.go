@@ -18,7 +18,7 @@ func NewModelPlazaMetricsRepository(db *sql.DB) service.ModelPlazaMetricsReposit
 
 // The database computes percentiles over source samples for each grouping;
 // hourly percentiles or per-group averages are never averaged together.
-const plazaMetricsSamples = `
+const plazaMetricsSamplesCore = `
 WITH scope AS (
  SELECT DISTINCT catalog_id,platform,model,group_id FROM jsonb_to_recordset($3::jsonb)
  AS x(catalog_id text,platform text,model text,group_id bigint)
@@ -98,13 +98,21 @@ WITH scope AS (
    NULL::float8,0::bigint,t.status='succeeded'
  FROM sub2api_native_video_tasks t JOIN scope ON scope.group_id=t.group_id AND scope.platform=t.platform AND scope.model=t.model
  WHERE t.finished_at >= $1 AND t.finished_at < $2 AND t.status IN('succeeded','failed')
-), buckets AS (
+)`
+
+const plazaMetricsSamples = plazaMetricsSamplesCore + `, buckets AS (
  SELECT *, date_trunc('hour', created_at) AS bucket,
    CASE WHEN first_token_ms >= 0 AND duration_ms > first_token_ms THEN duration_ms-first_token_ms END AS generation_ms
  FROM samples
 )`
 
-const plazaMetricsQuery = plazaMetricsSamples + `
+const plazaMetricsSubHourSamples = plazaMetricsSamplesCore + `, buckets AS (
+ SELECT *, to_timestamp(floor(extract(epoch FROM created_at) / $4) * $4) AS bucket,
+   CASE WHEN first_token_ms >= 0 AND duration_ms > first_token_ms THEN duration_ms-first_token_ms END AS generation_ms
+ FROM samples
+)`
+
+const plazaMetricsSelect = `
 SELECT CASE WHEN GROUPING(group_id) = 1 THEN 0 ELSE group_id END,
  CASE WHEN GROUPING(bucket) = 1 THEN NULL ELSE bucket END,
  COUNT(*), COUNT(*) FILTER (WHERE success),
@@ -117,7 +125,7 @@ FROM buckets
 GROUP BY GROUPING SETS ((group_id,bucket),(group_id),(bucket),())
 ORDER BY 1,2 NULLS FIRST`
 
-const plazaMetricsSummariesQuery = plazaMetricsSamples + `
+const plazaMetricsSummariesSelect = `
 SELECT catalog_id,CASE WHEN GROUPING(bucket)=1 THEN NULL ELSE bucket END,COUNT(*),COUNT(*) FILTER(WHERE success),
  AVG(duration_ms) FILTER(WHERE success AND duration_ms>=0),
  percentile_cont(0.95) WITHIN GROUP(ORDER BY duration_ms) FILTER(WHERE success AND duration_ms>=0),
@@ -125,6 +133,29 @@ SELECT catalog_id,CASE WHEN GROUPING(bucket)=1 THEN NULL ELSE bucket END,COUNT(*
  SUM(output_tokens) FILTER(WHERE success AND output_tokens>0 AND generation_ms>0)*1000.0 /
  NULLIF(SUM(generation_ms) FILTER(WHERE success AND output_tokens>0 AND generation_ms>0),0)
 FROM buckets GROUP BY GROUPING SETS ((catalog_id),(catalog_id,bucket)) ORDER BY catalog_id,bucket NULLS FIRST`
+
+const plazaMetricsQuery = plazaMetricsSamples + plazaMetricsSelect
+
+const plazaMetricsSubHourQuery = plazaMetricsSubHourSamples + plazaMetricsSelect
+
+const plazaMetricsSummariesQuery = plazaMetricsSamples + plazaMetricsSummariesSelect
+
+const plazaMetricsSubHourSummariesQuery = plazaMetricsSubHourSamples + plazaMetricsSummariesSelect
+
+func plazaBucketSeconds(d time.Duration) int64 {
+	switch {
+	case d <= 90*time.Minute:
+		return 300
+	case d <= 3*time.Hour:
+		return 600
+	case d <= 6*time.Hour:
+		return 900
+	case d <= 12*time.Hour:
+		return 1800
+	default:
+		return 3600
+	}
+}
 
 func encodePlazaMetricsScope(scopes []service.PlazaMetricsScope) ([]byte, error) {
 	type row struct {
@@ -160,7 +191,7 @@ func (r *modelPlazaMetricsRepository) ReadModelSummaries(ctx context.Context, sc
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, plazaMetricsSummariesQuery, start, end, scope)
+	rows, err := queryPlazaMetricsRows(ctx, r.db, start, end, scope, true)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +225,7 @@ func (r *modelPlazaMetricsRepository) ReadModelMetrics(ctx context.Context, mode
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.db.QueryContext(ctx, plazaMetricsQuery, start, end, scope)
+	rows, err := queryPlazaMetricsRows(ctx, r.db, start, end, scope, false)
 	if err != nil {
 		return nil, err
 	}
@@ -213,4 +244,20 @@ func (r *modelPlazaMetricsRepository) ReadModelMetrics(ctx context.Context, mode
 		result = append(result, p)
 	}
 	return result, rows.Err()
+}
+
+func queryPlazaMetricsRows(ctx context.Context, db *sql.DB, start, end time.Time, scope []byte, summaries bool) (*sql.Rows, error) {
+	bucketSec := plazaBucketSeconds(end.Sub(start))
+	if bucketSec >= 3600 {
+		query := plazaMetricsQuery
+		if summaries {
+			query = plazaMetricsSummariesQuery
+		}
+		return db.QueryContext(ctx, query, start, end, scope)
+	}
+	query := plazaMetricsSubHourQuery
+	if summaries {
+		query = plazaMetricsSubHourSummariesQuery
+	}
+	return db.QueryContext(ctx, query, start, end, scope, float64(bucketSec))
 }

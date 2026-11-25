@@ -206,11 +206,15 @@
       <button
         type="button"
         class="rail__item rail__item--quiet rail__item--ambient"
-        :class="{ 'is-ambient-on': ambientEnabled }"
+        :class="{
+          'is-ambient-on': fxMode === 'full',
+          'is-ambient-soft': fxMode === 'ambient',
+        }"
         data-testid="ambient-backdrop-toggle"
+        :data-fx-mode="fxMode"
         :aria-pressed="ambientEnabled"
         :title="ambientLabel"
-        @click="toggleAmbientBackdrop"
+        @click="cycleFxMode"
         @mouseenter="showTooltip($event, ambientLabel)"
         @mouseleave="hideTooltip"
         @focus="showTooltip($event, ambientLabel)"
@@ -314,11 +318,13 @@ const railRef = ref<HTMLElement | null>(null)
 const navRef = ref<HTMLElement | null>(null)
 
 const { isDark, toggleTheme } = useTheme()
-const { ambientEnabled, toggleAmbientBackdrop } = useAmbientBackdrop()
+const { fxMode, ambientEnabled, cycleFxMode } = useAmbientBackdrop()
 
-const ambientLabel = computed(() =>
-  ambientEnabled.value ? t('nav.ambientBackdropOn') : t('nav.ambientBackdropOff')
-)
+const ambientLabel = computed(() => {
+  if (fxMode.value === 'full') return t('nav.fxModeFull')
+  if (fxMode.value === 'ambient') return t('nav.fxModeAmbient')
+  return t('nav.fxModeOff')
+})
 
 const qimuLink = computed(() => {
   const links = appStore.cachedPublicSettings?.custom_topbar_links
@@ -689,6 +695,11 @@ html[data-theme='dark'] .rail::after {
 
 .rail__item--ambient.is-ambient-on .rail__icon {
   color: var(--ui-accent);
+  filter: drop-shadow(0 0 6px rgb(56 232 213 / 0.55));
+}
+
+.rail__item--ambient.is-ambient-soft .rail__icon {
+  color: #f0c27b;
 }
 
 /* ------------------------------------------------------------------ 导航 */

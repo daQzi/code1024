@@ -44,7 +44,7 @@
         </RouterLink>
         <RouterLink
           v-else
-          :to="{ path: '/login', query: { redirect: '/model-plaza' } }"
+          :to="{ path: '/home', query: { auth: 'login', redirect: '/model-plaza' } }"
           class="glass-button glass-button--primary flex-shrink-0"
         >
           {{ t('modelPlaza.nav.login') }}

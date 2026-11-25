@@ -42,46 +42,86 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PlazaHealthBucket } from '@/api/modelPlaza'
 
-const props = defineProps<{ recent?: PlazaHealthBucket[]; end?: string }>()
+const props = defineProps<{
+  recent?: PlazaHealthBucket[]
+  start?: string
+  end?: string
+  bucketSeconds?: number
+}>()
 const { t, locale } = useI18n()
-const hour = 3600000
 const activeIndex = ref<number | null>(null)
+
+const stepMs = computed(() => Math.max(60000, (props.bucketSeconds ?? 3600) * 1000))
+
 const buckets = computed(() => {
-  const end = props.end ? Math.floor(Date.parse(props.end) / hour) * hour : Math.floor(Date.now() / hour) * hour
-  const samples = new Map((props.recent ?? []).map(point => [Date.parse(point.bucket), point]))
-  return Array.from({ length: 24 }, (_, index) => {
-    const time = end - (23 - index) * hour
+  const step = stepMs.value
+  const parsedEnd = props.end ? Date.parse(props.end) : Date.now()
+  const endAligned = Math.floor((Number.isFinite(parsedEnd) ? parsedEnd : Date.now()) / step) * step
+
+  let count = 24
+  if (props.start) {
+    const parsedStart = Date.parse(props.start)
+    if (Number.isFinite(parsedStart)) {
+      const startAligned = Math.floor(parsedStart / step) * step
+      count = Math.min(24, Math.max(12, Math.round((endAligned - startAligned) / step)))
+    }
+  }
+
+  const samples = new Map(
+    (props.recent ?? []).map((point) => [Math.floor(Date.parse(point.bucket) / step) * step, point]),
+  )
+  return Array.from({ length: count }, (_, index) => {
+    const time = endAligned - (count - 1 - index) * step
     return { time, point: samples.get(time) }
   })
 })
+
 const activeBucket = computed(() => (activeIndex.value == null ? null : buckets.value[activeIndex.value] ?? null))
+
 const tipAlignClass = computed(() => {
   if (activeIndex.value == null) return ''
-  if (activeIndex.value <= 4) return 'health-bar__tip--left'
-  if (activeIndex.value >= 19) return 'health-bar__tip--right'
+  const total = buckets.value.length
+  const edge = Math.min(4, Math.floor(total * 0.2))
+  if (activeIndex.value <= edge) return 'health-bar__tip--left'
+  if (activeIndex.value >= total - 1 - edge) return 'health-bar__tip--right'
   return 'health-bar__tip--center'
 })
+
 const tipPositionStyle = computed(() => {
   if (activeIndex.value == null) return {}
-  if (activeIndex.value <= 4) return { left: '0px' }
-  if (activeIndex.value >= 19) return { right: '0px' }
-  return { left: `${((activeIndex.value + 0.5) / 24) * 100}%` }
+  const total = buckets.value.length
+  const edge = Math.min(4, Math.floor(total * 0.2))
+  if (activeIndex.value <= edge) return { left: '0px' }
+  if (activeIndex.value >= total - 1 - edge) return { right: '0px' }
+  return { left: `${((activeIndex.value + 0.5) / total) * 100}%` }
 })
+
 function handleBlur(index: number) {
   if (activeIndex.value === index) activeIndex.value = null
 }
+
 function color(point?: PlazaHealthBucket) {
   if (!point?.requests) return 'bg-gray-200 dark:bg-dark-600'
-  if (point.successes === point.requests) return 'bg-emerald-500 dark:bg-emerald-500'
-  return point.successes === 0 ? 'bg-red-500' : 'bg-amber-400'
+  const rate = point.successes / point.requests
+  if (rate >= 0.95) return 'bg-emerald-500 dark:bg-emerald-500'
+  if (rate >= 0.8) return 'bg-amber-400'
+  return 'bg-red-500'
 }
+
 function formatTime(timestamp: number) {
-  return new Date(timestamp).toLocaleString(locale.value, { hour: '2-digit', minute: '2-digit', month: '2-digit', day: '2-digit' })
+  return new Date(timestamp).toLocaleString(locale.value, {
+    hour: '2-digit',
+    minute: '2-digit',
+    month: '2-digit',
+    day: '2-digit',
+  })
 }
+
 function formatStat(bucket: { time: number; point?: PlazaHealthBucket }) {
   if (!bucket.point?.requests) return t('modelPlaza.catalog.noMetrics')
   return `${bucket.point.successes}/${bucket.point.requests} (${(bucket.point.successes * 100 / bucket.point.requests).toFixed(1)}%)`
 }
+
 function label(bucket: { time: number; point?: PlazaHealthBucket }) {
   const time = formatTime(bucket.time)
   if (!bucket.point?.requests) return `${time} · ${t('modelPlaza.catalog.noMetrics')}`

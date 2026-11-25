@@ -33,6 +33,66 @@
       {{ t('modelPlaza.loadFailed') }}
     </div>
     <template v-else>
+      <!-- 近期模型状态监控面板（时间窗口切换 + 颜色阈值图例） -->
+      <section
+        class="rounded-2xl border border-gray-200/80 bg-white/80 px-5 py-4 shadow-card backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-800/60"
+        data-testid="plaza-status-banner"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
+              {{ t('modelPlaza.catalog.recentStatusTitle') }}
+            </h2>
+            <p class="mt-1 max-w-4xl text-xs leading-5 text-gray-500 dark:text-dark-400">
+              {{ t('modelPlaza.catalog.recentStatusDesc') }}
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 text-[11px] text-gray-500 dark:text-dark-400">
+            <span class="inline-flex items-center gap-1.5">
+              <i class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+              {{ t('modelPlaza.catalog.legendHealthy') }}
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <i class="h-2 w-2 rounded-full bg-amber-400" aria-hidden="true" />
+              {{ t('modelPlaza.catalog.legendDegraded') }}
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <i class="h-2 w-2 rounded-full bg-red-500" aria-hidden="true" />
+              {{ t('modelPlaza.catalog.legendUnhealthy') }}
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <i class="h-2 w-2 rounded-full bg-gray-300 dark:bg-dark-600" aria-hidden="true" />
+              {{ t('modelPlaza.catalog.legendNoData') }}
+            </span>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+          <div class="flex flex-wrap items-center gap-1.5" role="group" :aria-label="t('modelPlaza.catalog.recentStatusTitle')" data-testid="plaza-window-selector">
+            <button
+              v-for="win in WINDOW_OPTIONS"
+              :key="win"
+              type="button"
+              class="min-w-[44px] rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500"
+              :class="selectedWindow === win
+                ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300'
+                : 'border-gray-200 bg-white/70 text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:border-dark-600 dark:bg-dark-900/40 dark:text-dark-300 dark:hover:border-dark-500 dark:hover:text-white'"
+              :aria-pressed="selectedWindow === win"
+              :data-testid="`plaza-window-${win}`"
+              @click="selectedWindow = win"
+            >
+              {{ t(`modelPlaza.catalog.windows.${win}`) }}
+            </button>
+          </div>
+          <span
+            v-if="formattedUpdatedAt"
+            class="ml-auto text-xs tabular-nums text-gray-400 dark:text-dark-400"
+            data-testid="plaza-updated-at"
+          >
+            {{ t('modelPlaza.catalog.updatedAt', { time: formattedUpdatedAt }) }}
+          </span>
+        </div>
+      </section>
+
       <!-- 筛选区:平台 → 分组 → 倍率 -->
       <PlazaFilterBar
         :platforms="platforms"
@@ -64,7 +124,13 @@
 
       <!-- 分组分节的模型清单(默认按生效倍率升序) -->
       <div v-if="filteredGroups.length > 0" class="space-y-5">
-        <PlazaModelCatalog :groups="filteredGroups" :view="view" :group-id="selectedGroupId === 'all' ? undefined : selectedGroupId" />
+        <PlazaModelCatalog
+          :groups="filteredGroups"
+          :view="view"
+          :group-id="selectedGroupId === 'all' ? undefined : selectedGroupId"
+          :window="selectedWindow"
+          @metrics-updated="metricsUpdatedAt = $event"
+        />
       </div>
       <div
         v-else
@@ -86,8 +152,10 @@ import Icon from '@/components/icons/Icon.vue'
 import Select from '@/components/common/Select.vue'
 import PlazaFilterBar from './PlazaFilterBar.vue'
 import PlazaModelCatalog from './PlazaModelCatalog.vue'
-import type { ModelPlazaGroup, ModelPlazaResponse, PlazaModel } from '@/api/modelPlaza'
+import type { ModelPlazaGroup, ModelPlazaResponse, PlazaMetricsWindow, PlazaModel } from '@/api/modelPlaza'
 import { useAuthStore } from '@/stores/auth'
+
+const WINDOW_OPTIONS: readonly PlazaMetricsWindow[] = ['1h', '90m', '3h', '6h', '12h', '24h']
 
 const props = defineProps<{
   response: ModelPlazaResponse | null
@@ -97,11 +165,25 @@ const props = defineProps<{
   embedded?: boolean
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
+
+const selectedWindow = ref<PlazaMetricsWindow>('24h')
+const metricsUpdatedAt = ref<string>('')
+const formattedUpdatedAt = computed(() => {
+  if (!metricsUpdatedAt.value) return ''
+  const parsed = Date.parse(metricsUpdatedAt.value)
+  if (!Number.isFinite(parsed)) return ''
+  return new Date(parsed).toLocaleTimeString(locale.value, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+})
 
 const selectedPlatform = ref<string>('all')
 const selectedGroupId = ref<number | 'all'>('all')

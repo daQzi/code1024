@@ -175,6 +175,11 @@ func (h *ModelPlazaHandler) get(c *gin.Context, modelID string, performance bool
 	// route. Shared caches must never reuse one user's catalog for another.
 	c.Header("Cache-Control", "private, no-store")
 	if performance {
+		window, _, _, ok := service.ParsePlazaMetricsWindow(c.Query("window"))
+		if !ok {
+			response.BadRequest(c, "Invalid window")
+			return
+		}
 		if modelID == "" {
 			ids := strings.Split(c.Query("ids"), ",")
 			if len(ids) > 100 {
@@ -189,7 +194,7 @@ func (h *ModelPlazaHandler) get(c *gin.Context, modelID string, performance bool
 				}
 				requested[id] = true
 			}
-			metrics, err := h.plazaService.PerformanceSummaries(c.Request.Context(), plazaSummaryScopes(visible, requested))
+			metrics, err := h.plazaService.PerformanceSummariesWindow(c.Request.Context(), plazaSummaryScopes(visible, requested), window)
 			if err != nil {
 				response.ErrorFrom(c, err)
 				return
@@ -206,7 +211,7 @@ func (h *ModelPlazaHandler) get(c *gin.Context, modelID string, performance bool
 		for _, group := range visible {
 			groupIDs = append(groupIDs, group.ID)
 		}
-		metrics, err := h.plazaService.Performance(c.Request.Context(), model.Name, model.Platform, groupIDs)
+		metrics, err := h.plazaService.PerformanceWindow(c.Request.Context(), model.Name, model.Platform, groupIDs, window)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return

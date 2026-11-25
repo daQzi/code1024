@@ -106,13 +106,21 @@ describe('ShellRail interactions', () => {
 
     const toggle = wrapper.get('[data-testid="ambient-backdrop-toggle"]')
     expect(toggle.attributes('aria-pressed')).toBe('true')
-
-    await toggle.trigger('click')
-    expect(toggle.attributes('aria-pressed')).toBe('false')
-    expect(localStorage.getItem('shell_ambient_backdrop')).toBe('0')
+    expect(toggle.attributes('data-fx-mode')).toBe('full')
 
     await toggle.trigger('click')
     expect(toggle.attributes('aria-pressed')).toBe('true')
-    expect(localStorage.getItem('shell_ambient_backdrop')).toBe('1')
+    expect(toggle.attributes('data-fx-mode')).toBe('ambient')
+    expect(localStorage.getItem('shell_ambient_backdrop')).toBe('ambient')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-pressed')).toBe('false')
+    expect(toggle.attributes('data-fx-mode')).toBe('off')
+    expect(localStorage.getItem('shell_ambient_backdrop')).toBe('off')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-pressed')).toBe('true')
+    expect(toggle.attributes('data-fx-mode')).toBe('full')
+    expect(localStorage.getItem('shell_ambient_backdrop')).toBe('full')
   })
 })

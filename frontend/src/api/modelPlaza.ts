@@ -131,26 +131,46 @@ export interface PlazaMetricsPoint {
 
 export interface PlazaHealthBucket { bucket: string; requests: number; successes: number }
 
+export type PlazaMetricsWindow = '1h' | '90m' | '3h' | '6h' | '12h' | '24h'
+
 export interface PlazaMetrics {
+  window?: string
+  bucket_seconds?: number
   start: string
   end: string
   scope: string
   points: PlazaMetricsPoint[]
 }
 
-export async function getModelPlazaPerformance(id: string, signal?: AbortSignal, groupId?: number): Promise<PlazaMetrics> {
-  const { data } = await apiClient.get<PlazaMetrics>(`/model-plaza/models/${encodeURIComponent(id)}/performance`, { signal, params: { group_id: groupId } })
+export async function getModelPlazaPerformance(
+  id: string,
+  signal?: AbortSignal,
+  groupId?: number,
+  window?: PlazaMetricsWindow
+): Promise<PlazaMetrics> {
+  const params: Record<string, unknown> = { group_id: groupId }
+  if (window) params.window = window
+  const { data } = await apiClient.get<PlazaMetrics>(`/model-plaza/models/${encodeURIComponent(id)}/performance`, { signal, params })
   return data
 }
 
 export interface PlazaMetricsSummaries {
+  window?: string
+  bucket_seconds?: number
   start: string
   end: string
   models: Record<string, PlazaMetricsPoint>
 }
 
-export async function getModelPlazaPerformanceSummaries(ids: string[], signal?: AbortSignal, groupId?: number): Promise<PlazaMetricsSummaries> {
-  const { data } = await apiClient.get<PlazaMetricsSummaries>('/model-plaza/performance', { params: { ids: ids.join(','), group_id: groupId }, signal })
+export async function getModelPlazaPerformanceSummaries(
+  ids: string[],
+  signal?: AbortSignal,
+  groupId?: number,
+  window?: PlazaMetricsWindow
+): Promise<PlazaMetricsSummaries> {
+  const params: Record<string, unknown> = { ids: ids.join(','), group_id: groupId }
+  if (window) params.window = window
+  const { data } = await apiClient.get<PlazaMetricsSummaries>('/model-plaza/performance', { params, signal })
   return data
 }
 
