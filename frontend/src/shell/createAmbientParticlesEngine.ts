@@ -29,16 +29,28 @@ interface Meteor {
   life: number
   maxLife: number
   length: number
-  gold: boolean
+  variant: 'cyan' | 'gold' | 'violet'
 }
 
-const SPORE_COUNT = 56
-const MAX_METEORS = 3
+interface Ripple {
+  active: boolean
+  x: number
+  y: number
+  radius: number
+  maxRadius: number
+  life: number
+  maxLife: number
+  variant: 'cyan' | 'gold' | 'violet'
+}
+
+const SPORE_COUNT = 72
+const MAX_METEORS = 5
+const MAX_RIPPLES = 3
 
 /**
- * Lightweight interactive 2D particle engine for the authenticated console:
- * renders floating astral spores pushed by pointer wake, proximity filaments,
- * and periodic shooting stars.
+ * Interactive 2D cosmic particle layer for the authenticated console:
+ * renders dual-halo astral spores pushed by gentle pointer wake, shooting stars
+ * with luminous star flares, and subtle expanding energy ripples.
  */
 export function createAmbientParticlesEngine(options: AmbientParticlesOptions): AmbientParticlesController {
   const { canvas } = options
@@ -59,14 +71,14 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
 
   const tints: Spore['tint'][] = ['teal', 'gold', 'lavender']
   const spores: Spore[] = Array.from({ length: SPORE_COUNT }, (_, i) => {
-    const baseVy = -(6 + Math.random() * 14)
+    const baseVy = -(8 + Math.random() * 16)
     return {
       x: Math.random() * width,
       y: Math.random() * height,
-      vx: (Math.random() - 0.5) * 6,
+      vx: (Math.random() - 0.5) * 8,
       vy: baseVy,
       baseVy,
-      radius: 1.1 + Math.random() * 1.9,
+      radius: 1.2 + Math.random() * 2.2,
       phase: Math.random() * Math.PI * 2,
       tint: tints[i % 3]!,
     }
@@ -80,8 +92,19 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
     vy: 0,
     life: 0,
     maxLife: 1,
-    length: 110,
-    gold: false,
+    length: 160,
+    variant: 'cyan',
+  }))
+
+  const ripples: Ripple[] = Array.from({ length: MAX_RIPPLES }, () => ({
+    active: false,
+    x: 0,
+    y: 0,
+    radius: 0,
+    maxRadius: 160,
+    life: 0,
+    maxLife: 1.8,
+    variant: 'cyan',
   }))
 
   let pointerX = -9999
@@ -90,11 +113,26 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
   let pointerVy = 0
   let lastPointerX = -9999
   let lastPointerY = -9999
-  let nextMeteorIn = 1.6 + Math.random() * 2.2
+  let nextMeteorIn = 0.8 + Math.random() * 1.4
+  let nextRippleIn = 2.4 + Math.random() * 2.2
   let elapsed = 0
   let lastTimestamp = typeof performance !== 'undefined' ? performance.now() : 0
   let rafId: number | null = null
   let disposed = false
+
+  const spawnRipple = (x: number, y: number, maxRadius = 150 + Math.random() * 90) => {
+    const slot = ripples.find((r) => !r.active)
+    if (!slot) return
+    const variants: Ripple['variant'][] = ['cyan', 'violet', 'gold']
+    slot.active = true
+    slot.x = x
+    slot.y = y
+    slot.radius = 6
+    slot.maxRadius = maxRadius
+    slot.life = 0
+    slot.maxLife = 1.6 + Math.random() * 0.8
+    slot.variant = variants[Math.floor(Math.random() * variants.length)]!
+  }
 
   const handlePointerMove = (e: PointerEvent) => {
     if (e.pointerType === 'touch') return
@@ -108,6 +146,11 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
     lastPointerY = e.clientY
   }
 
+  const handlePointerDown = (e: PointerEvent) => {
+    if (e.pointerType === 'touch') return
+    spawnRipple(e.clientX, e.clientY, 130)
+  }
+
   const handleVisibilityChange = () => {
     if (typeof document !== 'undefined' && !document.hidden) {
       lastTimestamp = performance.now()
@@ -116,6 +159,7 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
 
   if (typeof window !== 'undefined') {
     window.addEventListener('pointermove', handlePointerMove, { passive: true })
+    window.addEventListener('pointerdown', handlePointerDown, { passive: true })
   }
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -125,17 +169,18 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
     const slot = meteors.find((m) => !m.active)
     if (!slot) return
     const fromRight = Math.random() > 0.35
+    const variants: Meteor['variant'][] = ['cyan', 'gold', 'violet']
     slot.active = true
-    slot.x = fromRight ? width * (0.45 + Math.random() * 0.55) : width * (0.1 + Math.random() * 0.45)
+    slot.x = fromRight ? width * (0.42 + Math.random() * 0.58) : width * (0.06 + Math.random() * 0.45)
     slot.y = -24
-    const speed = 520 + Math.random() * 280
+    const speed = 580 + Math.random() * 320
     const angle = fromRight ? Math.PI * 0.72 + Math.random() * 0.14 : Math.PI * 0.24 + Math.random() * 0.14
     slot.vx = Math.cos(angle) * speed
     slot.vy = Math.sin(angle) * speed
     slot.life = 0
-    slot.maxLife = 0.75 + Math.random() * 0.45
-    slot.length = 95 + Math.random() * 65
-    slot.gold = Math.random() > 0.58
+    slot.maxLife = 0.72 + Math.random() * 0.48
+    slot.length = 140 + Math.random() * 100
+    slot.variant = variants[Math.floor(Math.random() * variants.length)]!
   }
 
   const renderFrame = (now: number) => {
@@ -155,7 +200,13 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
     nextMeteorIn -= dt
     if (nextMeteorIn <= 0) {
       spawnMeteor()
-      nextMeteorIn = 2.6 + Math.random() * 2.4
+      nextMeteorIn = 1.1 + Math.random() * 1.3
+    }
+
+    nextRippleIn -= dt
+    if (nextRippleIn <= 0) {
+      spawnRipple(width * (0.15 + Math.random() * 0.7), height * (0.18 + Math.random() * 0.65))
+      nextRippleIn = 3.5 + Math.random() * 2.0
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -164,25 +215,24 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
     const themeScale = dark ? 1 : 0.28
     const nearbyIndices: number[] = []
 
-    // 1. Update & render astral spores
+    // 1. Update & render dual-layer astral spores
     for (let i = 0; i < spores.length; i++) {
       const s = spores[i]!
       const dx = s.x - pointerX
       const dy = s.y - pointerY
       const distSq = dx * dx + dy * dy
 
-      if (distSq < 175 * 175 && distSq > 1) {
+      if (distSq < 185 * 185 && distSq > 1) {
         const dist = Math.sqrt(distSq)
-        const falloff = 1 - dist / 175
-        // Aerodynamic wake swirl around moving cursor
-        s.vx += ((dx / dist) * 58 + pointerVx * 0.24) * falloff * dt
-        s.vy += ((dy / dist) * 58 + pointerVy * 0.24) * falloff * dt
+        const falloff = 1 - dist / 185
+        s.vx += ((dx / dist) * 62 + pointerVx * 0.22) * falloff * dt
+        s.vy += ((dy / dist) * 62 + pointerVy * 0.22) * falloff * dt
       }
-      if (distSq < 210 * 210) {
+      if (distSq < 220 * 220) {
         nearbyIndices.push(i)
       }
 
-      s.vx += (Math.sin(elapsed * 0.65 + s.phase) * 7 - s.vx) * dt * 1.4
+      s.vx += (Math.sin(elapsed * 0.7 + s.phase) * 8.5 - s.vx) * dt * 1.4
       s.vy += (s.baseVy - s.vy) * dt * 1.6
       s.x += s.vx * dt
       s.y += s.vy * dt
@@ -196,36 +246,45 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
       if (s.x < -16) s.x = width + 16
       else if (s.x > width + 16) s.x = -16
 
-      const alpha = (0.34 + 0.24 * Math.sin(elapsed * 1.7 + s.phase)) * themeScale
+      const alpha = (0.38 + 0.28 * Math.sin(elapsed * 1.85 + s.phase)) * themeScale
+      const rgb =
+        s.tint === 'teal'
+          ? '56, 232, 213'
+          : s.tint === 'gold'
+            ? '251, 191, 36'
+            : '216, 180, 254'
+
+      // Outer luminous halo
+      ctx.beginPath()
+      ctx.arc(s.x, s.y, s.radius * 2.8, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(${rgb}, ${(alpha * 0.20).toFixed(3)})`
+      ctx.fill()
+
+      // Crisp bright star core
       ctx.beginPath()
       ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2)
-      ctx.fillStyle =
-        s.tint === 'teal'
-          ? `rgba(56, 232, 213, ${alpha.toFixed(3)})`
-          : s.tint === 'gold'
-            ? `rgba(240, 194, 123, ${alpha.toFixed(3)})`
-            : `rgba(216, 212, 255, ${(alpha * 0.85).toFixed(3)})`
+      ctx.fillStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`
       ctx.fill()
     }
 
     // 2. Subtle proximity filaments between spores near the pointer
     if (nearbyIndices.length > 1) {
-      ctx.lineWidth = 0.65
+      ctx.lineWidth = 0.7
       for (let a = 0; a < nearbyIndices.length; a++) {
         const sa = spores[nearbyIndices[a]!]!
         for (let b = a + 1; b < nearbyIndices.length; b++) {
           const sb = spores[nearbyIndices[b]!]!
           const distSq = (sa.x - sb.x) ** 2 + (sa.y - sb.y) ** 2
-          if (distSq < 92 * 92) {
+          if (distSq < 105 * 105) {
             const dist = Math.sqrt(distSq)
-            const lineAlpha = (1 - dist / 92) * 0.18 * themeScale
+            const lineAlpha = (1 - dist / 105) * 0.20 * themeScale
             if (lineAlpha <= 0.01) continue
             ctx.beginPath()
             ctx.moveTo(sa.x, sa.y)
             ctx.lineTo(sb.x, sb.y)
             ctx.strokeStyle =
               sa.tint === 'gold' || sb.tint === 'gold'
-                ? `rgba(240, 194, 123, ${lineAlpha.toFixed(3)})`
+                ? `rgba(251, 191, 36, ${lineAlpha.toFixed(3)})`
                 : `rgba(56, 232, 213, ${lineAlpha.toFixed(3)})`
             ctx.stroke()
           }
@@ -233,7 +292,32 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
       }
     }
 
-    // 3. Shooting stars
+    // 3. Expanding astral energy ripples
+    for (const r of ripples) {
+      if (!r.active) continue
+      r.life += dt
+      if (r.life >= r.maxLife) {
+        r.active = false
+        continue
+      }
+      const p = r.life / r.maxLife
+      const eased = 1 - Math.pow(1 - p, 3)
+      const currentRadius = r.radius + (r.maxRadius - r.radius) * eased
+      const alpha = (1 - p) * Math.sin(p * Math.PI) * 0.24 * themeScale
+      const rgb =
+        r.variant === 'gold'
+          ? '251, 191, 36'
+          : r.variant === 'violet'
+            ? '167, 139, 250'
+            : '56, 232, 213'
+      ctx.beginPath()
+      ctx.arc(r.x, r.y, currentRadius, 0, Math.PI * 2)
+      ctx.lineWidth = 1.25
+      ctx.strokeStyle = `rgba(${rgb}, ${alpha.toFixed(3)})`
+      ctx.stroke()
+    }
+
+    // 4. Multi-chromatic shooting stars with glowing star-head flare
     for (const m of meteors) {
       if (!m.active) continue
       m.life += dt
@@ -244,27 +328,40 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
       m.x += m.vx * dt
       m.y += m.vy * dt
       const p = m.life / m.maxLife
-      const fade = Math.sin(p * Math.PI) * 0.82 * themeScale
+      const fade = Math.sin(p * Math.PI) * 0.90 * themeScale
       const mag = Math.hypot(m.vx, m.vy) || 1
       const tailX = m.x - (m.vx / mag) * m.length
       const tailY = m.y - (m.vy / mag) * m.length
 
+      const rgb =
+        m.variant === 'gold'
+          ? '251, 191, 36'
+          : m.variant === 'violet'
+            ? '167, 139, 250'
+            : '56, 232, 213'
+
       const grad = ctx.createLinearGradient(tailX, tailY, m.x, m.y)
-      if (m.gold) {
-        grad.addColorStop(0, 'rgba(240, 194, 123, 0)')
-        grad.addColorStop(0.75, `rgba(240, 194, 123, ${(fade * 0.72).toFixed(3)})`)
-        grad.addColorStop(1, `rgba(255, 250, 235, ${fade.toFixed(3)})`)
-      } else {
-        grad.addColorStop(0, 'rgba(56, 232, 213, 0)')
-        grad.addColorStop(0.75, `rgba(56, 232, 213, ${(fade * 0.72).toFixed(3)})`)
-        grad.addColorStop(1, `rgba(235, 255, 255, ${fade.toFixed(3)})`)
-      }
+      grad.addColorStop(0, `rgba(${rgb}, 0)`)
+      grad.addColorStop(0.72, `rgba(${rgb}, ${(fade * 0.78).toFixed(3)})`)
+      grad.addColorStop(1, `rgba(255, 255, 255, ${fade.toFixed(3)})`)
+
       ctx.beginPath()
       ctx.moveTo(tailX, tailY)
       ctx.lineTo(m.x, m.y)
-      ctx.lineWidth = 1.6
+      ctx.lineWidth = 1.85
       ctx.strokeStyle = grad
       ctx.stroke()
+
+      // Luminous comet head flare
+      ctx.beginPath()
+      ctx.arc(m.x, m.y, 4.2, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(${rgb}, ${(fade * 0.34).toFixed(3)})`
+      ctx.fill()
+
+      ctx.beginPath()
+      ctx.arc(m.x, m.y, 1.8, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(255, 255, 255, ${fade.toFixed(3)})`
+      ctx.fill()
     }
   }
 
@@ -287,6 +384,7 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
       }
       if (typeof window !== 'undefined') {
         window.removeEventListener('pointermove', handlePointerMove)
+        window.removeEventListener('pointerdown', handlePointerDown)
       }
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange)

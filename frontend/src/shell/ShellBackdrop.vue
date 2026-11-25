@@ -2,7 +2,6 @@
   <div
     class="shell-bg"
     :data-ambient-mode="shouldMountWebGL ? 'webgl' : 'css'"
-    :data-fx-mode="fxMode"
     aria-hidden="true"
   >
     <div class="shell-bg__blob shell-bg__blob--a" />
@@ -43,7 +42,7 @@ const props = withDefaults(
 )
 
 const { isDark } = useTheme()
-const { fxMode, ambientEnabled } = useAmbientBackdrop()
+const { ambientEnabled } = useAmbientBackdrop()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const particlesCanvasRef = ref<HTMLCanvasElement | null>(null)

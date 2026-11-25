@@ -1,17 +1,17 @@
 <template>
-  <section class="card space-y-4 p-5">
-    <header class="flex flex-wrap items-start justify-between gap-3">
+  <section class="card flex min-h-0 flex-1 flex-col gap-4 p-5">
+    <header class="flex shrink-0 flex-wrap items-start justify-between gap-3">
       <div>
         <h3 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('admin.plugins.js.review.title') }}</h3>
         <p class="mt-1 max-w-3xl text-sm text-gray-500">{{ t('admin.plugins.js.review.hint') }}</p>
       </div>
       <button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="load">{{ t('common.refresh') }}</button>
     </header>
-    <p v-if="error" role="alert" class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
-    <p v-if="message" role="status" class="text-sm text-emerald-600 dark:text-emerald-400">{{ message }}</p>
-    <p v-if="loading" class="py-4 text-sm text-gray-500">{{ t('common.loading') }}</p>
-    <p v-else-if="!tasks.length" class="py-4 text-sm text-gray-500">{{ t('admin.plugins.js.review.empty') }}</p>
-    <div v-else class="divide-y divide-gray-200 dark:divide-dark-700">
+    <p v-if="error" role="alert" class="shrink-0 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <p v-if="message" role="status" class="shrink-0 text-sm text-emerald-600 dark:text-emerald-400">{{ message }}</p>
+    <div v-if="loading" class="flex flex-1 flex-col items-center justify-center py-12 text-center text-sm text-gray-500 dark:text-dark-400">{{ t('common.loading') }}</div>
+    <div v-else-if="!tasks.length" data-testid="generation-review-empty" class="flex flex-1 flex-col items-center justify-center py-12 text-center text-sm text-gray-500 dark:text-dark-400">{{ t('admin.plugins.js.review.empty') }}</div>
+    <div v-else class="min-h-0 flex-1 divide-y divide-gray-200 overflow-y-auto dark:divide-dark-700">
       <article v-for="task in tasks" :key="task.id" class="space-y-3 py-4">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0 space-y-1">

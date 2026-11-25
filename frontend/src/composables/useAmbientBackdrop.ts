@@ -1,30 +1,26 @@
-import { computed, readonly, ref } from 'vue'
-
-export type AmbientFxMode = 'full' | 'ambient' | 'off'
+import { readonly, ref } from 'vue'
 
 export const AMBIENT_BACKDROP_STORAGE_KEY = 'shell_ambient_backdrop'
 
-function parseStoredMode(raw: string | null): AmbientFxMode {
-  if (raw === '0' || raw === 'off') return 'off'
-  if (raw === 'ambient') return 'ambient'
-  return 'full'
+function parseStoredEnabled(raw: string | null): boolean {
+  return raw !== '0' && raw !== 'off'
 }
 
-function readStoredMode(): AmbientFxMode {
-  if (typeof localStorage === 'undefined') return 'full'
+function readStoredEnabled(): boolean {
+  if (typeof localStorage === 'undefined') return true
   try {
-    return parseStoredMode(localStorage.getItem(AMBIENT_BACKDROP_STORAGE_KEY))
+    return parseStoredEnabled(localStorage.getItem(AMBIENT_BACKDROP_STORAGE_KEY))
   } catch {
-    return 'full'
+    return true
   }
 }
 
-const fxMode = ref<AmbientFxMode>(readStoredMode())
+const ambientEnabled = ref<boolean>(readStoredEnabled())
 let listenerAttached = false
 
 function handleStorage(event: StorageEvent) {
   if (event.key === AMBIENT_BACKDROP_STORAGE_KEY || event.key === null) {
-    fxMode.value = readStoredMode()
+    ambientEnabled.value = readStoredEnabled()
   }
 }
 
@@ -35,59 +31,36 @@ function ensureStorageSync() {
 }
 
 /**
- * Sets the visual FX tier across backdrop WebGL/particles and the starfighter cursor.
+ * Sets whether the dynamic 3D cosmic console backdrop is enabled.
  */
-export function setFxMode(mode: AmbientFxMode): void {
-  fxMode.value = mode
+export function setAmbientBackdrop(enabled: boolean): void {
+  ambientEnabled.value = enabled
   if (typeof localStorage === 'undefined') return
   try {
-    localStorage.setItem(AMBIENT_BACKDROP_STORAGE_KEY, mode)
+    localStorage.setItem(AMBIENT_BACKDROP_STORAGE_KEY, enabled ? '1' : '0')
   } catch {
     // Ignore storage quota or privacy-mode restrictions.
   }
 }
 
 /**
- * Cycles through Full -> Ambient -> Off -> Full.
- */
-export function cycleFxMode(): AmbientFxMode {
-  const next: AmbientFxMode =
-    fxMode.value === 'full' ? 'ambient' : fxMode.value === 'ambient' ? 'off' : 'full'
-  setFxMode(next)
-  return next
-}
-
-/**
- * Backwards-compatible boolean setter mapping true -> full, false -> off.
- */
-export function setAmbientBackdrop(enabled: boolean): void {
-  setFxMode(enabled ? 'full' : 'off')
-}
-
-/**
- * Backwards-compatible boolean toggle used by older callers/tests.
+ * Toggles the dynamic 3D cosmic console backdrop on or off.
  */
 export function toggleAmbientBackdrop(): boolean {
-  const next = fxMode.value === 'off'
+  const next = !ambientEnabled.value
   setAmbientBackdrop(next)
   return next
 }
 
 /**
- * Reactive 3-mode cosmic FX preference synced across components and browser tabs.
+ * Reactive 2-state cosmic backdrop preference synced across components and browser tabs.
  */
 export function useAmbientBackdrop() {
   ensureStorageSync()
-  fxMode.value = readStoredMode()
-  const ambientEnabled = computed(() => fxMode.value !== 'off')
-  const cursorFxEnabled = computed(() => fxMode.value === 'full')
+  ambientEnabled.value = readStoredEnabled()
 
   return {
-    fxMode: readonly(fxMode),
-    ambientEnabled,
-    cursorFxEnabled,
-    setFxMode,
-    cycleFxMode,
+    ambientEnabled: readonly(ambientEnabled),
     setAmbientBackdrop,
     toggleAmbientBackdrop,
   }

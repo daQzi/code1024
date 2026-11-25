@@ -1,6 +1,6 @@
 <template>
-    <div class="space-y-5">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="task-log-console table-page-layout flex h-full min-h-[32rem] flex-col gap-4">
+      <div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div class="flex gap-2">
           <button v-for="option in tabs" :key="option" type="button" class="btn btn-sm" :class="tab === option ? 'btn-primary' : 'btn-secondary'" :aria-pressed="tab === option" @click="tab = option">{{ t(`taskLogs.tabs.${option}`) }}</button>
         </div>
@@ -11,7 +11,7 @@
       </div>
       <slot v-if="admin && tab === 'review'" name="review" />
       <template v-else>
-        <form class="card space-y-3 p-4" @submit.prevent="applyFilters">
+        <form class="card shrink-0 space-y-3 p-4" @submit.prevent="applyFilters">
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label><span class="input-label">{{ t('taskLogs.taskId') }}</span><input v-model.trim="filters.task_id" class="input" maxlength="512" :placeholder="t('taskLogs.taskIdHint')" /></label>
             <label><span class="input-label">{{ t('taskLogs.model') }}</span><input v-model.trim="filters.model" class="input" maxlength="256" /></label>
@@ -32,15 +32,15 @@
             <label><span class="input-label">{{ t('taskLogs.end') }}</span><input v-model="end" type="datetime-local" class="input" /></label>
           </div>
         </form>
-        <p class="text-xs leading-5 text-gray-500 dark:text-dark-400">{{ t('taskLogs.coverage') }}</p>
-        <p v-if="error" role="alert" class="rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
-        <div class="card overflow-hidden" :aria-busy="loading">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
-              <thead class="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-400"><tr>
+        <p class="shrink-0 text-xs leading-5 text-gray-500 dark:text-dark-400">{{ t('taskLogs.coverage') }}</p>
+        <p v-if="error" role="alert" class="shrink-0 rounded-xl border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
+        <div class="card flex min-h-0 flex-1 flex-col overflow-hidden" :aria-busy="loading">
+          <div class="flex min-h-0 flex-1 flex-col overflow-auto">
+            <table class="w-full shrink-0 text-left text-sm">
+              <thead class="sticky top-0 z-10 border-b border-gray-200 bg-gray-50 text-xs text-gray-500 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-400"><tr>
                 <th class="px-4 py-3">{{ t('taskLogs.created') }}</th><th class="px-4 py-3">{{ t('taskLogs.model') }} / {{ t('taskLogs.taskId') }}</th><th class="px-4 py-3">{{ t('taskLogs.plugin') }}</th><th class="px-4 py-3">{{ t('taskLogs.group') }}</th><th v-if="admin" class="px-4 py-3">{{ t('taskLogs.userAccount') }}</th><th class="px-4 py-3">{{ t('common.status') }}</th><th class="px-4 py-3">{{ t('taskLogs.duration') }}</th><th class="px-4 py-3">{{ t('taskLogs.billing') }}</th><th class="px-4 py-3">{{ t('common.actions') }}</th>
               </tr></thead>
-              <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+              <tbody v-if="data?.items.length" class="divide-y divide-gray-100 dark:divide-dark-700">
                 <tr v-for="task in data?.items ?? []" :key="task.id" class="align-top transition-colors hover:bg-gray-50/70 dark:hover:bg-dark-800/40">
                   <td class="whitespace-nowrap px-4 py-4 text-xs text-gray-500 dark:text-dark-400">{{ formatDate(task.created_at) }}</td>
                   <td class="max-w-64 px-4 py-4">
@@ -77,11 +77,16 @@
                   <td class="whitespace-nowrap px-4 py-4 text-xs"><p>{{ billingLabel(task.billing_status) }}</p><span class="tabular-nums text-gray-500 dark:text-dark-400">{{ task.source === 'native' && task.actual_amount == null ? '—' : `$${task.actual_amount ?? task.hold_amount}` }}</span></td>
                   <td class="px-4 py-4"><button type="button" class="btn btn-secondary btn-sm" @click="openDetail(task.id)">{{ t('taskLogs.details') }}</button></td>
                 </tr>
-                <tr v-if="!data?.items.length"><td :colspan="admin ? 9 : 8" class="px-4 py-12 text-center text-gray-500 dark:text-dark-400">{{ loading ? t('common.loading') : t('taskLogs.empty') }}</td></tr>
               </tbody>
             </table>
+            <div v-if="!data?.items.length" data-testid="task-logs-empty" class="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center text-gray-500 dark:text-dark-400">
+              <svg class="mb-3 h-10 w-10 text-gray-400 dark:text-dark-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H6.911a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661z" />
+              </svg>
+              <p class="text-sm font-medium">{{ loading ? t('common.loading') : t('taskLogs.empty') }}</p>
+            </div>
           </div>
-          <component :is="paginationComponent" v-if="data && data.total > 0" :page="page" :page-size="pageSize" :total="data.total" @update:page="page = Number($event)" @update:page-size="pageSize = Number($event); page = 1" />
+          <component :is="paginationComponent" v-if="data && data.total > 0" class="shrink-0" :page="page" :page-size="pageSize" :total="data.total" @update:page="page = Number($event)" @update:page-size="pageSize = Number($event); page = 1" />
         </div>
       </template>
     </div>
@@ -312,3 +317,12 @@ onMounted(() => {
 })
 onBeforeUnmount(() => { document.removeEventListener('visibilitychange', visibilityChanged); clearInterval(timer); clearTimeout(copiedTimer); listController?.abort(); detailController?.abort(); downloadController?.abort(); maintenanceController?.abort(); props.cancelMutation?.() })
 </script>
+
+<style scoped>
+@media (max-width: 1023px) {
+  .task-log-console {
+    height: auto;
+    min-height: 0;
+  }
+}
+</style>

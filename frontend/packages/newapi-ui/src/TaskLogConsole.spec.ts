@@ -125,4 +125,17 @@ describe('standalone task log console', () => {
     expect(wrapper.find('[role="alert"]').text()).toBe('taskLogs.loadFailed')
     expect(wrapper.text()).not.toContain('secret')
   })
+
+  it('uses full-height table-page-layout with flex-1 centered empty state when empty', async () => {
+    const api = client()
+    vi.mocked(api.listTaskLogs).mockResolvedValue(page([]))
+    const wrapper = render(api)
+    await flushPromises()
+    const root = wrapper.find('.table-page-layout')
+    const empty = wrapper.find('[data-testid="task-logs-empty"]')
+    expect(root.exists()).toBe(true)
+    expect(empty.exists()).toBe(true)
+    expect(empty.classes()).toContain('flex-1')
+    expect(empty.text()).toContain('taskLogs.empty')
+  })
 })
