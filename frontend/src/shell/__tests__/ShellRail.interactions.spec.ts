@@ -90,4 +90,29 @@ describe('ShellRail interactions', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     expect(appState.setMobileOpen).toHaveBeenCalledWith(false)
   })
+
+  it('renders the Qimu workspace switcher and toggles dynamic aurora backdrop preference', async () => {
+    localStorage.removeItem('shell_ambient_backdrop')
+    appState.sidebarCollapsed = false
+    wrapper = mount(ShellRail, {
+      attachTo: document.body,
+      global: { stubs: { RouterLink: { template: '<a v-bind="$attrs"><slot /></a>' }, Icon: true } },
+    })
+
+    const switcher = wrapper.get('[data-testid="workspace-switcher"]')
+    const qimuLink = switcher.get('a')
+    expect(qimuLink.attributes('href')).toBe('https://qimu.code1024.cc/')
+    expect(qimuLink.text()).toContain('nav.workspaceQimu')
+
+    const toggle = wrapper.get('[data-testid="ambient-backdrop-toggle"]')
+    expect(toggle.attributes('aria-pressed')).toBe('true')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-pressed')).toBe('false')
+    expect(localStorage.getItem('shell_ambient_backdrop')).toBe('0')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-pressed')).toBe('true')
+    expect(localStorage.getItem('shell_ambient_backdrop')).toBe('1')
+  })
 })

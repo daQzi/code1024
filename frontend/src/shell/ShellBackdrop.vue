@@ -1,13 +1,162 @@
 <template>
-  <div class="shell-bg" aria-hidden="true">
+  <div class="shell-bg" :data-ambient-mode="shouldMountWebGL ? 'webgl' : 'css'" aria-hidden="true">
     <div class="shell-bg__blob shell-bg__blob--a" />
     <div class="shell-bg__blob shell-bg__blob--b" />
     <div class="shell-bg__blob shell-bg__blob--c" />
     <div class="shell-bg__blob shell-bg__blob--d" />
+    <canvas
+      v-if="shouldMountWebGL"
+      ref="canvasRef"
+      class="shell-bg__canvas"
+      :class="{ 'is-ready': engineReady }"
+    />
     <div class="shell-bg__grid" />
     <div class="shell-bg__grain" />
   </div>
 </template>
+
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useTheme } from '@/composables/useTheme'
+import { useAmbientBackdrop } from '@/composables/useAmbientBackdrop'
+import type { AmbientBackdropController } from './createAmbientBackdropEngine'
+
+const props = withDefaults(
+  defineProps<{
+    routePath?: string
+  }>(),
+  {
+    routePath: '/',
+  },
+)
+
+const { isDark } = useTheme()
+const { ambientEnabled } = useAmbientBackdrop()
+
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const engineReady = ref(false)
+const webglSupported = ref(false)
+const reducedMotion = ref(false)
+const isNarrowViewport = ref(false)
+
+let controller: AmbientBackdropController | null = null
+let resizeObserver: ResizeObserver | null = null
+let motionMedia: MediaQueryList | undefined
+let viewportMedia: MediaQueryList | undefined
+let mountToken = 0
+let unmounted = false
+
+function probeWebGL(): boolean {
+  if (typeof document === 'undefined') return false
+  try {
+    const probe = document.createElement('canvas')
+    return Boolean(probe.getContext('webgl2') || probe.getContext('webgl'))
+  } catch {
+    return false
+  }
+}
+
+function resolveMoodForPath(path: string): number {
+  if (/^\/(subscriptions|payment|redeem|orders)/.test(path)) return 0.32
+  if (/^\/model-plaza/.test(path)) return 0
+  if (/^\/(dashboard|keys|usage|admin)/.test(path)) return -0.32
+  return -0.2
+}
+
+const shouldMountWebGL = computed(
+  () => ambientEnabled.value && !reducedMotion.value && !isNarrowViewport.value && webglSupported.value,
+)
+
+function disposeEngine() {
+  mountToken++
+  engineReady.value = false
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  controller?.dispose()
+  controller = null
+}
+
+async function startEngine() {
+  const token = ++mountToken
+  await nextTick()
+  if (unmounted || token !== mountToken || !shouldMountWebGL.value) return
+  const canvas = canvasRef.value
+  if (!canvas) return
+
+  try {
+    const { createAmbientBackdropEngine } = await import('./createAmbientBackdropEngine')
+    if (unmounted || token !== mountToken || !shouldMountWebGL.value) return
+
+    controller = createAmbientBackdropEngine({
+      canvas,
+      initialDark: isDark.value,
+      initialMood: resolveMoodForPath(props.routePath),
+    })
+    engineReady.value = true
+
+    const syncSize = () => {
+      if (!controller) return
+      const w = canvas.parentElement?.clientWidth || window.innerWidth || 1440
+      const h = canvas.parentElement?.clientHeight || window.innerHeight || 900
+      controller.resize(w, h)
+    }
+
+    if (typeof ResizeObserver !== 'undefined' && canvas.parentElement) {
+      resizeObserver = new ResizeObserver(syncSize)
+      resizeObserver.observe(canvas.parentElement)
+    }
+  } catch {
+    engineReady.value = false
+    webglSupported.value = false
+    disposeEngine()
+  }
+}
+
+watch(shouldMountWebGL, (active) => {
+  if (active) {
+    void startEngine()
+  } else {
+    disposeEngine()
+  }
+})
+
+watch(isDark, (dark) => {
+  controller?.setDark(dark)
+})
+
+watch(
+  () => props.routePath,
+  (path) => {
+    controller?.setMood(resolveMoodForPath(path))
+  },
+)
+
+function syncMediaPreferences() {
+  reducedMotion.value = motionMedia?.matches ?? false
+  isNarrowViewport.value = viewportMedia?.matches ?? (typeof window !== 'undefined' && window.innerWidth < 768)
+}
+
+onMounted(() => {
+  webglSupported.value = probeWebGL()
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    motionMedia = window.matchMedia('(prefers-reduced-motion: reduce)')
+    viewportMedia = window.matchMedia('(max-width: 767px)')
+    motionMedia.addEventListener?.('change', syncMediaPreferences)
+    viewportMedia.addEventListener?.('change', syncMediaPreferences)
+  }
+  syncMediaPreferences()
+  if (shouldMountWebGL.value) {
+    void startEngine()
+  }
+})
+
+onBeforeUnmount(() => {
+  unmounted = true
+  motionMedia?.removeEventListener?.('change', syncMediaPreferences)
+  viewportMedia?.removeEventListener?.('change', syncMediaPreferences)
+  disposeEngine()
+})
+</script>
 
 <style scoped>
 .shell-bg {
@@ -22,6 +171,21 @@
     radial-gradient(110% 70% at 92% 8%, var(--ui-canvas-tint-2) 0%, transparent 44%),
     radial-gradient(120% 90% at 50% 104%, var(--ui-canvas-tint-3) 0%, transparent 52%),
     linear-gradient(168deg, var(--ui-canvas) 0%, var(--ui-canvas-deep) 100%);
+  opacity: 1;
+}
+
+.shell-bg__canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.shell-bg__canvas.is-ready {
   opacity: 1;
 }
 
@@ -74,20 +238,22 @@
 .shell-bg__grid {
   position: absolute;
   inset: 0;
+  z-index: 2;
   background-image:
     linear-gradient(to right, var(--ui-line-soft) 1px, transparent 1px),
     linear-gradient(to bottom, var(--ui-line-soft) 1px, transparent 1px);
   background-size: 56px 56px;
   -webkit-mask-image: radial-gradient(120% 90% at 30% 0%, #000 0%, transparent 72%);
   mask-image: radial-gradient(120% 90% at 30% 0%, #000 0%, transparent 72%);
-  opacity: 0.7;
+  opacity: 0.55;
 }
 
 /* 颗粒：让大面积渐变不出现色带 */
 .shell-bg__grain {
   position: absolute;
   inset: 0;
-  opacity: 0.16;
+  z-index: 3;
+  opacity: 0.14;
   mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
 }

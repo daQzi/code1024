@@ -11,15 +11,15 @@ type DocumentWithViewTransition = Document & {
   startViewTransition?: (callback: () => void) => ViewTransitionLike
 }
 
-const preference = ref<ThemePreference>('system')
-const isDark = ref(false)
+const preference = ref<ThemePreference>('dark')
+const isDark = ref(true)
 let media: MediaQueryList | undefined
 let initialized = false
 
 function storedPreference(): ThemePreference {
   try {
     const saved = localStorage.getItem('theme')
-    return saved === 'dark' || saved === 'light' ? saved : 'system'
+    return saved === 'dark' || saved === 'light' || saved === 'system' ? saved : 'dark'
   } catch {
     return preference.value
   }
@@ -110,9 +110,7 @@ export function setTheme(next: ThemePreference) {
     applyTheme()
   }
   try {
-    // Absence of an override is the existing application's system mode.
-    if (next === 'system') localStorage.removeItem('theme')
-    else localStorage.setItem('theme', next)
+    localStorage.setItem('theme', next)
   } catch {
     // Storage restrictions must not prevent the current page changing theme.
   }

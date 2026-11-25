@@ -327,4 +327,13 @@ describe('HomeView compact mode', () => {
     expect(navLink.findComponent(RouterLinkStub).exists() || navLink.element.tagName === 'A').toBe(true)
     expect(wrapper.findAllComponents(RouterLinkStub).some(link => link.attributes('data-testid') === 'nav-model-plaza' && link.props('to') === '/model-plaza')).toBe(true)
   })
+
+  it('renders a unified Act 1 flagship hero with capability switcher instead of a hard split card', async () => {
+    const wrapper = mountHome()
+    await flushPromises()
+
+    expect(wrapper.find('.sp-split-portal').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="hero-primary-cta"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="platform-mode-switcher"]').exists()).toBe(true)
+  })
 })

@@ -212,7 +212,7 @@ describe('SpatialPortalCanvas & ReferenceLanding', () => {
     expect(wrapper.get('.sp-act--aicode').classes()).toContain('is-active')
   })
 
-  it('updates hoverSide on portal dock pointerenter/leave', async () => {
+  it('updates hoverSide and unified Act 1 capability switcher modes', async () => {
     const CanvasStub = defineComponent({
       name: 'SpatialPortalCanvas',
       props: ['progress', 'hoverSide', 'dark', 'reducedMotion'],
@@ -233,9 +233,27 @@ describe('SpatialPortalCanvas & ReferenceLanding', () => {
 
     await flushPromises()
 
+    const canvas = wrapper.get('[data-testid="canvas-stub"]')
+    const modeAiCode = wrapper.get('[data-testid="mode-aicode"]')
+    const modeQimu = wrapper.get('[data-testid="mode-qimu"]')
+    const modeCore = wrapper.get('[data-testid="mode-core"]')
+
+    await modeAiCode.trigger('click')
+    expect(modeAiCode.attributes('aria-selected')).toBe('true')
+    expect(canvas.attributes('data-hover')).toBe('aicode')
+    expect(wrapper.get('.sp-mode-panel').text()).toContain('AICode')
+
+    await modeQimu.trigger('click')
+    expect(modeQimu.attributes('aria-selected')).toBe('true')
+    expect(canvas.attributes('data-hover')).toBe('qimu')
+    expect(wrapper.get('.sp-mode-panel').text()).toContain('启幕工坊')
+
+    await modeCore.trigger('click')
+    expect(modeCore.attributes('aria-selected')).toBe('true')
+    expect(canvas.attributes('data-hover')).toBe('')
+
     const aicodeDock = wrapper.get('[data-testid="portal-aicode"]')
     const qimuDock = wrapper.get('[data-testid="portal-qimu"]')
-    const canvas = wrapper.get('[data-testid="canvas-stub"]')
 
     await aicodeDock.trigger('pointerenter')
     expect(canvas.attributes('data-hover')).toBe('aicode')
@@ -335,8 +353,8 @@ describe('SpatialPortalCanvas & ReferenceLanding', () => {
     await flushPromises()
     expect(document.body.querySelector('[data-testid="auth-portal-modal"]')).toBeNull()
 
-    // Click AICode primary CTA -> opens modal in-page again
-    await wrapper.get('[data-testid="portal-aicode"] .sp-cta-aicode').trigger('click')
+    // Click Act 1 unified primary CTA -> opens modal in-page again
+    await wrapper.get('[data-testid="hero-primary-cta"]').trigger('click')
     await vi.waitFor(() => {
       expect(document.body.querySelector('[data-testid="auth-portal-modal"]')).not.toBeNull()
     })

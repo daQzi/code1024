@@ -170,8 +170,8 @@ html[data-theme='dark'] {
   --ui-glass-strong-rgb: 13 20 36;
   --ui-glass-soft-rgb: 11 17 31;
 
-  --ui-glass-alpha: 0.52;
-  --ui-glass-strong-alpha: 0.64;
+  --ui-glass-alpha: 0.48;
+  --ui-glass-strong-alpha: 0.60;
   --ui-glass-soft-alpha: 0.34;
 
   --ui-glass-blur: 30px;

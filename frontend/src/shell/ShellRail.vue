@@ -54,6 +54,45 @@
       </button>
     </div>
 
+    <!-- ---------------------------------------------------------- 工作空间切换 -->
+    <div
+      class="rail__workspace"
+      data-testid="workspace-switcher"
+      :aria-label="t('nav.workspaceSwitcher')"
+    >
+      <template v-if="!collapsed || mobileOpen">
+        <span class="rail__ws-pill is-active">
+          <span class="rail__ws-dot rail__ws-dot--aicode" aria-hidden="true" />
+          <span class="rail__ws-name">{{ t('nav.workspaceAicode') }}</span>
+        </span>
+        <a
+          :href="qimuUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="rail__ws-pill rail__ws-pill--qimu"
+          :title="qimuLabel"
+        >
+          <span class="rail__ws-dot rail__ws-dot--qimu" aria-hidden="true" />
+          <span class="rail__ws-name">{{ qimuLabel }}</span>
+          <Icon name="externalLink" size="xs" aria-hidden="true" />
+        </a>
+      </template>
+      <a
+        v-else
+        :href="qimuUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="rail__ws-compact"
+        :aria-label="qimuLabel"
+        @mouseenter="showTooltip($event, qimuLabel)"
+        @mouseleave="hideTooltip"
+        @focus="showTooltip($event, qimuLabel)"
+        @blur="hideTooltip"
+      >
+        <span class="rail__ws-dot rail__ws-dot--qimu" aria-hidden="true" />
+      </a>
+    </div>
+
     <!-- ---------------------------------------------------------- 导航 -->
     <nav ref="navRef" class="rail__nav ui-scroll" @scroll.passive="hideTooltip">
       <div v-for="section in sections" :key="section.key" class="rail__section">
@@ -166,6 +205,27 @@
     <div class="rail__foot">
       <button
         type="button"
+        class="rail__item rail__item--quiet rail__item--ambient"
+        :class="{ 'is-ambient-on': ambientEnabled }"
+        data-testid="ambient-backdrop-toggle"
+        :aria-pressed="ambientEnabled"
+        :title="ambientLabel"
+        @click="toggleAmbientBackdrop"
+        @mouseenter="showTooltip($event, ambientLabel)"
+        @mouseleave="hideTooltip"
+        @focus="showTooltip($event, ambientLabel)"
+        @blur="hideTooltip"
+      >
+        <span class="rail__icon">
+          <Icon name="sparkles" size="md" />
+        </span>
+        <span v-show="!collapsed || mobileOpen" class="rail__label">
+          {{ ambientLabel }}
+        </span>
+      </button>
+
+      <button
+        type="button"
         class="rail__item rail__item--quiet"
         :title="isDark ? t('nav.lightMode') : t('nav.darkMode')"
         @click="toggleTheme"
@@ -219,6 +279,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme } from '@/composables/useTheme'
+import { useAmbientBackdrop } from '@/composables/useAmbientBackdrop'
 import { useAppStore } from '@/stores'
 import Icon from '@/components/icons/Icon.vue'
 import VersionBadge from '@/components/common/VersionBadge.vue'
@@ -253,6 +314,20 @@ const railRef = ref<HTMLElement | null>(null)
 const navRef = ref<HTMLElement | null>(null)
 
 const { isDark, toggleTheme } = useTheme()
+const { ambientEnabled, toggleAmbientBackdrop } = useAmbientBackdrop()
+
+const ambientLabel = computed(() =>
+  ambientEnabled.value ? t('nav.ambientBackdropOn') : t('nav.ambientBackdropOff')
+)
+
+const qimuLink = computed(() => {
+  const links = appStore.cachedPublicSettings?.custom_topbar_links
+  if (!Array.isArray(links)) return undefined
+  return links.find((item) => item?.id === 'canvas' || /qimu/i.test(item?.url || ''))
+})
+
+const qimuUrl = computed(() => sanitizeUrl(qimuLink.value?.url || '') || 'https://qimu.code1024.cc/')
+const qimuLabel = computed(() => qimuLink.value?.label?.trim() || t('nav.workspaceQimu'))
 
 const tooltip = ref<{ label: string; top: number; left: number } | null>(null)
 let pointerRafId: number | null = null
@@ -528,6 +603,92 @@ html[data-theme='dark'] .rail::after {
   background: transparent;
   color: var(--ui-text-muted);
   cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ 工作空间切换 */
+.rail__workspace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: var(--ui-s-2);
+  border-radius: var(--ui-r-md);
+  background-color: rgb(var(--ui-glass-strong-rgb) / calc(var(--ui-glass-strong-alpha) - 0.14));
+  border: 1px solid var(--ui-line-soft);
+}
+
+.rail--collapsed .rail__workspace {
+  display: flex;
+  justify-content: center;
+  padding: 3px;
+}
+
+.rail__ws-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 7px;
+  border-radius: calc(var(--ui-r-md) - 2px);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: color var(--ui-dur-fast) var(--ui-ease-out), background-color var(--ui-dur-fast) var(--ui-ease-out);
+}
+
+.rail__ws-pill.is-active {
+  color: var(--ui-text);
+  background-color: rgb(var(--ui-glass-strong-rgb) / calc(var(--ui-glass-strong-alpha) + 0.18));
+  box-shadow: inset 0 1px 0 var(--ui-edge-inner);
+}
+
+.rail__ws-pill--qimu:hover {
+  color: var(--ui-text);
+  background-color: rgb(240 194 123 / 0.14);
+}
+
+.rail__ws-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail__ws-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 28px;
+  border-radius: var(--ui-r-sm);
+  transition: background-color var(--ui-dur-fast) var(--ui-ease-out);
+}
+
+.rail__ws-compact:hover {
+  background-color: rgb(240 194 123 / 0.14);
+}
+
+.rail__ws-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.rail__ws-dot--aicode {
+  background: #38e8d5;
+  box-shadow: 0 0 8px rgb(56 232 213 / 0.75);
+}
+
+.rail__ws-dot--qimu {
+  background: #f0c27b;
+  box-shadow: 0 0 8px rgb(240 194 123 / 0.75);
+}
+
+.rail__item--ambient.is-ambient-on .rail__icon {
+  color: var(--ui-accent);
 }
 
 /* ------------------------------------------------------------------ 导航 */

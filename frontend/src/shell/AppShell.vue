@@ -1,6 +1,6 @@
 <template>
   <div class="shell">
-    <ShellBackdrop />
+    <ShellBackdrop :route-path="route.path" />
 
     <ShellRail />
 

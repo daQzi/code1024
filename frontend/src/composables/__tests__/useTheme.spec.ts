@@ -53,19 +53,22 @@ describe('theme synchronization', () => {
     expect(media.addEventListener).toHaveBeenCalledTimes(1)
   })
 
-  it('follows system changes without overriding an explicit choice', () => {
-    media.matches = true
+  it('defaults to dark when unset and follows system changes only in explicit system mode', () => {
+    media.matches = false
     stop = initializeTheme()
     expectTheme(true)
-    media.matches = false
-    onSystemChange?.()
+    setTheme('system')
+    expect(localStorage.getItem('theme')).toBe('system')
     expectTheme(false)
+    media.matches = true
+    onSystemChange?.()
+    expectTheme(true)
     setTheme('light')
     media.matches = true
     onSystemChange?.()
     expectTheme(false)
     setTheme('system')
-    expect(localStorage.getItem('theme')).toBeNull()
+    expect(localStorage.getItem('theme')).toBe('system')
     expectTheme(true)
     media.matches = false
     onSystemChange?.()
@@ -100,13 +103,15 @@ describe('theme synchronization', () => {
   it('applies the current selection even when persisting it is blocked', () => {
     stop = initializeTheme()
     vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('Storage blocked') })
-    expect(() => setTheme('dark')).not.toThrow()
-    expectTheme(true)
+    expect(() => setTheme('light')).not.toThrow()
+    expectTheme(false)
   })
 
   it('removes application-lifetime subscriptions during teardown', () => {
     const removeStorage = vi.spyOn(window, 'removeEventListener')
+    localStorage.setItem('theme', 'light')
     stop = initializeTheme()
+    expectTheme(false)
     stop()
     expect(media.removeEventListener).toHaveBeenCalledWith('change', onSystemChange)
     expect(removeStorage).toHaveBeenCalledWith('storage', expect.any(Function))
@@ -116,14 +121,15 @@ describe('theme synchronization', () => {
   })
 
   it('supports the legacy system-theme listener API', () => {
-    const legacyMedia = { matches: true, addListener: vi.fn(), removeListener: vi.fn() }
+    const legacyMedia = { matches: false, addListener: vi.fn(), removeListener: vi.fn() }
     vi.mocked(window.matchMedia).mockReturnValue(legacyMedia as unknown as MediaQueryList)
+    localStorage.setItem('theme', 'system')
     stop = initializeTheme()
-    expectTheme(true)
-    const change = legacyMedia.addListener.mock.calls[0][0]
-    legacyMedia.matches = false
-    change()
     expectTheme(false)
+    const change = legacyMedia.addListener.mock.calls[0][0]
+    legacyMedia.matches = true
+    change()
+    expectTheme(true)
     stop()
     expect(legacyMedia.removeListener).toHaveBeenCalledWith(change)
   })
@@ -140,9 +146,9 @@ describe('theme synchronization', () => {
     })
     try {
       stop = initializeTheme()
-      setTheme('dark')
+      setTheme('light')
       expect(startViewTransition).toHaveBeenCalledTimes(1)
-      expectTheme(true)
+      expectTheme(false)
     } finally {
       delete (document as unknown as Record<string, unknown>).startViewTransition
     }
@@ -164,9 +170,9 @@ describe('theme synchronization', () => {
     }) as unknown as MediaQueryList)
     try {
       stop = initializeTheme()
-      setTheme('dark')
+      setTheme('light')
       expect(startViewTransition).not.toHaveBeenCalled()
-      expectTheme(true)
+      expectTheme(false)
     } finally {
       delete (document as unknown as Record<string, unknown>).startViewTransition
     }

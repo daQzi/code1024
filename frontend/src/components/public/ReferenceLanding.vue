@@ -166,82 +166,158 @@
                   <span class="sp-kicker-label">{{ t('referenceLanding.portal.tagline') }}</span>
                 </span>
                 <h1 id="home-title">{{ siteName }}</h1>
+                <p class="sp-hero-subtitle">{{ t('referenceLanding.portal.heroSubtitle') }}</p>
+              </div>
+
+              <div class="sp-hero-cta-row">
+                <router-link
+                  :to="entryPath"
+                  class="glass-button sp-cta-aicode sp-cta-primary"
+                  data-testid="hero-primary-cta"
+                  @click.capture="handleAuthEntryClick($event)"
+                >
+                  <span class="sp-roll">
+                    <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.primaryAction') }}</span>
+                    <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.primaryAction') }}</span>
+                  </span>
+                  <Icon name="arrowRight" size="sm" aria-hidden="true" />
+                </router-link>
+
+                <router-link
+                  v-if="modelPlazaEnabled"
+                  :to="modelPlazaPath"
+                  class="glass-button sp-cta-secondary"
+                  data-testid="hero-secondary-cta"
+                  @click.capture="handleProtectedPlazaClick($event)"
+                >
+                  <Icon name="grid" size="sm" aria-hidden="true" />
+                  <span>{{ modelPlazaLinkLabel }}</span>
+                </router-link>
+                <button
+                  v-else
+                  type="button"
+                  class="glass-button sp-cta-secondary"
+                  data-testid="hero-secondary-cta"
+                  @click="scrollToAct('act-aicode')"
+                >
+                  <Icon name="sparkles" size="sm" aria-hidden="true" />
+                  <span>{{ t('referenceLanding.portal.modeAiCode') }}</span>
+                </button>
               </div>
 
               <div
-                ref="splitPortalRef"
-                class="sp-split-portal"
-                @pointermove="onSplitPortalPointerMove"
-                @pointerleave="onSplitPortalPointerLeave"
+                ref="modeDockRef"
+                class="sp-mode-dock"
+                data-testid="platform-mode-switcher"
+                @pointermove="onModeDockPointerMove"
+                @pointerleave="onModeDockPointerLeave"
               >
-                <article
-                  class="sp-split-cell sp-split-cell--aicode"
-                  data-testid="portal-aicode"
-                  @pointerenter="hoverSide = 'aicode'"
-                  @pointerleave="hoverSide = null"
+                <div
+                  class="sp-mode-tabs"
+                  role="tablist"
+                  :aria-label="t('referenceLanding.portal.tagline')"
+                  @pointerleave="resetHeroPreview"
                 >
-                  <div class="sp-dock-head">
+                  <button
+                    type="button"
+                    role="tab"
+                    class="sp-mode-tab"
+                    :class="{ 'is-active': heroMode === 'core' }"
+                    :aria-selected="heroMode === 'core'"
+                    data-testid="mode-core"
+                    @click="setHeroMode('core')"
+                    @pointerenter="previewHeroMode('core')"
+                  >
+                    <span>{{ t('referenceLanding.portal.modeCore') }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="sp-mode-tab sp-mode-tab--aicode"
+                    :class="{ 'is-active': heroMode === 'aicode' }"
+                    :aria-selected="heroMode === 'aicode'"
+                    data-testid="mode-aicode"
+                    @click="setHeroMode('aicode')"
+                    @pointerenter="previewHeroMode('aicode')"
+                  >
                     <span class="sp-dot sp-dot--aicode" aria-hidden="true" />
-                    <div>
-                      <h2>{{ t('referenceLanding.portal.aicodeTitle') }}</h2>
-                      <span class="sp-dock-tags">{{ t('referenceLanding.portal.aicodeTag') }}</span>
-                    </div>
-                  </div>
-                  <div class="sp-dock-actions">
-                    <router-link
-                      :to="entryPath"
-                      class="glass-button sp-cta-aicode"
-                      @click.capture="handleAuthEntryClick($event)"
-                    >
-                      <span class="sp-roll">
-                        <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
-                        <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
-                      </span>
-                      <Icon name="arrowRight" size="sm" aria-hidden="true" />
-                    </router-link>
-                    <button
-                      type="button"
-                      class="glass-button rl-icon-button sp-copy-btn"
-                      :class="{ 'is-copied': copiedTarget === 'hero-address' }"
-                      :aria-label="t(copiedTarget === 'hero-address' ? 'glass.home.copied' : 'referenceLanding.portal.copyApi')"
-                      :title="apiBaseUrl"
-                      @click="copyValue(apiBaseUrl, 'hero-address')"
-                    >
-                      <Icon :name="copiedTarget === 'hero-address' ? 'check' : 'copy'" size="md" aria-hidden="true" />
-                    </button>
-                  </div>
-                </article>
-
-                <span class="sp-split-divider" aria-hidden="true" />
-
-                <article
-                  class="sp-split-cell sp-split-cell--qimu"
-                  data-testid="portal-qimu"
-                  @pointerenter="hoverSide = 'qimu'"
-                  @pointerleave="hoverSide = null"
-                >
-                  <div class="sp-dock-head">
+                    <span>{{ t('referenceLanding.portal.modeAiCode') }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    class="sp-mode-tab sp-mode-tab--qimu"
+                    :class="{ 'is-active': heroMode === 'qimu' }"
+                    :aria-selected="heroMode === 'qimu'"
+                    data-testid="mode-qimu"
+                    @click="setHeroMode('qimu')"
+                    @pointerenter="previewHeroMode('qimu')"
+                  >
                     <span class="sp-dot sp-dot--qimu" aria-hidden="true" />
-                    <div>
-                      <h2>{{ t('referenceLanding.portal.qimuTitle') }}</h2>
-                      <span class="sp-dock-tags">{{ t('referenceLanding.portal.qimuTag') }}</span>
+                    <span>{{ t('referenceLanding.portal.modeQimu') }}</span>
+                  </button>
+                </div>
+
+                <div class="sp-mode-panel" role="tabpanel">
+                  <template v-if="heroMode === 'core'">
+                    <span class="sp-mode-summary">{{ t('referenceLanding.portal.coreSummary') }}</span>
+                    <div class="sp-mode-quick">
+                      <button type="button" class="sp-mode-jump" @click="scrollToAct('act-aicode')">
+                        <span class="sp-dot sp-dot--aicode" aria-hidden="true" />
+                        <span>{{ t('referenceLanding.portal.aicodeTitle') }}</span>
+                      </button>
+                      <button type="button" class="sp-mode-jump" @click="scrollToAct('act-qimu')">
+                        <span class="sp-dot sp-dot--qimu" aria-hidden="true" />
+                        <span>{{ t('referenceLanding.portal.qimuTitle') }}</span>
+                      </button>
                     </div>
-                  </div>
-                  <div class="sp-dock-actions">
-                    <a
-                      :href="qimuUrl"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="glass-button sp-cta-qimu"
-                    >
-                      <span class="sp-roll">
-                        <span class="sp-roll-main">{{ qimuLabel }}</span>
-                        <span class="sp-roll-hover" aria-hidden="true">{{ qimuLabel }}</span>
-                      </span>
-                      <Icon name="externalLink" size="sm" aria-hidden="true" />
-                    </a>
-                  </div>
-                </article>
+                  </template>
+                  <template v-else-if="heroMode === 'aicode'">
+                    <span class="sp-mode-summary">
+                      <strong>{{ t('referenceLanding.portal.aicodeTitle') }}</strong>
+                      <span aria-hidden="true"> · </span>
+                      {{ t('referenceLanding.portal.aicodeTag') }}
+                    </span>
+                    <div class="sp-mode-actions">
+                      <router-link
+                        :to="entryPath"
+                        class="glass-button sp-mode-action"
+                        @click.capture="handleAuthEntryClick($event)"
+                      >
+                        <span>{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                        <Icon name="arrowRight" size="sm" aria-hidden="true" />
+                      </router-link>
+                      <button
+                        type="button"
+                        class="glass-button rl-icon-button sp-copy-btn"
+                        :class="{ 'is-copied': copiedTarget === 'hero-address' }"
+                        :aria-label="t(copiedTarget === 'hero-address' ? 'glass.home.copied' : 'referenceLanding.portal.copyApi')"
+                        :title="apiBaseUrl"
+                        @click="copyValue(apiBaseUrl, 'hero-address')"
+                      >
+                        <Icon :name="copiedTarget === 'hero-address' ? 'check' : 'copy'" size="md" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span class="sp-mode-summary">
+                      <strong>{{ t('referenceLanding.portal.qimuTitle') }}</strong>
+                      <span aria-hidden="true"> · </span>
+                      {{ t('referenceLanding.portal.qimuTag') }}
+                    </span>
+                    <div class="sp-mode-actions">
+                      <a
+                        :href="qimuUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="glass-button sp-mode-action sp-mode-action--qimu"
+                      >
+                        <span>{{ qimuLabel }}</span>
+                        <Icon name="externalLink" size="sm" aria-hidden="true" />
+                      </a>
+                    </div>
+                  </template>
+                </div>
               </div>
 
               <button
@@ -262,7 +338,12 @@
             :aria-hidden="activeAct !== 'aicode'"
           >
             <div class="rl-container sp-stage-bar sp-stage-bar--left">
-              <div class="sp-stage-dock">
+              <div
+                class="sp-stage-dock"
+                data-testid="portal-aicode"
+                @pointerenter="hoverSide = 'aicode'"
+                @pointerleave="resetHeroPreview"
+              >
                 <div class="sp-dock-head">
                   <span class="sp-dot sp-dot--aicode" aria-hidden="true" />
                   <div>
@@ -314,7 +395,12 @@
             :aria-hidden="activeAct !== 'qimu'"
           >
             <div class="rl-container sp-stage-bar sp-stage-bar--right">
-              <div class="sp-stage-dock">
+              <div
+                class="sp-stage-dock"
+                data-testid="portal-qimu"
+                @pointerenter="hoverSide = 'qimu'"
+                @pointerleave="resetHeroPreview"
+              >
                 <div class="sp-dock-head">
                   <span class="sp-dot sp-dot--qimu" aria-hidden="true" />
                   <div>
@@ -347,6 +433,7 @@
             :class="{ 'is-active': activeAct === 'finale' }"
             :aria-hidden="activeAct !== 'finale'"
           >
+            <h2 class="sp-finale-title">{{ t('referenceLanding.portal.finaleTitle') }}</h2>
             <div class="sp-finale-portals">
               <router-link
                 :to="entryPath"
@@ -354,8 +441,8 @@
                 @click.capture="handleAuthEntryClick($event)"
               >
                 <span class="sp-roll">
-                  <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
-                  <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.aicodeAction') }}</span>
+                  <span class="sp-roll-main">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.primaryAction') }}</span>
+                  <span class="sp-roll-hover" aria-hidden="true">{{ t(isAuthenticated ? 'referenceLanding.portal.consoleAction' : 'referenceLanding.portal.primaryAction') }}</span>
                 </span>
                 <Icon name="arrowRight" size="md" aria-hidden="true" />
               </router-link>
@@ -486,10 +573,26 @@ function handleProtectedPlazaClick(event: MouseEvent) {
 const landingRoot = ref<HTMLElement | null>(null)
 const headerRef = ref<HTMLElement | null>(null)
 const trackRef = ref<HTMLElement | null>(null)
-const splitPortalRef = ref<HTMLElement | null>(null)
+const modeDockRef = ref<HTMLElement | null>(null)
 
-function onSplitPortalPointerMove(event: PointerEvent) {
-  const el = splitPortalRef.value
+type HeroMode = 'core' | 'aicode' | 'qimu'
+const heroMode = ref<HeroMode>('core')
+
+function setHeroMode(mode: HeroMode) {
+  heroMode.value = mode
+  hoverSide.value = mode === 'core' ? null : mode
+}
+
+function previewHeroMode(mode: HeroMode) {
+  hoverSide.value = mode === 'core' ? null : mode
+}
+
+function resetHeroPreview() {
+  hoverSide.value = heroMode.value === 'core' ? null : heroMode.value
+}
+
+function onModeDockPointerMove(event: PointerEvent) {
+  const el = modeDockRef.value
   if (!el || reducedMotion.value) return
   const rect = el.getBoundingClientRect()
   if (rect.width <= 0 || rect.height <= 0) return
@@ -499,8 +602,8 @@ function onSplitPortalPointerMove(event: PointerEvent) {
   el.style.setProperty('--sp-my', `${y.toFixed(1)}%`)
 }
 
-function onSplitPortalPointerLeave() {
-  const el = splitPortalRef.value
+function onModeDockPointerLeave() {
+  const el = modeDockRef.value
   if (!el) return
   el.style.setProperty('--sp-mx', '50%')
   el.style.setProperty('--sp-my', '0%')
