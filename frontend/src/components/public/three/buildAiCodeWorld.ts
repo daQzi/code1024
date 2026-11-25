@@ -53,14 +53,14 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
 
   // Architectural brushed chassis materials (zero transmission, instant single-pass MSAA)
   const chassisMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0f1a,
+    color: 0x101312,
     metalness: 0.72,
     roughness: 0.42,
     envMapIntensity: 0.45,
   })
   const trimCyanMat = new THREE.MeshStandardMaterial({
-    color: 0x22d3ee,
-    emissive: 0x06b6d4,
+    color: 0x7ba79b,
+    emissive: 0x7ba79b,
     emissiveIntensity: 0.95,
     metalness: 0.72,
     roughness: 0.2,
@@ -90,8 +90,8 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
   const coreOrbGeo = new THREE.SphereGeometry(0.46, 32, 24)
   geometries.push(coreOrbGeo)
   const coreOrbMat = new THREE.MeshStandardMaterial({
-    color: 0x0f172a,
-    emissive: 0x0ea5e9,
+    color: 0x171a18,
+    emissive: 0x6d9187,
     emissiveIntensity: 1.1,
     metalness: 0.92,
     roughness: 0.12,
@@ -102,7 +102,7 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
 
   const coreGlowMat = new THREE.SpriteMaterial({
     map: softGlowTex,
-    color: 0x22d3ee,
+    color: 0x7ba79b,
     transparent: true,
     opacity: 0.62,
     depthWrite: false,
@@ -117,8 +117,8 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
   const gimbalGeoB = new THREE.TorusGeometry(1.42, 0.022, 10, 64)
   geometries.push(gimbalGeoA, gimbalGeoB)
   const gimbalMatB = new THREE.MeshStandardMaterial({
-    color: 0x818cf8,
-    emissive: 0x4f46e5,
+    color: 0x6d9187,
+    emissive: 0x3f635a,
     emissiveIntensity: 0.95,
     metalness: 0.84,
     roughness: 0.18,
@@ -192,7 +192,7 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
         float r2 = dot(c, c);
         if (r2 > 0.25) discard;
         float alpha = smoothstep(0.25, 0.02, r2) * vPulse * mix(0.92, 0.42, uThemeT);
-        vec3 col = mix(vec3(0.14, 0.90, 1.0), vec3(0.49, 0.45, 0.98), vMix);
+        vec3 col = mix(vec3(0.49, 0.66, 0.60), vec3(0.69, 0.57, 0.40), vMix);
         gl_FragColor = vec4(col, alpha);
       }
     `,
@@ -226,8 +226,8 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
       side: THREE.FrontSide,
     })
     const bezelMat = new THREE.MeshStandardMaterial({
-      color: 0x0e172a,
-      emissive: 0x0e7490,
+      color: 0x141715,
+      emissive: 0x4a7268,
       emissiveIntensity: 0.24,
       metalness: 0.88,
       roughness: 0.2,
@@ -282,8 +282,8 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
         float frame = 1.0 - min(borderX, borderY);
         float scan = smoothstep(0.65, 1.0, sin(vUv.y * 42.0 - uTime * 3.5) * 0.5 + 0.5);
         float bar = smoothstep(0.75, 0.98, sin(vUv.x * 18.0 + floor(vUv.y * 6.0) * 1.4 - uTime * 2.2) * 0.5 + 0.5);
-        vec3 cyanCol = vec3(0.14, 0.88, 1.0);
-        vec3 indigoCol = vec3(0.45, 0.44, 0.98);
+        vec3 cyanCol = vec3(0.49, 0.66, 0.60);
+        vec3 indigoCol = vec3(0.69, 0.57, 0.40);
         vec3 col = mix(indigoCol, cyanCol, vUv.x * 0.7 + scan * 0.3);
         float alpha = (0.12 + frame * 0.45 + scan * 0.14 + bar * 0.18) * mix(0.85, 0.45, uThemeT);
         gl_FragColor = vec4(col, alpha);
@@ -358,17 +358,17 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
         float lightMix = clamp(dot(n, normalize(vec3(0.4, 0.85, 0.55))) * 0.5 + 0.5, 0.0, 1.0);
 
         // Dark obsidian basalt vs Light Mode frosted alabaster stone monoliths
-        vec3 darkStone = mix(vec3(0.024, 0.036, 0.075), vec3(0.065, 0.095, 0.175), lightMix);
-        vec3 lightStone = mix(vec3(0.78, 0.84, 0.93), vec3(0.95, 0.97, 1.0), lightMix);
+        vec3 darkStone = mix(vec3(0.030, 0.036, 0.034), vec3(0.055, 0.065, 0.061), lightMix);
+        vec3 lightStone = mix(vec3(0.83, 0.82, 0.80), vec3(0.94, 0.94, 0.92), lightMix);
         vec3 baseBody = mix(darkStone, lightStone, uThemeT);
 
-        vec3 cyanGlow = vec3(0.14, 0.90, 1.0);
-        vec3 indigoGlow = vec3(0.45, 0.48, 0.98);
+        vec3 cyanGlow = vec3(0.49, 0.66, 0.60);
+        vec3 indigoGlow = vec3(0.69, 0.57, 0.40);
         vec3 pulseColor = mix(cyanGlow, indigoGlow, fract(vInstPhase * 0.37));
 
         float energy = (edgeStrip * 0.38 + centerSlot * flowWave * 1.15) * isVerticalSide * heightFade;
         vec3 darkCol = baseBody + pulseColor * energy * 1.15;
-        vec3 lightCol = mix(baseBody, vec3(0.05, 0.58, 0.84), clamp(energy * 0.48, 0.0, 0.65));
+        vec3 lightCol = mix(baseBody, vec3(0.25, 0.44, 0.40), clamp(energy * 0.48, 0.0, 0.65));
 
         gl_FragColor = vec4(mix(darkCol, lightCol, uThemeT), 1.0);
       }
@@ -422,11 +422,11 @@ export function buildAiCodeWorld(highTier: boolean): AiCodeWorldHandle {
     wingLeft.position.y = 2.2 + Math.sin(elapsed * 1.15) * 0.09
     wingRight.position.y = 2.2 + Math.cos(elapsed * 1.15) * 0.09
 
-    const themeChassis = themeT > 0.5 ? 0xe8edf5 : 0x0a0f1a
+    const themeChassis = themeT > 0.5 ? 0xece9e2 : 0x101312
     chassisMat.color.setHex(themeChassis)
-    mainCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xcbd5e1 : 0x0e172a)
-    leftCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xcbd5e1 : 0x0e172a)
-    rightCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xcbd5e1 : 0x0e172a)
+    mainCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xd2cec7 : 0x141715)
+    leftCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xd2cec7 : 0x141715)
+    rightCluster.bezelMat.color.setHex(themeT > 0.5 ? 0xd2cec7 : 0x141715)
     trimCyanMat.emissiveIntensity = THREE.MathUtils.lerp(0.95, 0.35, themeT)
     coreGlowMat.opacity = THREE.MathUtils.lerp(0.62, 0.25, themeT) * (0.85 + 0.15 * focusWeight)
   }

@@ -10,11 +10,13 @@
   --glass-action-ink:#174574;
   --glass-panel-fill:linear-gradient(145deg,rgb(255 255 255 / .46),rgb(255 255 255 / .2));
   --glass-panel-blur:blur(20px) saturate(145%);
-  --glass-primary-fill:linear-gradient(135deg,#1b6be6 0%,#0b5bd3 52%,#0848ab 100%);
-  --glass-primary-hover:linear-gradient(135deg,#2577f2 0%,#0f64e6 52%,#0a51bf 100%);
+  /* 主操作色与登录后控制台保持同一支：青绿 → 深青 → 蓝，避免「登录是蓝色、
+     进控制台变青色」的割裂。白字在该渐变各段均 ≥5.3:1。 */
+  --glass-primary-fill:linear-gradient(135deg,#0f766e 0%,#0e7490 52%,#0369a1 100%);
+  --glass-primary-hover:linear-gradient(135deg,#11806f 0%,#10809c 52%,#047aae 100%);
   --glass-primary-edge:rgb(255 255 255 / .38);
-  --glass-primary-shadow:inset 0 1px 1px rgb(255 255 255 / .45),inset 0 -1px 1.5px rgb(4 30 78 / .28),0 10px 24px -10px rgb(8 72 171 / .52);
-  --glass-primary-shadow-hover:inset 0 1px 1px rgb(255 255 255 / .55),inset 0 -1px 1.5px rgb(4 30 78 / .26),0 14px 28px -10px rgb(8 72 171 / .6);
+  --glass-primary-shadow:inset 0 1px 1px rgb(255 255 255 / .45),inset 0 -1px 1.5px rgb(4 30 78 / .28),0 10px 24px -10px rgb(13 116 128 / .52);
+  --glass-primary-shadow-hover:inset 0 1px 1px rgb(255 255 255 / .55),inset 0 -1px 1.5px rgb(4 30 78 / .26),0 14px 28px -10px rgb(13 116 128 / .6);
   --glass-primary-ink:#ffffff;
 }
 .dark {
@@ -25,23 +27,24 @@
   --glass-control-ink:#e5edf8;
   --glass-action-ink:#e0efff;
   --glass-panel-fill:linear-gradient(145deg,rgb(32 49 71 / .58),rgb(24 39 60 / .28));
-  --glass-primary-fill:linear-gradient(135deg,#216ce0 0%,#1556bf 55%,#10459e 100%);
-  --glass-primary-hover:linear-gradient(135deg,#2d79ee 0%,#1a62d4 55%,#1450b5 100%);
+  --glass-primary-fill:linear-gradient(135deg,#2dd4bf 0%,#5eead4 55%,#93c5fd 100%);
+  --glass-primary-hover:linear-gradient(135deg,#5eead4 0%,#7ff0e2 55%,#aed3ff 100%);
   --glass-primary-edge:rgb(198 226 255 / .42);
-  --glass-primary-shadow:inset 0 1px 1px rgb(225 241 255 / .42),inset 0 -1px 1.5px rgb(5 18 42 / .42),0 12px 28px -10px rgb(22 98 219 / .58);
-  --glass-primary-shadow-hover:inset 0 1px 1px rgb(232 245 255 / .52),inset 0 -1px 1.5px rgb(5 18 42 / .38),0 16px 32px -10px rgb(34 114 236 / .68);
-  --glass-primary-ink:#f7fbff;
+  --glass-primary-shadow:inset 0 1px 1px rgb(225 241 255 / .42),inset 0 -1px 1.5px rgb(5 18 42 / .42),0 12px 28px -10px rgb(45 212 191 / .58);
+  --glass-primary-shadow-hover:inset 0 1px 1px rgb(232 245 255 / .52),inset 0 -1px 1.5px rgb(5 18 42 / .38),0 16px 32px -10px rgb(94 234 212 / .68);
+  /* 深色主题主按钮是浅色渐变，正文色必须反过来用深墨，否则白字看不见。 */
+  --glass-primary-ink:#04211d;
 }
 /* Public pages own their materials; account and admin surfaces keep their tokens. */
 .public-glass {
-  --glass-ground:#edf3fa; --glass-text:#182638; --glass-muted:#52647c; --glass-line:rgb(72 99 135 / .19); --glass-accent:#0666d3; --glass-soft:rgb(255 255 255 / .58);
+  --glass-ground:#edf3fa; --glass-text:#182638; --glass-muted:#52647c; --glass-line:rgb(72 99 135 / .19); --glass-accent:#0f766e; --glass-soft:rgb(255 255 255 / .58);
   --glass-material:rgb(255 255 255 / .2); --glass-thick:rgb(255 255 255 / .46); --glass-field:var(--glass-control-fill); --glass-rim:rgb(255 255 255 / .68);
-  --auth-bg:var(--glass-field); --auth-surface:var(--glass-thick); --auth-text:var(--glass-text); --auth-muted:var(--glass-muted); --auth-line:var(--glass-line); --auth-control-line:var(--glass-line); --auth-blue:var(--glass-accent); --auth-button:#0876e9;
+  --auth-bg:var(--glass-field); --auth-surface:var(--glass-thick); --auth-text:var(--glass-text); --auth-muted:var(--glass-muted); --auth-line:var(--glass-line); --auth-control-line:var(--glass-line); --auth-blue:var(--glass-accent); --auth-button:#0f766e;
   --ui-ease-out:cubic-bezier(.23,1,.32,1); --ui-ease-in-out:cubic-bezier(.77,0,.175,1); --ui-dur-fast:120ms; --ui-dur-base:200ms;
   position:relative; isolation:isolate; min-height:100vh; min-height:100svh; color:var(--glass-text); background:var(--glass-ground); color-scheme:light;
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; font-optical-sizing:auto; -webkit-font-smoothing:antialiased; -webkit-text-size-adjust:100%; line-height:1.5;
 }
-.dark .public-glass { --glass-ground:#142338; --glass-text:#f2f6fc; --glass-muted:#b6c6da; --glass-line:rgb(191 214 245 / .24); --glass-accent:#82baff; --glass-soft:rgb(43 62 86 / .18); --glass-material:rgb(32 49 71 / .28); --glass-thick:rgb(28 43 63 / .58); --glass-rim:rgb(219 235 255 / .24); color-scheme:dark; }
+.dark .public-glass { --glass-ground:#142338; --glass-text:#f2f6fc; --glass-muted:#b6c6da; --glass-line:rgb(191 214 245 / .24); --glass-accent:#5eead4; --glass-soft:rgb(43 62 86 / .18); --glass-material:rgb(32 49 71 / .28); --glass-thick:rgb(28 43 63 / .58); --glass-rim:rgb(219 235 255 / .24); color-scheme:dark; }
 .public-glass *, .public-glass *::before, .public-glass *::after { box-sizing:border-box; }
 .public-glass button, .public-glass a, .public-glass summary { -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
 .public-glass button { font-family:inherit; }
@@ -161,12 +164,12 @@ body:has(.public-glass) .announcement-confirm:active:not(:focus-visible) { trans
 @media (hover:hover) and (pointer:fine) { body:has(.public-glass) .announcement-confirm:hover { background:var(--glass-control-hover); } }
 @media (prefers-reduced-motion:reduce) { body:has(.public-glass) .announcement-confirm { transition:none; } body:has(.public-glass) .announcement-confirm:active { transform:none; } }
 @media (prefers-reduced-transparency:reduce), (prefers-contrast:more) {
-  :root { --glass-control-fill:#f4f7fc; --glass-control-hover:#e5edf8; --glass-control-edge:#8498b3; --glass-control-shadow:none; --glass-control-blur:none; --glass-panel-fill:#f7f9fc; --glass-panel-blur:none; --glass-primary-fill:#0550ae; --glass-primary-hover:#044291; --glass-primary-edge:#033575; --glass-primary-shadow:none; --glass-primary-shadow-hover:none; --glass-primary-ink:#ffffff; }
-  .dark { --glass-control-fill:#203149; --glass-control-hover:#304762; --glass-control-edge:#8da6c4; --glass-panel-fill:#17293f; --glass-primary-fill:#82baff; --glass-primary-hover:#a3cdff; --glass-primary-edge:#b9daff; --glass-primary-shadow:none; --glass-primary-shadow-hover:none; --glass-primary-ink:#0b1a2e; }
+  :root { --glass-control-fill:#f4f7fc; --glass-control-hover:#e5edf8; --glass-control-edge:#8498b3; --glass-control-shadow:none; --glass-control-blur:none; --glass-panel-fill:#f7f9fc; --glass-panel-blur:none; --glass-primary-fill:#0f766e; --glass-primary-hover:#0b6b60; --glass-primary-edge:#075e56; --glass-primary-shadow:none; --glass-primary-shadow-hover:none; --glass-primary-ink:#ffffff; }
+  .dark { --glass-control-fill:#203149; --glass-control-hover:#304762; --glass-control-edge:#8da6c4; --glass-panel-fill:#17293f; --glass-primary-fill:#5eead4; --glass-primary-hover:#7ff0e2; --glass-primary-edge:#9ff5e8; --glass-primary-shadow:none; --glass-primary-shadow-hover:none; --glass-primary-ink:#04211d; }
   .public-glass { --glass-material:#f4f7fc; --glass-thick:#fff; --glass-field:#fff; --glass-rim:#9caec5; }
   .dark .public-glass { --glass-material:#203149; --glass-thick:#17293f; --glass-field:#102137; --glass-rim:#7089a9; }
 }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
-  :root { --glass-control-fill:#eef3fa; --glass-control-hover:#e4edf8; --glass-panel-fill:#f4f7fc; --glass-control-blur:none; --glass-panel-blur:none; --glass-primary-fill:#0b5bd3; --glass-primary-hover:#094fb8; }
-  .dark { --glass-control-fill:#203149; --glass-control-hover:#304762; --glass-panel-fill:#17293f; --glass-primary-fill:#1556bf; --glass-primary-hover:#1a62d4; }
+  :root { --glass-control-fill:#eef3fa; --glass-control-hover:#e4edf8; --glass-panel-fill:#f4f7fc; --glass-control-blur:none; --glass-panel-blur:none; --glass-primary-fill:#0f766e; --glass-primary-hover:#0b6b60; }
+  .dark { --glass-control-fill:#203149; --glass-control-hover:#304762; --glass-panel-fill:#17293f; --glass-primary-fill:#2dd4bf; --glass-primary-hover:#5eead4; }
 }

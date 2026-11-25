@@ -109,7 +109,7 @@ const series = computed(() => {
 })
 const chartData = computed(() => ({
   labels: series.value.map(p => new Date(p.bucket!).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })),
-  datasets: [{ label: t('modelPlaza.catalog.averageSeconds'), data: series.value.map(p => p.average_ms == null ? null : p.average_ms / 1000), borderColor: '#6366f1', backgroundColor: '#6366f1', pointRadius: 3, borderWidth: 2, spanGaps: false }]
+  datasets: [{ label: t('modelPlaza.catalog.averageSeconds'), data: series.value.map(p => p.average_ms == null ? null : p.average_ms / 1000), borderColor: '#3f635a', backgroundColor: '#3f635a', pointRadius: 3, borderWidth: 2, spanGaps: false }]
 }))
 const chartOptions: ChartOptions<'line'> = { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: true } }, scales: { y: { beginAtZero: true } } }
 function duration(value: number | null) { return value == null ? '—' : `${(value / 1000).toFixed(2)} s` }

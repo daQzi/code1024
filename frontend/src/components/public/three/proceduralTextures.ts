@@ -148,46 +148,46 @@ export function createLiveCodeScreen(): AnimatedScreenTexture {
 
   const apiLines: Array<Array<{ text: string; color: string }>> = [
     [
-      { text: 'POST ', color: '#38e8d5' },
+      { text: 'POST ', color: '#8fb5a8' },
       { text: '/v1/responses  ', color: '#f5f7fb' },
-      { text: '200 ', color: '#34d399' },
-      { text: '38ms · 148 tok/s', color: '#7dd3fc' },
+      { text: '200 ', color: '#7fa88b' },
+      { text: '38ms · 148 tok/s', color: '#a3c3ba' },
     ],
     [
-      { text: '  model: ', color: '#64748b' },
-      { text: '"claude-opus-4"  ', color: '#38bdf8' },
-      { text: 'route: ', color: '#64748b' },
-      { text: '"edge-mesh"', color: '#f0c27b' },
+      { text: '  model: ', color: '#6b716b' },
+      { text: '"claude-opus-4"  ', color: '#7ba79b' },
+      { text: 'route: ', color: '#6b716b' },
+      { text: '"edge-mesh"', color: '#c9a876' },
     ],
     [
-      { text: 'POST ', color: '#38e8d5' },
+      { text: 'POST ', color: '#8fb5a8' },
       { text: '/v1/chat/completions  ', color: '#f5f7fb' },
-      { text: 'gpt-5  ', color: '#a5b4fc' },
-      { text: 'stream: true', color: '#34d399' },
+      { text: 'gpt-5  ', color: '#a3c3ba' },
+      { text: 'stream: true', color: '#7fa88b' },
     ],
     [
-      { text: 'MCP  ', color: '#f0c27b' },
-      { text: 'gemini-2.5-pro  ', color: '#c4b5fd' },
-      { text: 'tool: ', color: '#64748b' },
+      { text: 'MCP  ', color: '#c9a876' },
+      { text: 'gemini-2.5-pro  ', color: '#b9b2a3' },
+      { text: 'tool: ', color: '#6b716b' },
       { text: '"qimu.storyboard"', color: '#f5f7fb' },
     ],
     [
-      { text: 'POST ', color: '#38e8d5' },
+      { text: 'POST ', color: '#8fb5a8' },
       { text: '/v1/messages  ', color: '#f5f7fb' },
-      { text: '200 ', color: '#34d399' },
-      { text: 'cache: HIT · 29ms', color: '#38e8d5' },
+      { text: '200 ', color: '#7fa88b' },
+      { text: 'cache: HIT · 29ms', color: '#8fb5a8' },
     ],
     [
-      { text: 'SDK  ', color: '#7dd3fc' },
-      { text: 'media.render  ', color: '#f0c27b' },
+      { text: 'SDK  ', color: '#a3c3ba' },
+      { text: 'media.render  ', color: '#c9a876' },
       { text: '4K · 24fps  ', color: '#cbd5e1' },
-      { text: 'dispatched', color: '#38bdf8' },
+      { text: 'dispatched', color: '#7ba79b' },
     ],
     [
-      { text: 'CLI  ', color: '#38bdf8' },
+      { text: 'CLI  ', color: '#7ba79b' },
       { text: 'aicode --provider ', color: '#cbd5e1' },
-      { text: 'auto  ', color: '#38e8d5' },
-      { text: '99.98% SLA', color: '#34d399' },
+      { text: 'auto  ', color: '#8fb5a8' },
+      { text: '99.98% SLA', color: '#7fa88b' },
     ],
   ]
 
@@ -234,12 +234,12 @@ export function createLiveCodeScreen(): AnimatedScreenTexture {
     ctx.lineTo(width, 44)
     ctx.stroke()
 
-    ctx.fillStyle = '#38e8d5'
+    ctx.fillStyle = '#8fb5a8'
     ctx.beginPath()
     ctx.arc(24, 22, 3.5, 0, Math.PI * 2)
     ctx.fill()
 
-    ctx.fillStyle = '#94a3b8'
+    ctx.fillStyle = '#9a9c94'
     ctx.font = '600 11px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
@@ -247,9 +247,9 @@ export function createLiveCodeScreen(): AnimatedScreenTexture {
 
     // Right active protocol pills
     const protocols = [
-      { label: 'OpenAI', accent: '#38e8d5' },
-      { label: 'Claude', accent: '#38bdf8' },
-      { label: 'Gemini', accent: '#a5b4fc' },
+      { label: 'OpenAI', accent: '#8fb5a8' },
+      { label: 'Claude', accent: '#7ba79b' },
+      { label: 'Gemini', accent: '#a3c3ba' },
     ]
     protocols.forEach((p, idx) => {
       const px = width - 252 + idx * 78
@@ -262,7 +262,7 @@ export function createLiveCodeScreen(): AnimatedScreenTexture {
       ctx.fill()
       ctx.stroke()
 
-      ctx.fillStyle = isLit ? '#f5f7fb' : '#94a3b8'
+      ctx.fillStyle = isLit ? '#f5f7fb' : '#9a9c94'
       ctx.font = '600 10.5px ui-monospace, SFMono-Regular, Menlo, monospace'
       ctx.textAlign = 'center'
       ctx.fillText(p.label, px + 35, 22.5)
@@ -331,14 +331,14 @@ export function createLiveCodeScreen(): AnimatedScreenTexture {
     }
 
     drawWave(24, 12, 3.4, 'rgba(56, 232, 213, 0.36)', 5, 0.4)
-    drawWave(24, 12, 3.4, '#38e8d5', 2, 0.96)
-    drawWave(17, 16, -2.6, '#818cf8', 1.5, 0.8)
+    drawWave(24, 12, 3.4, '#8fb5a8', 2, 0.96)
+    drawWave(17, 16, -2.6, '#6d9187', 1.5, 0.8)
     ctx.globalAlpha = 1
 
     for (let b = 0; b < 10; b++) {
       const bh = 10 + Math.abs(Math.sin(elapsed * 3.2 + b * 0.58)) * 42
       const bx = width - 142 + b * 11
-      ctx.fillStyle = b % 2 === 0 ? '#38e8d5' : '#38bdf8'
+      ctx.fillStyle = b % 2 === 0 ? '#8fb5a8' : '#7ba79b'
       ctx.globalAlpha = 0.8
       ctx.fillRect(bx, 344 - bh, 5.5, bh)
     }
@@ -379,7 +379,7 @@ export function createRoutingMatrixTexture(): THREE.CanvasTexture {
   ctx.lineWidth = 1.5
   ctx.strokeRect(1, 1, width - 2, height - 2)
 
-  ctx.fillStyle = '#94a3b8'
+  ctx.fillStyle = '#9a9c94'
   ctx.font = '600 12px ui-monospace, SFMono-Regular, Menlo, monospace'
   ctx.fillText('INTELLIGENT ROUTING // 99.98% SLA', 28, 36)
 
@@ -390,10 +390,10 @@ export function createRoutingMatrixTexture(): THREE.CanvasTexture {
   ctx.stroke()
 
   const models = [
-    { name: 'OpenAI · GPT-5', latency: '34ms', pct: 0.92, color: '#38e8d5' },
-    { name: 'Claude · Opus 4', latency: '38ms', pct: 0.96, color: '#38bdf8' },
-    { name: 'Gemini · 2.5 Pro', latency: '31ms', pct: 0.89, color: '#a5b4fc' },
-    { name: 'DeepSeek · R1', latency: '27ms', pct: 0.84, color: '#f0c27b' },
+    { name: 'OpenAI · GPT-5', latency: '34ms', pct: 0.92, color: '#8fb5a8' },
+    { name: 'Claude · Opus 4', latency: '38ms', pct: 0.96, color: '#7ba79b' },
+    { name: 'Gemini · 2.5 Pro', latency: '31ms', pct: 0.89, color: '#a3c3ba' },
+    { name: 'DeepSeek · R1', latency: '27ms', pct: 0.84, color: '#c9a876' },
   ]
 
   models.forEach((m, i) => {
@@ -426,7 +426,7 @@ export function createRoutingMatrixTexture(): THREE.CanvasTexture {
   ctx.roundRect(28, 326, width - 56, 68, 10)
   ctx.fill()
 
-  const curveCols = ['#38e8d5', '#38bdf8', '#a5b4fc']
+  const curveCols = ['#8fb5a8', '#7ba79b', '#a3c3ba']
   curveCols.forEach((c, idx) => {
     ctx.strokeStyle = c
     ctx.lineWidth = 2
@@ -461,7 +461,7 @@ export function createProtocolHubTexture(): THREE.CanvasTexture {
   ctx.lineWidth = 1.5
   ctx.strokeRect(1, 1, width - 2, height - 2)
 
-  ctx.fillStyle = '#94a3b8'
+  ctx.fillStyle = '#9a9c94'
   ctx.font = '600 12px ui-monospace, SFMono-Regular, Menlo, monospace'
   ctx.fillText('UNIFIED PROTOCOL & MULTIMODAL HUB', 28, 36)
 
@@ -473,10 +473,10 @@ export function createProtocolHubTexture(): THREE.CanvasTexture {
 
   // 2x2 Protocol chips
   const chips = [
-    { title: 'API', sub: 'OpenAI Compat', accent: '#38e8d5' },
-    { title: 'CLI', sub: 'Terminal Native', accent: '#38bdf8' },
-    { title: 'SDK', sub: 'Streaming Typed', accent: '#a5b4fc' },
-    { title: 'MCP', sub: 'Agent Tooling', accent: '#f0c27b' },
+    { title: 'API', sub: 'OpenAI Compat', accent: '#8fb5a8' },
+    { title: 'CLI', sub: 'Terminal Native', accent: '#7ba79b' },
+    { title: 'SDK', sub: 'Streaming Typed', accent: '#a3c3ba' },
+    { title: 'MCP', sub: 'Agent Tooling', accent: '#c9a876' },
   ]
   chips.forEach((chip, i) => {
     const col = i % 2
@@ -498,17 +498,17 @@ export function createProtocolHubTexture(): THREE.CanvasTexture {
     ctx.font = '700 18px -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
     ctx.fillText(chip.title, cx + 32, cy + 32)
 
-    ctx.fillStyle = '#94a3b8'
+    ctx.fillStyle = '#9a9c94'
     ctx.font = '500 12.5px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.fillText(chip.sub, cx + 32, cy + 53)
   })
 
   // Lower Multimodal signal bars: Text / Image / Video / Audio
   const mods = [
-    { name: 'TEXT', color: '#38e8d5' },
-    { name: 'IMAGE', color: '#38bdf8' },
-    { name: 'VIDEO', color: '#f0c27b' },
-    { name: 'AUDIO', color: '#c4b5fd' },
+    { name: 'TEXT', color: '#8fb5a8' },
+    { name: 'IMAGE', color: '#7ba79b' },
+    { name: 'VIDEO', color: '#c9a876' },
+    { name: 'AUDIO', color: '#b9b2a3' },
   ]
   mods.forEach((mod, i) => {
     const my = 272 + i * 32
@@ -571,14 +571,14 @@ export function createLiveTimelineScreen(): AnimatedScreenTexture {
     const totalFrames = Math.floor(elapsed * 24)
     const ff = String(totalFrames % 24).padStart(2, '0')
     const ss = String((14 + Math.floor(totalFrames / 24)) % 60).padStart(2, '0')
-    ctx.fillStyle = '#f0c27b'
+    ctx.fillStyle = '#c9a876'
     ctx.font = '600 10px ui-monospace, SFMono-Regular, Menlo, monospace'
     ctx.fillText(`00:01:${ss}:${ff}`, width - 82, 15)
 
     const tracks = [
-      { y: 26, h: 22, color: '#f0c27b', clips: [[18, 98], [122, 92], [220, 138], [364, 128]] },
-      { y: 54, h: 22, color: '#c4b5fd', clips: [[32, 84], [142, 128], [282, 102], [392, 94]] },
-      { y: 82, h: 32, color: '#38e8d5', clips: [[18, 474]] },
+      { y: 26, h: 22, color: '#c9a876', clips: [[18, 98], [122, 92], [220, 138], [364, 128]] },
+      { y: 54, h: 22, color: '#b9b2a3', clips: [[32, 84], [142, 128], [282, 102], [392, 94]] },
+      { y: 82, h: 32, color: '#8fb5a8', clips: [[18, 474]] },
     ]
 
     tracks.forEach((track, tIdx) => {
@@ -599,7 +599,7 @@ export function createLiveTimelineScreen(): AnimatedScreenTexture {
         ctx.globalAlpha = 1
 
         if (tIdx === 2) {
-          ctx.fillStyle = '#7dd3fc'
+          ctx.fillStyle = '#a3c3ba'
           for (let wx = cx + 8; wx < cx + cw - 8; wx += 6) {
             const wh = 4 + Math.abs(Math.sin(wx * 0.1 + elapsed * 2.8)) * 18
             ctx.fillRect(wx, track.y + track.h / 2 - wh / 2, 2.2, wh)
@@ -617,14 +617,14 @@ export function createLiveTimelineScreen(): AnimatedScreenTexture {
     ctx.lineTo(playheadX, height - 6)
     ctx.stroke()
 
-    ctx.strokeStyle = '#f0c27b'
+    ctx.strokeStyle = '#c9a876'
     ctx.lineWidth = 1.8
     ctx.beginPath()
     ctx.moveTo(playheadX, 6)
     ctx.lineTo(playheadX, height - 6)
     ctx.stroke()
 
-    ctx.fillStyle = '#f0c27b'
+    ctx.fillStyle = '#c9a876'
     ctx.beginPath()
     ctx.moveTo(playheadX - 4.5, 6)
     ctx.lineTo(playheadX + 4.5, 6)

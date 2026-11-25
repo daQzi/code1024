@@ -507,35 +507,37 @@ function formatBucketRange(value: string) {
   border-radius: 9999px;
 }
 
-/* Multi-stop green → yellow → red (score10 best … score0 worst) */
-.health-score10 { background: #16a34a; }
-.health-score9  { background: #22c55e; }
-.health-score8  { background: #4ade80; }
-.health-score7  { background: #a3e635; }
-.health-score6  { background: #facc15; }
-.health-score5  { background: #fbbf24; }
-.health-score4  { background: #f59e0b; }
-.health-score3  { background: #f97316; }
-.health-score2  { background: #fb7185; }
-.health-score1  { background: #f87171; }
-.health-score0  { background: rgb(239, 67, 67); }
+/* Multi-stop green → yellow → red (score10 best … score0 worst)
+   语义必须能一眼读出「好/坏」，但饱和度压到和墨韵底色同一档，
+   否则整块矩阵会变成糖果色噪声。 */
+.health-score10 { background: #4a7c59; }
+.health-score9  { background: #578c63; }
+.health-score8  { background: #6b9a6d; }
+.health-score7  { background: #93a673; }
+.health-score6  { background: #b8a970; }
+.health-score5  { background: #c2a463; }
+.health-score4  { background: #b8894a; }
+.health-score3  { background: #b07344; }
+.health-score2  { background: #ab6055; }
+.health-score1  { background: #a4433c; }
+.health-score0  { background: #8f332d; }
 /* Coarse fallbacks (older payloads without score) */
-.health-healthy  { background: #22c55e; }
-.health-warning  { background: #f59e0b; }
-.health-critical { background: #ef4444; }
-.health-unknown  { background: #9ca3af; }
+.health-healthy  { background: #4a7c59; }
+.health-warning  { background: #96702f; }
+.health-critical { background: #a4433c; }
+.health-unknown  { background: #9aa09b; }
 
 .score-legend {
   background: linear-gradient(
     90deg,
-    rgb(239, 67, 67) 0%,
-    #f87171 15%,
-    #f97316 30%,
-    #f59e0b 45%,
-    #facc15 55%,
-    #a3e635 70%,
-    #22c55e 85%,
-    #16a34a 100%
+    #8f332d 0%,
+    #a4433c 15%,
+    #b07344 30%,
+    #b8894a 45%,
+    #b8a970 55%,
+    #93a673 70%,
+    #6b9a6d 85%,
+    #4a7c59 100%
   );
 }
 

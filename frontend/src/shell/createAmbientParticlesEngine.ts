@@ -17,7 +17,7 @@ interface Spore {
   baseVy: number
   radius: number
   phase: number
-  tint: 'teal' | 'gold' | 'lavender'
+  tint: 'jade' | 'bronze' | 'bone'
 }
 
 interface Meteor {
@@ -29,7 +29,7 @@ interface Meteor {
   life: number
   maxLife: number
   length: number
-  variant: 'cyan' | 'gold' | 'violet'
+  variant: 'jade' | 'bronze' | 'bone'
 }
 
 interface Ripple {
@@ -40,7 +40,7 @@ interface Ripple {
   maxRadius: number
   life: number
   maxLife: number
-  variant: 'cyan' | 'gold' | 'violet'
+  variant: 'jade' | 'bronze' | 'bone'
 }
 
 const SPORE_COUNT = 72
@@ -69,7 +69,7 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
   }
   applyCanvasSize(width, height)
 
-  const tints: Spore['tint'][] = ['teal', 'gold', 'lavender']
+  const tints: Spore['tint'][] = ['jade', 'bronze', 'bone']
   const spores: Spore[] = Array.from({ length: SPORE_COUNT }, (_, i) => {
     const baseVy = -(8 + Math.random() * 16)
     return {
@@ -93,7 +93,7 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
     life: 0,
     maxLife: 1,
     length: 160,
-    variant: 'cyan',
+    variant: 'jade',
   }))
 
   const ripples: Ripple[] = Array.from({ length: MAX_RIPPLES }, () => ({
@@ -104,7 +104,7 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
     maxRadius: 160,
     life: 0,
     maxLife: 1.8,
-    variant: 'cyan',
+    variant: 'jade',
   }))
 
   let pointerX = -9999
@@ -123,7 +123,7 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
   const spawnRipple = (x: number, y: number, maxRadius = 150 + Math.random() * 90) => {
     const slot = ripples.find((r) => !r.active)
     if (!slot) return
-    const variants: Ripple['variant'][] = ['cyan', 'violet', 'gold']
+    const variants: Ripple['variant'][] = ['jade', 'bone', 'bronze']
     slot.active = true
     slot.x = x
     slot.y = y
@@ -169,7 +169,7 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
     const slot = meteors.find((m) => !m.active)
     if (!slot) return
     const fromRight = Math.random() > 0.35
-    const variants: Meteor['variant'][] = ['cyan', 'gold', 'violet']
+    const variants: Meteor['variant'][] = ['jade', 'bronze', 'bone']
     slot.active = true
     slot.x = fromRight ? width * (0.42 + Math.random() * 0.58) : width * (0.06 + Math.random() * 0.45)
     slot.y = -24
@@ -248,11 +248,11 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
 
       const alpha = (0.38 + 0.28 * Math.sin(elapsed * 1.85 + s.phase)) * themeScale
       const rgb =
-        s.tint === 'teal'
-          ? '56, 232, 213'
-          : s.tint === 'gold'
-            ? '251, 191, 36'
-            : '216, 180, 254'
+        s.tint === 'jade'
+          ? '143, 181, 168'
+          : s.tint === 'bronze'
+            ? '201, 168, 118'
+            : '216, 212, 200'
 
       // Outer luminous halo
       ctx.beginPath()
@@ -283,7 +283,7 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
             ctx.moveTo(sa.x, sa.y)
             ctx.lineTo(sb.x, sb.y)
             ctx.strokeStyle =
-              sa.tint === 'gold' || sb.tint === 'gold'
+              sa.tint === 'bronze' || sb.tint === 'bronze'
                 ? `rgba(251, 191, 36, ${lineAlpha.toFixed(3)})`
                 : `rgba(56, 232, 213, ${lineAlpha.toFixed(3)})`
             ctx.stroke()
@@ -305,11 +305,11 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
       const currentRadius = r.radius + (r.maxRadius - r.radius) * eased
       const alpha = (1 - p) * Math.sin(p * Math.PI) * 0.24 * themeScale
       const rgb =
-        r.variant === 'gold'
-          ? '251, 191, 36'
-          : r.variant === 'violet'
-            ? '167, 139, 250'
-            : '56, 232, 213'
+        r.variant === 'bronze'
+          ? '201, 168, 118'
+          : r.variant === 'bone'
+            ? '184, 178, 160'
+            : '143, 181, 168'
       ctx.beginPath()
       ctx.arc(r.x, r.y, currentRadius, 0, Math.PI * 2)
       ctx.lineWidth = 1.25
@@ -334,11 +334,11 @@ export function createAmbientParticlesEngine(options: AmbientParticlesOptions): 
       const tailY = m.y - (m.vy / mag) * m.length
 
       const rgb =
-        m.variant === 'gold'
-          ? '251, 191, 36'
-          : m.variant === 'violet'
-            ? '167, 139, 250'
-            : '56, 232, 213'
+        m.variant === 'bronze'
+          ? '201, 168, 118'
+          : m.variant === 'bone'
+            ? '184, 178, 160'
+            : '143, 181, 168'
 
       const grad = ctx.createLinearGradient(tailX, tailY, m.x, m.y)
       grad.addColorStop(0, `rgba(${rgb}, 0)`)

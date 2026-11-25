@@ -47,7 +47,7 @@
         v-if="mobileOpen"
         type="button"
         class="rail__mobile-close"
-        aria-label="关闭菜单"
+        :aria-label="t('glass.nav.closeMenu')"
         @click="closeMobile"
       >
         <Icon name="x" size="sm" />
@@ -94,7 +94,16 @@
     </div>
 
     <!-- ---------------------------------------------------------- 导航 -->
-    <nav ref="navRef" class="rail__nav ui-scroll" @scroll.passive="hideTooltip">
+    <nav
+      ref="navRef"
+      class="rail__nav ui-scroll"
+      :class="{
+        'is-scrollable': navScrollable,
+        'is-at-start': navAtStart,
+        'is-at-end': navAtEnd,
+      }"
+      @scroll.passive="handleNavScroll"
+    >
       <div v-for="section in sections" :key="section.key" class="rail__section">
         <p v-if="section.title && (!collapsed || mobileOpen)" class="rail__section-title">
           {{ section.title }}
@@ -312,6 +321,11 @@ const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
 
 const railRef = ref<HTMLElement | null>(null)
 const navRef = ref<HTMLElement | null>(null)
+/** 导航区滚动提示：只有真正溢出时才显示上下渐隐，避免静止时被“吃掉”一条边 */
+const navScrollable = ref(false)
+const navAtStart = ref(true)
+const navAtEnd = ref(true)
+let navResizeObserver: ResizeObserver | null = null
 
 const { isDark, toggleTheme } = useTheme()
 const { ambientEnabled, toggleAmbientBackdrop } = useAmbientBackdrop()
@@ -361,6 +375,33 @@ function hideTooltip() {
   tooltip.value = null
 }
 
+function measureNavScroll() {
+  const el = navRef.value
+  if (!el) return
+  const max = el.scrollHeight - el.clientHeight
+  const scrollable = max > 4
+  navScrollable.value = scrollable
+  navAtStart.value = !scrollable || el.scrollTop <= 2
+  navAtEnd.value = !scrollable || el.scrollTop >= max - 2
+}
+
+function handleNavScroll() {
+  hideTooltip()
+  measureNavScroll()
+}
+
+function observeNav() {
+  navResizeObserver?.disconnect()
+  navResizeObserver = null
+  const el = navRef.value
+  if (!el) return
+  measureNavScroll()
+  if (typeof ResizeObserver === 'undefined') return
+  navResizeObserver = new ResizeObserver(() => measureNavScroll())
+  navResizeObserver.observe(el)
+  for (const child of Array.from(el.children)) navResizeObserver.observe(child)
+}
+
 function handleKeydown(ev: KeyboardEvent) {
   if (mobileOpen.value && ev.key === 'Escape' && !ev.defaultPrevented && !ev.isComposing) {
     closeMobile()
@@ -369,7 +410,10 @@ function handleKeydown(ev: KeyboardEvent) {
 
 watch([collapsed, mobileOpen], () => {
   hideTooltip()
+  void nextTick(observeNav)
 })
+
+watch(sections, () => void nextTick(observeNav), { deep: true })
 
 /**
  * Icon.vue 的 name prop 是 90 个字面量的联合类型，而导航项由数据驱动（string）。
@@ -398,15 +442,19 @@ function trackPointer(ev: PointerEvent) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+  void nextTick(observeNav)
   if (appStore.sidebarScrollTop > 0 && navRef.value) {
     void nextTick(() => {
       if (navRef.value) navRef.value.scrollTop = appStore.sidebarScrollTop
+      measureNavScroll()
     })
   }
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown)
+  navResizeObserver?.disconnect()
+  navResizeObserver = null
   if (pointerRafId !== null) {
     window.cancelAnimationFrame(pointerRafId)
     pointerRafId = null
@@ -528,11 +576,14 @@ html[data-theme='dark'] .rail::after {
 
 /* ------------------------------------------------------------------ 品牌 */
 .rail__brand {
+  /* 侧栏是 flex 列，默认 flex-shrink:1 会在导航变长时压扁品牌区，
+     把版本徽标裁成半截 —— 品牌/工作空间/底部一律不参与压缩。 */
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--ui-s-3);
   padding: var(--ui-s-2) var(--ui-s-2) var(--ui-s-3);
-  min-height: 44px;
+  min-height: 48px;
 }
 
 .rail__logo {
@@ -546,7 +597,7 @@ html[data-theme='dark'] .rail::after {
   overflow: hidden;
   box-shadow:
     inset 0 1px 1px var(--ui-edge-inner),
-    0 6px 16px -10px rgb(13 148 136 / 0.7);
+    0 6px 16px -10px rgb(63 99 90 / 0.7);
   transition: transform var(--ui-dur-base) var(--ui-ease-spring);
 }
 .rail__logo:hover {
@@ -678,22 +729,23 @@ html[data-theme='dark'] .rail::after {
 }
 
 .rail__ws-dot--aicode {
-  background: #38e8d5;
-  box-shadow: 0 0 8px rgb(56 232 213 / 0.75);
+  background: #8fb5a8;
+  box-shadow: 0 0 8px rgb(143 181 168 / 0.6);
 }
 
 .rail__ws-dot--qimu {
-  background: #f0c27b;
-  box-shadow: 0 0 8px rgb(240 194 123 / 0.75);
+  background: #c9a876;
+  box-shadow: 0 0 8px rgb(201 168 118 / 0.6);
 }
 
 .rail__item--ambient.is-ambient-on .rail__icon {
   color: var(--ui-accent);
-  filter: drop-shadow(0 0 6px rgb(56 232 213 / 0.55));
+  filter: none;
 }
 
 /* ------------------------------------------------------------------ 导航 */
 .rail__nav {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -701,6 +753,32 @@ html[data-theme='dark'] .rail::after {
   flex-direction: column;
   gap: var(--ui-s-1);
   padding-bottom: var(--ui-s-2);
+}
+
+/* 只有真正溢出时才在上下边缘做渐隐，提示“这里还能滚” */
+.rail__nav.is-scrollable:not(.is-at-start) {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 100%);
+}
+.rail__nav.is-scrollable:not(.is-at-end) {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 16px), transparent 100%);
+}
+.rail__nav.is-scrollable:not(.is-at-start):not(.is-at-end) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
 }
 
 .rail__section {

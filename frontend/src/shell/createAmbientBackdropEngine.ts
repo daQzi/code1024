@@ -64,7 +64,8 @@ function createRingShaderMaterial(
 
         float alpha = (0.28 + 0.42 * dashWave + 0.30 * runeTicks) * pow(max(0.0, tubeProfile), 0.75);
         alpha = clamp(alpha + orbHead * 0.95, 0.0, 1.0) * uOpacity * (1.0 - uThemeT * 0.92);
-        vec3 col = mix(uColorA, uColorB, pulse) + vec3(0.45, 0.85, 1.0) * orbHead * 0.85;
+        // 环上的“游标光点”原来是冰蓝，改成偏暖的纸白，避免整环泛蓝
+        vec3 col = mix(uColorA, uColorB, pulse) + vec3(0.92, 0.90, 0.85) * orbHead * 0.85;
         gl_FragColor = vec4(col, alpha);
       }
     `,
@@ -228,25 +229,26 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
 
         float splitMix = clamp(vUv.x * 0.64 + (1.0 - vUv.y) * 0.36 + n1.r * 0.18 - 0.08 + uMood * 0.44, 0.0, 1.0);
 
-        // Deep Obsidian Cosmic Base + Vibrant Multi-Chromatic Nebula
-        vec3 darkTop = vec3(0.016, 0.031, 0.090);
-        vec3 darkBottom = vec3(0.039, 0.071, 0.188);
+        // 墨夜底：中性黑 + 一丝墨绿，不再有宝蓝/品红
+        vec3 darkTop = vec3(0.030, 0.036, 0.034);
+        vec3 darkBottom = vec3(0.055, 0.065, 0.061);
         vec3 darkBase = mix(darkBottom, darkTop, smoothstep(0.0, 0.92, vUv.y));
 
-        vec3 royalViolet = vec3(0.427, 0.157, 0.851);
-        vec3 sapphire = vec3(0.145, 0.388, 0.922);
-        vec3 mysticMagenta = vec3(0.576, 0.200, 0.918);
-        vec3 tealAurora = vec3(0.133, 0.949, 0.875);
-        vec3 celestialViolet = vec3(0.655, 0.545, 0.980);
-        vec3 champagneAurora = vec3(0.984, 0.749, 0.141);
+        // 同一色相的四级墨阶：越亮越接近宣纸白，越暗越接近墨
+        vec3 inkDeep = vec3(0.106, 0.157, 0.145);
+        vec3 inkMid = vec3(0.180, 0.251, 0.231);
+        vec3 inkSoft = vec3(0.290, 0.376, 0.353);
+        vec3 jadeGlow = vec3(0.451, 0.573, 0.541);
+        vec3 paperWarm = vec3(0.639, 0.612, 0.549);
+        vec3 bronzeWarm = vec3(0.596, 0.510, 0.365);
 
         float nebulaMask = smoothstep(0.22, 0.76, n1.g * 0.62 + n2.b * 0.38);
-        vec3 nebulaBlend = mix(royalViolet, sapphire, n2.r);
-        nebulaBlend = mix(nebulaBlend, mysticMagenta, n3.b * 0.45);
-        vec3 nebulaLayer = nebulaBlend * nebulaMask * 0.58;
+        vec3 nebulaBlend = mix(inkDeep, inkMid, n2.r);
+        nebulaBlend = mix(nebulaBlend, inkSoft, n3.b * 0.45);
+        vec3 nebulaLayer = nebulaBlend * nebulaMask * 0.44;
 
-        vec3 leftTint = mix(tealAurora, celestialViolet, n2.b * 0.48);
-        vec3 rightTint = mix(champagneAurora, celestialViolet, n3.b * 0.55);
+        vec3 leftTint = mix(jadeGlow, inkSoft, n2.b * 0.48);
+        vec3 rightTint = mix(bronzeWarm, paperWarm, n3.b * 0.55);
         vec3 auroraTint = mix(leftTint, rightTint, splitMix);
 
         float bandEnvelope = smoothstep(0.02, 0.46, vUv.y) * (1.0 - smoothstep(0.76, 1.06, vUv.y));
@@ -256,14 +258,14 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
         float rayCoord = centered.x * 0.82 + centered.y * 0.56 - uTime * 0.045;
         float shaftA = pow(0.5 + 0.5 * sin(rayCoord * 7.5 + n2.g * 2.6), 4.0);
         float shaftB = pow(0.5 + 0.5 * sin((centered.x * 0.6 - centered.y * 0.75 + uTime * 0.03) * 5.2 + n1.r * 2.1), 5.0);
-        vec3 rayGlow = mix(tealAurora, celestialViolet, vUv.x) * (shaftA * 0.14 + shaftB * 0.11) * (0.4 + 0.6 * n2.r);
+        vec3 rayGlow = mix(jadeGlow, paperWarm, vUv.x) * (shaftA * 0.10 + shaftB * 0.08) * (0.4 + 0.6 * n2.r);
 
         // Gentle center readability balance so tables stay sharp without crushing glow
         float radialCenter = length(centered / vec2(aspect * 0.5, 0.5));
         float edgeFactor = smoothstep(0.18, 1.0, radialCenter);
         float centerAtten = mix(0.84, 1.0, edgeFactor);
 
-        // Lower perspective astral horizon grid + luminous sweep
+        // 底部透视地平网格：只保留极淡的一层，避免“科幻 HUD”味
         float horizonMask = 1.0 - smoothstep(0.0, 0.34, vUv.y);
         float perspY = max(0.06, vUv.y + 0.06);
         float gridX = abs(fract((vUv.x - 0.5) * aspect / perspY * 1.15) - 0.5);
@@ -273,7 +275,7 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
         float gridPattern = max(lineX, lineZ) * horizonMask;
         float pulsePos = fract(uTime * 0.18);
         float pulseWave = exp(-pow((vUv.y - pulsePos * 0.34) * 15.0, 2.0)) * horizonMask;
-        vec3 horizonGlow = mix(tealAurora, champagneAurora, vUv.x) * (gridPattern * 0.14 + gridPattern * pulseWave * 0.28 + pulseWave * 0.06);
+        vec3 horizonGlow = mix(jadeGlow, bronzeWarm, vUv.x) * (gridPattern * 0.055 + gridPattern * pulseWave * 0.12 + pulseWave * 0.03);
 
         // Interactive soft pointer halo
         vec2 pointerGlowDelta = centered - uPointer * vec2(aspect * 0.36, 0.34);
@@ -282,12 +284,12 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
 
         vec3 darkCol =
           darkBase +
-          (nebulaLayer + auroraTint * auroraEnergy * 0.76 + rayGlow) * centerAtten +
-          mix(tealAurora, champagneAurora, splitMix) * pointerHalo * 0.16 +
+          (nebulaLayer + auroraTint * auroraEnergy * 0.5 + rayGlow) * centerAtten +
+          mix(jadeGlow, bronzeWarm, splitMix) * pointerHalo * 0.08 +
           horizonGlow +
           vec3(dither);
 
-        // Light Mode: 31-deg Fluted Glass + Marble Swirl + Iridescent Aurora
+        // Light Mode: 宣纸纹 + 极淡墨韵，不再走虹彩极光
         float fluteAngle = 0.541;
         float ca = cos(fluteAngle);
         float sa = sin(fluteAngle);
@@ -300,12 +302,15 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
         float mR = texture2D(uNoiseTex, lightUvR).r;
         float mG = texture2D(uNoiseTex, (lightUvR + lightUvB) * 0.5).g;
         float mB = texture2D(uNoiseTex, lightUvB).b;
-        vec3 marble = mix(vec3(0.84, 0.89, 0.96), vec3(0.95, 0.97, 0.995), vec3(mR, mG, mB));
-        vec3 lightChroma = mix(vec3(0.32, 0.82, 0.78), vec3(0.62, 0.74, 0.96), splitMix);
-        float ridge = pow(max(0.0, fluteWave), 4.0) * 0.045;
+        // 纸底再压暗一档：半透明玻璃卡片只有和背景拉开明度差，才看得出「玻璃」
+        vec3 marble = mix(vec3(0.761, 0.749, 0.725), vec3(0.839, 0.831, 0.812), vec3(mR, mG, mB));
+        vec3 lightChroma = mix(vec3(0.600, 0.678, 0.643), vec3(0.722, 0.651, 0.545), splitMix);
+        float ridge = pow(max(0.0, fluteWave), 4.0) * 0.028;
         vec3 lightCol =
-          mix(marble, lightChroma, clamp(auroraEnergy * 0.24 + pointerHalo * 0.14, 0.0, 0.32)) +
-          vec3(ridge) +
+          // 纸面需要看得见的墨韵，否则半透明卡片后面的背景是一片纯白，
+          // 玻璃效果完全消失；这里给晕染留出 26% 上限的权重。
+          mix(marble, lightChroma, clamp(auroraEnergy * 0.30 + pointerHalo * 0.08, 0.0, 0.26)) +
+          vec3(ridge * 0.6) +
           vec3(dither * 0.5);
 
         gl_FragColor = vec4(mix(darkCol, lightCol, uThemeT), 1.0);
@@ -329,9 +334,10 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
   spaceScene.add(astrolabePrimary)
 
   const ringSpecsPrimary = [
-    { radius: 3.15, tube: 0.028, colorA: 0x22f2df, colorB: 0xfbbf24, ticks: 36, speed: 0.28, opacity: 0.56 },
-    { radius: 2.38, tube: 0.022, colorA: 0xa78bfa, colorB: 0x22f2df, ticks: 24, speed: -0.36, opacity: 0.48 },
-    { radius: 1.65, tube: 0.017, colorA: 0xfbbf24, colorB: 0xa78bfa, ticks: 18, speed: 0.44, opacity: 0.44 },
+    // 三环只用「墨玉 → 古铜」的相邻色，避免出现第二个彩色轴
+    { radius: 3.15, tube: 0.028, colorA: 0x6d9187, colorB: 0xb08a5c, ticks: 36, speed: 0.28, opacity: 0.42 },
+    { radius: 2.38, tube: 0.022, colorA: 0x4a7268, colorB: 0x6d9187, ticks: 24, speed: -0.36, opacity: 0.36 },
+    { radius: 1.65, tube: 0.017, colorA: 0xb08a5c, colorB: 0x4a7268, ticks: 18, speed: 0.44, opacity: 0.32 },
   ]
   const primaryRings = ringSpecsPrimary.map((spec) => {
     const geom = new THREE.TorusGeometry(spec.radius, spec.tube, 12, 112)
@@ -370,7 +376,8 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
         float rings = exp(-abs(r - 1.85) * 24.0) * 0.45;
         float arc = smoothstep(0.1, 0.85, sin(angle * 4.0 - uTime * 0.35));
         float radialFade = smoothstep(1.18, 1.55, r) * (1.0 - smoothstep(2.15, 2.52, r));
-        vec3 col = mix(vec3(0.13, 0.95, 0.87), vec3(0.65, 0.54, 0.98), 0.5 + 0.5 * cos(angle));
+        // 墨玉 → 古铜，不再用青紫双色（那是整块背景发蓝紫的来源之一）
+        vec3 col = mix(vec3(0.427, 0.569, 0.529), vec3(0.690, 0.573, 0.400), 0.5 + 0.5 * cos(angle));
         float alpha = (rings + arc * radialFade * 0.14) * (1.0 - uThemeT * 0.92);
         gl_FragColor = vec4(col, alpha);
       }
@@ -387,8 +394,8 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
   spaceScene.add(astrolabeSecondary)
 
   const ringSpecsSecondary = [
-    { radius: 2.42, tube: 0.022, colorA: 0x22f2df, colorB: 0xa78bfa, ticks: 28, speed: -0.32, opacity: 0.46 },
-    { radius: 1.66, tube: 0.016, colorA: 0xfbbf24, colorB: 0x22f2df, ticks: 16, speed: 0.42, opacity: 0.40 },
+    { radius: 2.42, tube: 0.022, colorA: 0x6d9187, colorB: 0x4a7268, ticks: 28, speed: -0.32, opacity: 0.34 },
+    { radius: 1.66, tube: 0.016, colorA: 0xb08a5c, colorB: 0x6d9187, ticks: 16, speed: 0.42, opacity: 0.30 },
   ]
   const secondaryRings = ringSpecsSecondary.map((spec) => {
     const geom = new THREE.TorusGeometry(spec.radius, spec.tube, 10, 96)
@@ -402,7 +409,7 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
 
   // C. Two Translucent 3D Flowing Energy Ribbons
   const ribbonGeom1 = new THREE.PlaneGeometry(26, 3.8, 72, 12)
-  const ribbonMat1 = createRibbonMaterial(0x22f2df, 0xa78bfa, 0xfbbf24, 0.55, 0.0)
+  const ribbonMat1 = createRibbonMaterial(0x4a7268, 0x6d9187, 0xb08a5c, 0.55, 0.0)
   const ribbonMesh1 = new THREE.Mesh(ribbonGeom1, ribbonMat1)
   ribbonMesh1.position.set(0.4, 0.8, -9.8)
   ribbonMesh1.rotation.set(-0.28, 0.08, -0.22)
@@ -411,7 +418,7 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
   themeAwareMaterials.push(ribbonMat1)
 
   const ribbonGeom2 = new THREE.PlaneGeometry(24, 3.2, 64, 10)
-  const ribbonMat2 = createRibbonMaterial(0xa78bfa, 0xfbbf24, 0x22f2df, 0.42, 2.4)
+  const ribbonMat2 = createRibbonMaterial(0x6d9187, 0xb08a5c, 0x4a7268, 0.42, 2.4)
   const ribbonMesh2 = new THREE.Mesh(ribbonGeom2, ribbonMat2)
   ribbonMesh2.position.set(-0.8, -1.5, -12.6)
   ribbonMesh2.rotation.set(0.24, -0.1, 0.18)
@@ -425,10 +432,10 @@ export function createAmbientBackdropEngine(options: AmbientBackdropOptions): Am
   const starSeeds = new Float32Array(STAR_COUNT * 3)
 
   const palette = [
-    new THREE.Color(0xf8fafc), // ice white
-    new THREE.Color(0x38e8d5), // cyan
-    new THREE.Color(0xc4b5fd), // lavender
-    new THREE.Color(0xfcd34d), // champagne gold
+    new THREE.Color(0xf4f2ee), // 宣纸白
+    new THREE.Color(0x9dbfb3), // 墨玉
+    new THREE.Color(0xd8d2c4), // 素白
+    new THREE.Color(0xc9a876), // 古铜
   ]
 
   for (let i = 0; i < STAR_COUNT; i++) {

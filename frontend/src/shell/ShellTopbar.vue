@@ -33,61 +33,117 @@
 
       <AnnouncementBell v-if="user" />
 
-      <a
-        v-if="docUrl"
-        :href="docUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="topbar__link"
-      >
-        <Icon name="book" size="sm" />
-        <span class="topbar__link-text">{{ t('nav.docs') }}</span>
-      </a>
+      <!-- 文档 / 模型广场 / 自定义入口：宽屏平铺，窄屏收进“更多”以免只剩一堆裸图标 -->
+      <template v-if="!linksCollapsed">
+        <a
+          v-if="docUrl"
+          :href="docUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="topbar__link"
+          :aria-label="t('nav.docs')"
+          :title="t('nav.docs')"
+        >
+          <Icon name="book" size="sm" aria-hidden="true" />
+          <span class="topbar__link-text">{{ t('nav.docs') }}</span>
+        </a>
 
-      <RouterLink
-        v-if="user && modelPlazaEnabled"
-        :to="{ path: '/model-plaza', query: { embedded: '1' } }"
-        class="topbar__link"
-        :title="t('nav.modelPlaza')"
-      >
-        <Icon name="grid" size="sm" />
-        <span class="topbar__link-text">{{ t('nav.modelPlaza') }}</span>
-      </RouterLink>
+        <RouterLink
+          v-if="user && modelPlazaEnabled"
+          :to="{ path: '/model-plaza', query: { embedded: '1' } }"
+          class="topbar__link"
+          :title="t('nav.modelPlaza')"
+        >
+          <Icon name="grid" size="sm" aria-hidden="true" />
+          <span class="topbar__link-text">{{ t('nav.modelPlaza') }}</span>
+        </RouterLink>
 
-      <a
-        v-for="link in visibleTopbarLinks"
-        :key="link.id"
-        :href="link.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="topbar__link"
-        :title="link.label"
-        :aria-label="link.label"
-        data-testid="topbar-custom-link"
-      >
-        <span
-          v-if="link.iconSvg"
-          class="topbar__link-svg"
-          aria-hidden="true"
-          v-html="link.iconSvg"
-        />
-        <Icon v-else :name="link.iconName" size="sm" aria-hidden="true" />
-        <span class="topbar__link-text">{{ link.label }}</span>
-      </a>
+        <a
+          v-for="link in visibleTopbarLinks"
+          :key="link.id"
+          :href="link.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="topbar__link"
+          :title="link.label"
+          :aria-label="link.label"
+          data-testid="topbar-custom-link"
+        >
+          <span
+            v-if="link.iconSvg"
+            class="topbar__link-svg"
+            aria-hidden="true"
+            v-html="link.iconSvg"
+          />
+          <Icon v-else :name="link.iconName" size="sm" aria-hidden="true" />
+          <span class="topbar__link-text">{{ link.label }}</span>
+        </a>
+      </template>
+
+      <div v-else-if="topbarLinks.length" ref="linksMenuRef" class="topbar__links-more">
+        <button
+          type="button"
+          class="topbar__link topbar__link--icon"
+          :aria-label="t('common.moreLinks')"
+          :title="t('common.moreLinks')"
+          :aria-expanded="linksMenuOpen"
+          aria-haspopup="menu"
+          data-testid="topbar-more-links"
+          @click="linksMenuOpen = !linksMenuOpen"
+        >
+          <Icon name="externalLink" size="sm" aria-hidden="true" />
+        </button>
+
+        <Transition name="topbar-pop">
+          <div v-if="linksMenuOpen" class="topbar__menu topbar__links-menu" role="menu">
+            <template v-for="link in topbarLinks" :key="link.key">
+              <RouterLink
+                v-if="link.to"
+                :to="link.to"
+                class="topbar__menu-item"
+                role="menuitem"
+                @click="linksMenuOpen = false"
+              >
+                <Icon :name="asIconName(link.iconName)" size="sm" aria-hidden="true" />
+                {{ link.label }}
+              </RouterLink>
+              <a
+                v-else
+                :href="link.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="topbar__menu-item"
+                role="menuitem"
+              >
+                <Icon :name="asIconName(link.iconName)" size="sm" aria-hidden="true" />
+                {{ link.label }}
+              </a>
+            </template>
+          </div>
+        </Transition>
+      </div>
 
       <LocaleSwitcher />
 
       <SubscriptionProgressMini v-if="user && subscriptionFeatureEnabled" />
 
-      <!-- 余额胶囊 -->
-      <div v-if="user" class="topbar__balance" tabindex="0">
-        <span class="topbar__balance-dot" aria-hidden="true" />
-        <span class="topbar__balance-value ui-num">{{ formatHeaderMoney(availableBalance) }}</span>
-        <span v-if="frozenBalance > 0" class="topbar__balance-frozen">
-          {{ balanceFrozenLabel }}
-        </span>
+      <!-- 余额胶囊：点击/回车展开明细，触屏与键盘都能用 -->
+      <div v-if="user" class="topbar__balance">
+        <button
+          type="button"
+          class="topbar__balance-trigger"
+          :aria-expanded="balanceOpen"
+          :aria-label="`${balanceAvailableText} ${formatHeaderMoney(availableBalance)}`"
+          @click="balanceOpen = !balanceOpen"
+        >
+          <span class="topbar__balance-dot" aria-hidden="true" />
+          <span class="topbar__balance-value ui-num">{{ formatHeaderMoney(availableBalance) }}</span>
+          <span v-if="frozenBalance > 0" class="topbar__balance-frozen">
+            {{ balanceFrozenLabel }}
+          </span>
+        </button>
 
-        <div class="topbar__balance-pop">
+        <div class="topbar__balance-pop" :class="{ 'is-open': balanceOpen }">
           <div class="topbar__pop-row">
             <span>{{ balanceAvailableText }}</span>
             <b class="ui-num">{{ formatHeaderMoney(availableBalance) }}</b>
@@ -190,9 +246,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { useMediaQuery } from '@vueuse/core'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
@@ -224,6 +281,15 @@ const onboardingStore = useOnboardingStore()
 const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
+const linksMenuOpen = ref(false)
+const linksMenuRef = ref<HTMLElement | null>(null)
+const balanceOpen = ref(false)
+
+/**
+ * 1280 以下顶栏会挤到「一排裸图标」，此时把文档 / 模型广场 / 自定义入口
+ * 收进一个「更多」菜单，只保留搜索、公告、语言、余额、头像。
+ */
+const linksCollapsed = useMediaQuery('(max-width: 1279px)')
 
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
@@ -238,6 +304,45 @@ const visibleTopbarLinks = computed(() =>
   })
 )
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
+
+type TopbarEntry = {
+  key: string
+  label: string
+  iconName: string
+  to?: string
+  url?: string
+}
+
+/** Icon.vue 的 name 是字面量联合类型，而入口数据是字符串，这里受控放宽。 */
+function asIconName(name: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (name || 'externalLink') as any
+}
+
+/** 折叠进「更多」菜单的全部入口，顺序与平铺时一致。 */
+const topbarLinks = computed<TopbarEntry[]>(() => {
+  const entries: TopbarEntry[] = []
+  if (docUrl.value) {
+    entries.push({ key: 'docs', label: t('nav.docs'), iconName: 'book', url: docUrl.value })
+  }
+  if (user.value && modelPlazaEnabled.value) {
+    entries.push({
+      key: 'plaza',
+      label: t('nav.modelPlaza'),
+      iconName: 'grid',
+      to: '/model-plaza',
+    })
+  }
+  for (const link of visibleTopbarLinks.value) {
+    entries.push({
+      key: `custom:${link.id}`,
+      label: link.label,
+      iconName: link.iconName,
+      url: link.url,
+    })
+  }
+  return entries
+})
 
 const availableBalance = computed(() => Number(user.value?.balance || 0))
 const frozenBalance = computed(() => Number(user.value?.frozen_balance || 0))
@@ -314,6 +419,8 @@ function toggleMobileSidebar() {
 
 function toggleDropdown() {
   dropdownOpen.value = !dropdownOpen.value
+  linksMenuOpen.value = false
+  balanceOpen.value = false
 }
 
 function closeDropdown() {
@@ -341,13 +448,37 @@ function formatHeaderMoney(value: number) {
 }
 
 function handleClickOutside(event: MouseEvent) {
-  if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
+  const target = event.target as Node | null
+  if (dropdownRef.value && target && !dropdownRef.value.contains(target)) {
     closeDropdown()
+  }
+  if (linksMenuRef.value && target && !linksMenuRef.value.contains(target)) {
+    linksMenuOpen.value = false
+  }
+  if (balanceOpen.value && target instanceof Element && !target.closest('.topbar__balance')) {
+    balanceOpen.value = false
   }
 }
 
-onMounted(() => document.addEventListener('click', handleClickOutside))
-onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
+function handleGlobalKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return
+  if (linksMenuOpen.value) linksMenuOpen.value = false
+  if (balanceOpen.value) balanceOpen.value = false
+}
+
+// 断点切换后残留的浮层会错位，直接收起
+watch(linksCollapsed, (collapsed) => {
+  if (!collapsed) linksMenuOpen.value = false
+})
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+  document.addEventListener('keydown', handleGlobalKeydown)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('keydown', handleGlobalKeydown)
+})
 </script>
 
 <style scoped>
@@ -512,6 +643,36 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
   text-overflow: ellipsis;
 }
 
+/* “更多入口”折叠按钮与浮层 */
+.topbar__links-more {
+  position: relative;
+  flex-shrink: 0;
+}
+.topbar__link--icon {
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+.topbar__links-menu {
+  width: 208px;
+  max-height: min(60vh, 420px);
+}
+
+/*
+ * “更多入口”按钮在窄屏被挤到工具栏中部，父容器只有 32px 宽，
+ * 冒泡层 right:0 会整块往左溢出到屏幕外。这里改为贴视口右上角定位。
+ */
+@media (max-width: 1279px) {
+  /* 用双类选择器提权：.topbar__menu 定义在后面，同权重会覆盖这里的 fixed */
+  .topbar__menu.topbar__links-menu {
+    position: fixed;
+    top: calc(var(--ui-topbar-h) + var(--ui-s-6) + var(--ui-s-2));
+    right: var(--ui-s-3);
+    left: auto;
+    width: min(260px, calc(100vw - 1.5rem));
+  }
+}
+
 .topbar__cmd {
   display: inline-flex;
   align-items: center;
@@ -571,17 +732,35 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
 .topbar__balance {
   position: relative;
   display: inline-flex;
+  height: 32px;
+}
+
+.topbar__balance-trigger {
+  display: inline-flex;
   align-items: center;
   gap: 7px;
   height: 32px;
   padding: 0 12px;
+  border: 0;
   border-radius: var(--ui-r-pill);
   background-color: var(--ui-accent-soft);
   box-shadow:
     inset 0 1px 1px var(--ui-edge-inner),
-    0 0 0 1px rgb(13 148 136 / 0.16);
-  cursor: default;
+    0 0 0 1px rgb(63 99 90 / 0.16);
+  font-family: var(--ui-font);
+  cursor: pointer;
+  transition: box-shadow var(--ui-dur-fast) var(--ui-ease-out);
+}
+.topbar__balance-trigger:hover {
+  box-shadow:
+    inset 0 1px 1px var(--ui-edge-inner),
+    0 0 0 1px var(--ui-accent-ring);
+}
+.topbar__balance-trigger:focus-visible {
   outline: none;
+  box-shadow:
+    inset 0 1px 1px var(--ui-edge-inner),
+    0 0 0 3px var(--ui-accent-ring);
 }
 
 .topbar__balance-dot {
@@ -634,9 +813,8 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
   pointer-events: none;
 }
 
-.topbar__balance:hover .topbar__balance-pop,
-.topbar__balance:focus-visible .topbar__balance-pop,
-.topbar__balance:focus-within .topbar__balance-pop {
+.topbar__balance-pop.is-open,
+.topbar__balance:hover .topbar__balance-pop {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
@@ -700,7 +878,7 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
   font-weight: 680;
   box-shadow:
     inset 0 1px 1px rgb(255 255 255 / 0.4),
-    0 4px 12px -8px rgb(13 148 136 / 0.8);
+    0 4px 12px -8px rgb(63 99 90 / 0.8);
 }
 .topbar__avatar img {
   width: 100%;
@@ -893,17 +1071,8 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
   }
 }
 
-@media (min-width: 1024px) and (max-width: 1120px) {
-  .topbar__link-text {
-    display: none;
-  }
-}
-
 @media (max-width: 860px) {
-  .topbar__link-text {
-    display: none;
-  }
-  .topbar__balance {
+  .topbar__balance-trigger {
     padding: 0 9px;
   }
 }
@@ -916,9 +1085,6 @@ onBeforeUnmount(() => document.removeEventListener('click', handleClickOutside))
     display: none;
   }
   .topbar__balance-frozen {
-    display: none;
-  }
-  .topbar__balance {
     display: none;
   }
   .topbar__lead {

@@ -290,7 +290,7 @@ function priceSummary(entry: { model: PlazaModel; groups: ModelPlazaGroup[] }) {
 
 .plaza-card:hover {
   transform: translateY(-2px);
-  border-color: var(--ui-accent-ring, rgb(13 148 136 / 0.34));
+  border-color: var(--ui-accent-ring, rgb(63 99 90 / 0.34));
   box-shadow: var(--ui-shadow-3, 0 14px 34px -12px rgb(15 23 42 / 0.16));
 }
 

@@ -15,7 +15,7 @@ function createStudioPmrem(renderer: THREE.WebGLRenderer): {
   pmrem.compileEquirectangularShader()
 
   const envScene = new THREE.Scene()
-  envScene.background = new THREE.Color(0x040712)
+  envScene.background = new THREE.Color(0x0f1211)
 
   const geometries: THREE.BufferGeometry[] = []
   const materials: THREE.Material[] = []
@@ -44,9 +44,9 @@ function createStudioPmrem(renderer: THREE.WebGLRenderer): {
   // Zenith white-champagne specular strip
   addLightCard(0xf8fafc, 2.2, [0, 14, 0], [Math.PI / 2, 0, 0], [28, 12, 1])
   // Left AICode teal studio key card
-  addLightCard(0x38e8d5, 1.9, [-16, 5, -4], [0, Math.PI / 2.2, 0], [18, 11, 1])
+  addLightCard(0x8fb5a8, 1.9, [-16, 5, -4], [0, Math.PI / 2.2, 0], [18, 11, 1])
   // Right Qimu champagne-gold cinema key card
-  addLightCard(0xf0c27b, 1.9, [16, 5, -4], [0, -Math.PI / 2.2, 0], [18, 11, 1])
+  addLightCard(0xc9a876, 1.9, [16, 5, -4], [0, -Math.PI / 2.2, 0], [18, 11, 1])
   // Neutral champagne-platinum cosmic crown rim (replaces violet wash on plinths)
   addLightCard(0xe2e8f0, 1.3, [0, 8, -18], [0, 0, 0], [26, 8, 1])
 
@@ -120,24 +120,24 @@ export function createStudioEnvironment(
   const pmrem = createStudioPmrem(renderer)
   scene.environment = pmrem.texture
 
-  const fogColorDark = new THREE.Color(0x03050c)
-  const fogColorLight = new THREE.Color(0xeef2fa)
+  const fogColorDark = new THREE.Color(0x0b0e0d)
+  const fogColorLight = new THREE.Color(0xf0eee9)
   const fog = new THREE.FogExp2(fogColorDark.getHex(), 0.0115)
   scene.fog = fog
 
   // Studio 3-point + hemisphere directional illumination for high-FPS clarity
-  const hemiLight = new THREE.HemisphereLight(0x93c5fd, 0x0b1022, 0.72)
+  const hemiLight = new THREE.HemisphereLight(0xa3c3ba, 0x141715, 0.72)
   scene.add(hemiLight)
 
   const keyLight = new THREE.DirectionalLight(0xf8fafc, 1.35)
   keyLight.position.set(0, 24, 16)
   scene.add(keyLight)
 
-  const aiCodeRim = new THREE.DirectionalLight(0x22d3ee, 1.65)
+  const aiCodeRim = new THREE.DirectionalLight(0x7ba79b, 1.65)
   aiCodeRim.position.set(-22, 11, -10)
   scene.add(aiCodeRim)
 
-  const qimuRim = new THREE.DirectionalLight(0xfbbf24, 1.65)
+  const qimuRim = new THREE.DirectionalLight(0xb08a5c, 1.65)
   qimuRim.position.set(22, 11, -10)
   scene.add(qimuRim)
 
@@ -195,24 +195,26 @@ export function createStudioEnvironment(
         float biasShift = clamp(uHoverBias * 0.35, -0.35, 0.35);
         float splitMix = clamp(sideRight + biasShift * 0.45, 0.0, 1.0);
 
-        // Dark Obsidian palette: crisp obsidian zenith + architectural teal left & warm champagne right silk
-        vec3 darkZenith = vec3(0.008, 0.014, 0.032);
-        vec3 darkHorizon = vec3(0.018, 0.034, 0.072);
+        // 墨夜：中性近黑 + 墨玉/古铜双色微弱极光。
+        // 原来是「青绿 + 石板蓝 + 香槟 + 暖橙」四色极光，是落地页 AI 味最重的部分；
+        // 这里收敛到同一色相的深浅，左右仅靠明度与冷暖微差区分。
+        vec3 darkZenith = vec3(0.030, 0.036, 0.034);
+        vec3 darkHorizon = vec3(0.055, 0.065, 0.061);
         vec3 darkBase = mix(darkHorizon, darkZenith, smoothstep(-0.02, 0.65, horizon));
 
-        vec3 tealAurora = vec3(0.10, 0.84, 0.78);
-        vec3 slateBlueAurora = vec3(0.24, 0.44, 0.88);
-        vec3 champagneAurora = vec3(0.95, 0.72, 0.34);
-        vec3 warmSilkAurora = vec3(0.86, 0.56, 0.28);
+        vec3 inkDeepAurora = vec3(0.106, 0.157, 0.145);
+        vec3 inkMidAurora = vec3(0.180, 0.251, 0.231);
+        vec3 bronzeAurora = vec3(0.451, 0.373, 0.271);
+        vec3 paperAurora = vec3(0.596, 0.549, 0.475);
 
-        vec3 leftTint = mix(tealAurora, slateBlueAurora, n2.b * 0.55);
-        vec3 rightTint = mix(champagneAurora, warmSilkAurora, n3.b * 0.55);
+        vec3 leftTint = mix(inkDeepAurora, inkMidAurora, n2.b * 0.55);
+        vec3 rightTint = mix(bronzeAurora, paperAurora, n3.b * 0.55);
         vec3 auroraColor = mix(leftTint, rightTint, splitMix);
 
         float auroraEnergy = (curtain1 * bandLow * 0.82 + curtain2 * bandZenith * 0.58) * (0.58 + 0.42 * verticalStreaks);
         float centerHalo = exp(-angleX * angleX * 2.6) * exp(-max(dir.y - 0.06, 0.0) * 5.2);
         float dither = (n3.r - 0.5) * 0.012;
-        vec3 darkCol = darkBase + auroraColor * auroraEnergy * 0.78 + mix(vec3(0.14, 0.72, 0.76), vec3(0.94, 0.70, 0.34), splitMix) * centerHalo * 0.36 + vec3(dither);
+        vec3 darkCol = darkBase + auroraColor * auroraEnergy * 0.5 + mix(inkMidAurora, bronzeAurora, splitMix) * centerHalo * 0.16 + vec3(dither);
 
         // Light Mode: MotionSites 31-deg Fluted (Reeded) Glass + Marble Swirl + Pointer Chroma Blob
         vec2 screenP = vec2(atan(dir.x, -dir.z) * 1.15, dir.y * 1.15);
@@ -228,16 +230,16 @@ export function createStudioEnvironment(
         float swirlR = texture2D(uNoiseTex, lightUvR).r;
         float swirlG = texture2D(uNoiseTex, (lightUvR + lightUvB) * 0.5).g;
         float swirlB = texture2D(uNoiseTex, lightUvB).b;
-        vec3 marble = mix(vec3(0.925, 0.945, 0.978), vec3(0.985, 0.988, 0.996), vec3(swirlR, swirlG, swirlB));
+        vec3 marble = mix(vec3(0.878, 0.872, 0.856), vec3(0.941, 0.936, 0.924), vec3(swirlR, swirlG, swirlB));
 
         vec2 pAim = vec2(uPointer.x * 0.55, uPointer.y * 0.25 + 0.12);
         vec2 chromaDelta = vec2(atan(dir.x, -dir.z), dir.y) + fluteShift * 0.65 - pAim;
         float pointerBlob = exp(-dot(chromaDelta, chromaDelta) * 2.8);
-        vec3 chromaCol = mix(vec3(0.22, 0.82, 0.80), vec3(0.94, 0.72, 0.36), splitMix);
+        vec3 chromaCol = mix(vec3(0.600, 0.678, 0.643), vec3(0.722, 0.651, 0.545), splitMix);
 
         float ridgeHighlight = pow(max(0.0, fluteCurve), 4.0) * 0.085;
-        vec3 lightBase = mix(vec3(0.955, 0.962, 0.982), marble, smoothstep(-0.08, 0.65, horizon));
-        vec3 lightCol = mix(lightBase, chromaCol, clamp(pointerBlob * 0.26 + auroraEnergy * 0.14 + centerHalo * 0.08, 0.0, 0.38)) + vec3(ridgeHighlight) + vec3(dither * 0.5);
+        vec3 lightBase = mix(vec3(0.910, 0.906, 0.894), marble, smoothstep(-0.08, 0.65, horizon));
+        vec3 lightCol = mix(lightBase, chromaCol, clamp(pointerBlob * 0.14 + auroraEnergy * 0.16 + centerHalo * 0.05, 0.0, 0.26)) + vec3(ridgeHighlight * 0.6) + vec3(dither * 0.5);
 
         vec3 finalCol = mix(darkCol, lightCol, uThemeT);
         gl_FragColor = vec4(finalCol, 1.0);
@@ -491,7 +493,7 @@ export function createStudioEnvironment(
     fog.density = THREE.MathUtils.lerp(0.0115, 0.0085, currentThemeT)
 
     hemiLight.intensity = THREE.MathUtils.lerp(0.72, 1.15, currentThemeT)
-    hemiLight.groundColor.setHex(currentThemeT > 0.5 ? 0xdbeafe : 0x0b1022)
+    hemiLight.groundColor.setHex(currentThemeT > 0.5 ? 0xd8dcd6 : 0x141715)
     keyLight.intensity = THREE.MathUtils.lerp(1.35, 1.6, currentThemeT)
     aiCodeRim.intensity = THREE.MathUtils.lerp(1.65, 1.15, currentThemeT)
     qimuRim.intensity = THREE.MathUtils.lerp(1.65, 1.15, currentThemeT)

@@ -98,7 +98,7 @@ function toggle() {
   background-image: var(--ui-arc);
   box-shadow:
     inset 0 1px 1px rgb(255 255 255 / 0.42),
-    0 4px 12px -6px rgb(13 148 136 / 0.7);
+    0 4px 12px -6px rgb(63 99 90 / 0.7);
 }
 
 .ui-switch--sm.is-on .ui-switch__thumb {

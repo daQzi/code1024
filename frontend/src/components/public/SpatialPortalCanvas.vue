@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
   opacity: 1;
   transition: opacity 520ms ease;
   background:
-    radial-gradient(65% 58% at 22% 48%, rgb(56 232 213 / 0.16) 0%, transparent 62%),
+    radial-gradient(65% 58% at 22% 48%, rgb(143 181 168 / 0.16) 0%, transparent 62%),
     radial-gradient(62% 56% at 78% 48%, rgb(240 194 123 / 0.14) 0%, transparent 60%),
     radial-gradient(48% 42% at 50% 45%, rgb(148 163 184 / 0.14) 0%, transparent 66%),
     linear-gradient(170deg, #03050a 0%, #070c18 55%, #03050a 100%);
@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
 
 .sp-stage.is-light .sp-fallback {
   background:
-    radial-gradient(68% 60% at 20% 45%, rgb(56 232 213 / 0.24) 0%, transparent 62%),
+    radial-gradient(68% 60% at 20% 45%, rgb(143 181 168 / 0.24) 0%, transparent 62%),
     radial-gradient(65% 58% at 80% 45%, rgb(240 194 123 / 0.22) 0%, transparent 60%),
     radial-gradient(50% 45% at 50% 40%, rgb(147 197 253 / 0.32) 0%, transparent 66%),
     linear-gradient(170deg, #edf1f7 0%, #dce4f1 100%);

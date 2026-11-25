@@ -1595,7 +1595,7 @@ function buildRegistrationErrorMessage(error: unknown, fallback: string): string
   height: 2px;
   width: 100%;
   flex: none;
-  background: linear-gradient(90deg, transparent 0%, #38e8d5 38%, #f0c27b 62%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, #8fb5a8 38%, #c9a876 62%, transparent 100%);
   opacity: 0.9;
 }
 
@@ -1714,8 +1714,8 @@ function buildRegistrationErrorMessage(error: unknown, fallback: string): string
 }
 
 .auth-portal-root .auth-content .input:focus {
-  border-color: #38e8d5;
-  outline-color: rgb(56 232 213 / 0.25);
+  border-color: #8fb5a8;
+  outline-color: rgb(143 181 168 / 0.25);
 }
 
 .auth-portal-root .auth-content .primary-btn.auth-portal-submit {
@@ -1730,14 +1730,14 @@ function buildRegistrationErrorMessage(error: unknown, fallback: string): string
 
 .auth-portal-root .auth-content .primary-btn.auth-portal-submit:hover:not(:disabled) {
   background: #ffffff;
-  box-shadow: 0 0 0 1px rgb(56 232 213 / 0.55), 0 10px 24px -10px rgb(56 232 213 / 0.45);
+  box-shadow: 0 0 0 1px rgb(143 181 168 / 0.55), 0 10px 24px -10px rgb(143 181 168 / 0.45);
 }
 
 .auth-portal-root .auth-link {
   background: transparent;
   border: 0;
   padding: 0;
-  color: #38e8d5;
+  color: #8fb5a8;
   font-size: 0.82rem;
   font-weight: 560;
   cursor: pointer;

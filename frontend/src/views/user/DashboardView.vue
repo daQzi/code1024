@@ -2,7 +2,7 @@
   <AppLayout>
     <div class="space-y-6">
       <div v-if="loading" role="status" aria-busy="true" class="space-y-6">
-        <div class="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))]">
+        <div class="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,10rem),1fr))]">
           <div v-for="cardIndex in 4" :key="`user-stat-skeleton-${cardIndex}`" class="card p-4">
             <div class="flex items-center gap-3">
               <UiSkeleton :width="36" :height="36" radius="var(--ui-r-md)" />

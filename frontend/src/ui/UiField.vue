@@ -141,7 +141,7 @@ function onInput(ev: Event) {
     inset 0 1px 1px var(--ui-edge-strong),
     inset 0 -1px 1px var(--ui-edge-shade),
     0 0 0 1.5px var(--ui-accent-ring),
-    0 6px 18px -12px rgb(13 148 136 / 0.5);
+    0 6px 18px -12px rgb(63 99 90 / 0.5);
 }
 
 .ui-field.has-error .ui-field__control {

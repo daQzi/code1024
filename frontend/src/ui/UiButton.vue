@@ -140,14 +140,14 @@ function onClick(ev: MouseEvent) {
   box-shadow:
     inset 0 1px 1px rgb(255 255 255 / 0.45),
     inset 0 -1px 1px rgb(0 0 0 / 0.12),
-    0 8px 20px -10px rgb(13 148 136 / 0.62);
+    0 8px 20px -10px rgb(63 99 90 / 0.62);
 }
 .ui-btn--primary:hover:not(:disabled) {
   background-position: 88% 50%;
   box-shadow:
     inset 0 1px 1px rgb(255 255 255 / 0.55),
     inset 0 -1px 1px rgb(0 0 0 / 0.14),
-    0 12px 26px -10px rgb(13 148 136 / 0.72);
+    0 12px 26px -10px rgb(63 99 90 / 0.72);
 }
 
 /* ---------------------------------------------------------------- 玻璃按钮 */

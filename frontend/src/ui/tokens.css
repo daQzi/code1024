@@ -8,6 +8,11 @@
  *   - 玻璃 = 半透明表面 + 背景模糊 + 饱和度提升 + 边缘折射 + 镜面高光
  *   - 一切层级靠「光」区分，而不是靠粗描边或重阴影
  *
+ * 配色：墨韵（Ink & Jade）
+ *   - 只有一支低饱和的墨玉色作为强调，其余全部是同一色相的中性墨阶
+ *   - 刻意压低玻璃的 saturate：早期 190% 会把背景的多色光晕煮成彩虹玻璃，
+ *     是整套界面「一眼 AI 模板」的主要来源
+ *
  * 主题切换同时支持 html.dark 与 html[data-theme="dark"]（历史两套写法都在用）。
  * ========================================================================= */
 
@@ -15,12 +20,14 @@
   color-scheme: light;
 
   /* ---------------------------------------------------------------- 画布 */
-  --ui-canvas: #d5dff2;
-  --ui-canvas-deep: #c2d0ea;
-  --ui-canvas-tint-1: #6ee7d7;
-  --ui-canvas-tint-2: #93c5fd;
-  --ui-canvas-tint-3: #c4b5fd;
-  --ui-canvas-tint-4: #f9a8d4;
+  /* 暖纸底：比蓝调白更耐看，也不会和青瓷强调色打架 */
+  --ui-canvas: #e6e2da;
+  --ui-canvas-deep: #d6d0c5;
+  /* 四枚光斑全部落在同一色相附近，只保留极低的彩度差 */
+  --ui-canvas-tint-1: #c6d5cd;
+  --ui-canvas-tint-2: #ced3d5;
+  --ui-canvas-tint-3: #d6ccbb;
+  --ui-canvas-tint-4: #cad0d2;
 
   /* ---------------------------------------------------------------- 玻璃 */
   /* rgb 三元组，供 rgb(var(--x) / alpha) 使用 */
@@ -28,64 +35,72 @@
   --ui-glass-strong-rgb: 255 255 255;
   --ui-glass-soft-rgb: 255 255 255;
 
-  --ui-glass-alpha: 0.60;
-  --ui-glass-strong-alpha: 0.74;
-  --ui-glass-soft-alpha: 0.40;
+  /* 卡片比背景亮一档才有「浮起来」的感觉，太透会糊成一片；
+     但也不能太实，否则玻璃的折射层次会消失。 */
+  --ui-glass-alpha: 0.80;
+  --ui-glass-strong-alpha: 0.88;
+  --ui-glass-soft-alpha: 0.56;
 
   --ui-glass-blur: 26px;
   --ui-glass-strong-blur: 40px;
-  --ui-glass-sat: 190%;
-  --ui-glass-bright: 108%;
+  /* saturate 超过 ~130% 就会把背后的杂色抽上来，卡片看着发脏 */
+  --ui-glass-sat: 115%;
+  --ui-glass-bright: 104%;
 
   /* 玻璃边缘：外侧描边 + 内侧高光 */
   --ui-edge: rgb(255 255 255 / 0.72);
   --ui-edge-strong: rgb(255 255 255 / 0.90);
   --ui-edge-inner: rgb(255 255 255 / 0.80);
-  --ui-edge-shade: rgb(15 23 42 / 0.07);
+  /* 卡片内外都要有可见的明暗落差，否则半透明白叠白就是一片糊 */
+  --ui-edge-shade: rgb(20 22 26 / 0.12);
 
   /* 轮廓发丝线：浅色背景上白描边完全不可见，靠这一条定义面板边界 */
-  --ui-hairline: rgb(15 23 42 / 0.13);
+  --ui-hairline: rgb(20 22 26 / 0.16);
 
   /* ---------------------------------------------------------------- 文本 */
-  --ui-text: #0b1220;
-  --ui-text-soft: #29384d;
-  --ui-text-muted: #4a5b73;
-  --ui-text-faint: #6b7d95;
-  --ui-text-inverse: #f8fafc;
+  --ui-text: #14161a;
+  --ui-text-soft: #2b3038;
+  --ui-text-muted: #4d545e;
+  /* 最淡一级文本仍需在画布色 #f2f0ec 上达到 WCAG AA（≥4.5:1），
+     侧栏分组标题、时间戳这类 10–11px 小字都在用这一级。 */
+  --ui-text-faint: #626a74;
+  --ui-text-inverse: #f7f7f5;
 
   /* ---------------------------------------------------------------- 描边 */
-  --ui-line: rgb(15 23 42 / 0.08);
-  --ui-line-soft: rgb(15 23 42 / 0.05);
-  --ui-line-strong: rgb(15 23 42 / 0.14);
+  --ui-line: rgb(20 22 26 / 0.08);
+  --ui-line-soft: rgb(20 22 26 / 0.05);
+  --ui-line-strong: rgb(20 22 26 / 0.14);
 
   /* ---------------------------------------------------------------- 强调 */
-  --ui-accent: #0d9488;
-  --ui-accent-hover: #0f766e;
-  --ui-accent-soft: rgb(13 148 136 / 0.12);
-  --ui-accent-ring: rgb(13 148 136 / 0.34);
+  /* 墨玉：比 #0d9488 更沉、更灰，避免「科技绿」的地推感 */
+  --ui-accent: #3f635a;
+  --ui-accent-hover: #33544c;
+  --ui-accent-soft: rgb(63 99 90 / 0.10);
+  --ui-accent-ring: rgb(63 99 90 / 0.30);
   --ui-accent-contrast: #ffffff;
   /* 渐变弧光（logo / 高亮条 / 进度） */
-  --ui-arc: linear-gradient(118deg, #5eead4 0%, #22d3ee 42%, #818cf8 100%);
-  /* 主按钮在浅色主题下采用深青蓝渐变，确保白字满足 WCAG AA 对比度 */
-  --ui-btn-primary-bg: linear-gradient(118deg, #0f766e 0%, #0e7490 52%, #0369a1 100%);
+  --ui-arc: linear-gradient(118deg, #6d9187 0%, #4a7268 58%, #33544c 100%);
+  /* 主按钮在浅色主题下采用深墨玉渐变，确保白字满足 WCAG AA 对比度 */
+  --ui-btn-primary-bg: linear-gradient(118deg, #3f635a 0%, #35564e 58%, #2a473f 100%);
 
   /* ---------------------------------------------------------------- 语义色 */
-  --ui-success: #059669;
-  --ui-success-soft: rgb(5 150 105 / 0.12);
-  --ui-warning: #d97706;
-  --ui-warning-soft: rgb(217 119 6 / 0.14);
-  --ui-danger: #dc2626;
-  --ui-danger-soft: rgb(220 38 38 / 0.12);
-  --ui-info: #2563eb;
-  --ui-info-soft: rgb(37 99 235 / 0.12);
+  /* 语义色只保留「能读懂」的最低彩度，不做成糖果色 */
+  --ui-success: #4a7c59;
+  --ui-success-soft: rgb(74 124 89 / 0.12);
+  --ui-warning: #96702f;
+  --ui-warning-soft: rgb(150 112 47 / 0.14);
+  --ui-danger: #a4433c;
+  --ui-danger-soft: rgb(164 67 60 / 0.12);
+  --ui-info: #47688f;
+  --ui-info-soft: rgb(71 104 143 / 0.12);
 
   /* ---------------------------------------------------------------- 阴影 */
   /* 双层：近距离接触影 + 远距离扩散影，模拟真实光照 */
-  --ui-shadow-1: 0 1px 2px rgb(15 23 42 / 0.06), 0 1px 1px rgb(15 23 42 / 0.04);
-  --ui-shadow-2: 0 4px 12px -2px rgb(15 23 42 / 0.10), 0 2px 4px -2px rgb(15 23 42 / 0.06);
-  --ui-shadow-3: 0 14px 34px -12px rgb(15 23 42 / 0.20), 0 4px 10px -6px rgb(15 23 42 / 0.10);
-  --ui-shadow-4: 0 34px 64px -28px rgb(15 23 42 / 0.30), 0 12px 24px -18px rgb(15 23 42 / 0.16);
-  --ui-shadow-glow: 0 0 0 1px rgb(13 148 136 / 0.18), 0 12px 30px -14px rgb(13 148 136 / 0.42);
+  --ui-shadow-1: 0 1px 2px rgb(20 22 26 / 0.06), 0 1px 1px rgb(20 22 26 / 0.04);
+  --ui-shadow-2: 0 4px 12px -2px rgb(20 22 26 / 0.10), 0 2px 4px -2px rgb(20 22 26 / 0.06);
+  --ui-shadow-3: 0 14px 34px -12px rgb(20 22 26 / 0.18), 0 4px 10px -6px rgb(20 22 26 / 0.09);
+  --ui-shadow-4: 0 34px 64px -28px rgb(20 22 26 / 0.26), 0 12px 24px -18px rgb(20 22 26 / 0.14);
+  --ui-shadow-glow: 0 0 0 1px rgb(63 99 90 / 0.16), 0 12px 30px -14px rgb(63 99 90 / 0.34);
 
   /* ---------------------------------------------------------------- 圆角 */
   --ui-r-xs: 8px;
@@ -159,56 +174,60 @@ html.dark,
 html[data-theme='dark'] {
   color-scheme: dark;
 
-  --ui-canvas: #070b14;
-  --ui-canvas-deep: #04070d;
-  --ui-canvas-tint-1: #0f4a45;
-  --ui-canvas-tint-2: #16306e;
-  --ui-canvas-tint-3: #2f1c5e;
-  --ui-canvas-tint-4: #5a1030;
+  /* 墨夜：中性近黑，只留一丝墨绿，不再有蓝紫星云 */
+  --ui-canvas: #121413;
+  --ui-canvas-deep: #0b0d0c;
+  --ui-canvas-tint-1: #1b2a26;
+  --ui-canvas-tint-2: #1d2321;
+  --ui-canvas-tint-3: #24221d;
+  --ui-canvas-tint-4: #1a1f22;
 
-  --ui-glass-rgb: 11 17 31;
-  --ui-glass-strong-rgb: 13 20 36;
-  --ui-glass-soft-rgb: 11 17 31;
+  --ui-glass-rgb: 22 24 23;
+  --ui-glass-strong-rgb: 26 29 28;
+  --ui-glass-soft-rgb: 22 24 23;
 
-  --ui-glass-alpha: 0.42;
-  --ui-glass-strong-alpha: 0.54;
+  /* 深色主题背景本身是蓝紫星海，玻璃底过透会让卡片边界消失，
+     这里比浅色主题略提高不透明度，让信息层级靠「面」也能区分。 */
+  --ui-glass-alpha: 0.52;
+  --ui-glass-strong-alpha: 0.64;
   --ui-glass-soft-alpha: 0.30;
 
   --ui-glass-blur: 24px;
   --ui-glass-strong-blur: 40px;
-  --ui-glass-sat: 185%;
-  --ui-glass-bright: 118%;
+  --ui-glass-sat: 112%;
+  --ui-glass-bright: 106%;
 
-  --ui-edge: rgb(255 255 255 / 0.14);
-  --ui-edge-strong: rgb(255 255 255 / 0.22);
-  --ui-edge-inner: rgb(255 255 255 / 0.10);
-  --ui-edge-shade: rgb(0 0 0 / 0.36);
+  --ui-edge: rgb(255 255 255 / 0.10);
+  --ui-edge-strong: rgb(255 255 255 / 0.16);
+  --ui-edge-inner: rgb(255 255 255 / 0.07);
+  --ui-edge-shade: rgb(0 0 0 / 0.42);
 
-  --ui-text: #f5f8fc;
-  --ui-text-soft: #dbe3ee;
-  --ui-text-muted: #b4c1d4;
-  --ui-text-faint: #8b9bb1;
-  --ui-text-inverse: #0b1220;
+  --ui-text: #f2f3f1;
+  --ui-text-soft: #d8dad6;
+  --ui-text-muted: #a9aeaa;
+  --ui-text-faint: #8c938e;
+  --ui-text-inverse: #14161a;
 
-  --ui-line: rgb(255 255 255 / 0.11);
-  --ui-line-soft: rgb(255 255 255 / 0.06);
-  --ui-line-strong: rgb(255 255 255 / 0.19);
+  --ui-line: rgb(255 255 255 / 0.09);
+  --ui-line-soft: rgb(255 255 255 / 0.05);
+  --ui-line-strong: rgb(255 255 255 / 0.16);
 
-  --ui-accent: #2dd4bf;
-  --ui-accent-hover: #5eead4;
-  --ui-accent-soft: rgb(45 212 191 / 0.16);
-  --ui-accent-ring: rgb(45 212 191 / 0.42);
-  --ui-accent-contrast: #04211d;
+  /* 深色下强调色必须提亮才够对比，但只提明度、不提饱和度 */
+  --ui-accent: #9dbfb3;
+  --ui-accent-hover: #b3cfc5;
+  --ui-accent-soft: rgb(157 191 179 / 0.14);
+  --ui-accent-ring: rgb(157 191 179 / 0.34);
+  --ui-accent-contrast: #101614;
   --ui-btn-primary-bg: var(--ui-arc);
 
-  --ui-success: #34d399;
-  --ui-success-soft: rgb(52 211 153 / 0.16);
-  --ui-warning: #fbbf24;
-  --ui-warning-soft: rgb(251 191 36 / 0.16);
-  --ui-danger: #f87171;
-  --ui-danger-soft: rgb(248 113 113 / 0.16);
-  --ui-info: #60a5fa;
-  --ui-info-soft: rgb(96 165 250 / 0.16);
+  --ui-success: #8fb89a;
+  --ui-success-soft: rgb(143 184 154 / 0.15);
+  --ui-warning: #cfa96b;
+  --ui-warning-soft: rgb(207 169 107 / 0.15);
+  --ui-danger: #cf8b84;
+  --ui-danger-soft: rgb(207 139 132 / 0.15);
+  --ui-info: #8aa8c6;
+  --ui-info-soft: rgb(138 168 198 / 0.15);
 
   --ui-shadow-1: 0 1px 2px rgb(0 0 0 / 0.40);
   --ui-shadow-2: 0 4px 14px -2px rgb(0 0 0 / 0.50), 0 2px 4px -2px rgb(0 0 0 / 0.36);
@@ -216,9 +235,9 @@ html[data-theme='dark'] {
   --ui-shadow-4: 0 40px 72px -30px rgb(0 0 0 / 0.78), 0 14px 28px -20px rgb(0 0 0 / 0.56);
   --ui-hairline: rgb(255 255 255 / 0.12);
 
-  --ui-shadow-glow: 0 0 0 1px rgb(45 212 191 / 0.26), 0 14px 34px -16px rgb(45 212 191 / 0.50);
+  --ui-shadow-glow: 0 0 0 1px rgb(157 191 179 / 0.22), 0 14px 34px -16px rgb(157 191 179 / 0.40);
 
-  --ui-blob-opacity: 0.38;
+  --ui-blob-opacity: 0.30;
 }
 
 /* 高对比 / 减少透明偏好 */

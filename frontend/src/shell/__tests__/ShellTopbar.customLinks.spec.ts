@@ -1,5 +1,5 @@
 import { mount, type VueWrapper } from '@vue/test-utils'
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CustomTopbarLink } from '@/types'
 import ShellTopbar from '../ShellTopbar.vue'
@@ -41,6 +41,15 @@ const adminSettingsState = reactive<{
   customTopbarLinks: [],
 })
 
+/**
+ * 测试环境里 matchMedia 的默认实现会命中所有媒体查询，
+ * 直接让顶栏进入折叠态。这里显式控制断点，避免隐式依赖。
+ */
+const mediaQueryState = { small: false }
+vi.mock('@vueuse/core', () => ({
+  useMediaQuery: () => ref(mediaQueryState.small),
+}))
+
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
   useRoute: () => ({ name: 'Dashboard', meta: { title: 'Dashboard' }, params: {} }),
@@ -75,6 +84,7 @@ describe('ShellTopbar custom links', () => {
 
   afterEach(() => {
     wrapper?.unmount()
+    mediaQueryState.small = false
     appState.cachedPublicSettings = { custom_topbar_links: [], custom_menu_items: [] }
     authState.user = { role: 'user', username: 'alice', email: 'alice@example.com', balance: 10, frozen_balance: 0 }
     authState.isAdmin = false
@@ -174,5 +184,27 @@ describe('ShellTopbar custom links', () => {
     expect(links).toHaveLength(1)
     expect(links[0].text()).toContain('运维站')
     expect(links[0].find('[data-icon="terminal"]').exists()).toBe(true)
+  })
+
+  it('collapses entries into a "more" menu on narrow viewports', async () => {
+    mediaQueryState.small = true
+    appState.cachedPublicSettings = {
+      custom_topbar_links: [
+        { id: 'store', label: '商店入口', url: 'https://ai.code1024.cc/', icon: 'shoppingBag', visibility: 'all', sort_order: 1 },
+      ],
+      custom_menu_items: [],
+    }
+
+    wrapper = mountTopbar()
+    expect(wrapper.findAll('[data-testid="topbar-custom-link"]')).toHaveLength(0)
+
+    const moreButton = wrapper.get('[data-testid="topbar-more-links"]')
+    expect(moreButton.attributes('aria-expanded')).toBe('false')
+    await moreButton.trigger('click')
+    expect(moreButton.attributes('aria-expanded')).toBe('true')
+
+    const menu = wrapper.get('.topbar__links-menu')
+    expect(menu.text()).toContain('商店入口')
+    expect(menu.find('a').attributes('href')).toBe('https://ai.code1024.cc/')
   })
 })

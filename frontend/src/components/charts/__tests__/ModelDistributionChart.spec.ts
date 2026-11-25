@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 import ModelDistributionChart from '../ModelDistributionChart.vue'
+import { CHART_MUTED_COLOR, CHART_SERIES_COLORS } from '@/utils/chartPalette'
 
 const messages: Record<string, string> = {
   'admin.dashboard.modelDistribution': 'Model Distribution',
@@ -183,8 +184,10 @@ describe('ModelDistributionChart', () => {
       'Others',
     ])
     expect(chartData.datasets[0].data).toEqual([12, 8, 0, 10])
-    expect(chartData.datasets[0].backgroundColor[0]).toBe('#3b82f6')
-    expect(chartData.datasets[0].backgroundColor[3]).toBe('#94a3b8')
+    // 断言「首色来自墨韵调色板、Others 用中性灰」，而不是绑定具体色值，
+    // 否则每次调整调色板都要改测试。
+    expect(chartData.datasets[0].backgroundColor[0]).toBe(CHART_SERIES_COLORS[0])
+    expect(chartData.datasets[0].backgroundColor[3]).toBe(CHART_MUTED_COLOR)
     expect(chartData.datasets[0].backgroundColor[3]).not.toBe(chartData.datasets[0].backgroundColor[0])
 
     const rows = wrapper.findAll('tbody tr')

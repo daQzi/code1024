@@ -377,6 +377,16 @@ function handleGlobalKeydown(event: KeyboardEvent) {
   if (event.isComposing) return
 
   if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
+    // 面板关闭时，页面输入框里的 ⌘K / Ctrl+K 是「删到行尾」等原生编辑操作，不能抢。
+    // 面板自身打开时仍允许用它收起。
+    const target = event.target as HTMLElement | null
+    const insidePanel = Boolean(panelRef.value && target && panelRef.value.contains(target))
+    const isEditable =
+      target?.isContentEditable ||
+      target?.tagName === 'INPUT' ||
+      target?.tagName === 'TEXTAREA' ||
+      target?.tagName === 'SELECT'
+    if (!props.open && isEditable && !insidePanel) return
     if (event.defaultPrevented) return
     event.preventDefault()
     emit('update:open', !props.open)

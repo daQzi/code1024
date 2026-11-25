@@ -16,7 +16,7 @@
               v-if="closable"
               type="button"
               class="ui-modal__close"
-              aria-label="关闭"
+              :aria-label="t('common.close')"
               @click="close"
             >
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -40,7 +40,10 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useDialogLayer } from '@/composables/useDialogLayer'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{

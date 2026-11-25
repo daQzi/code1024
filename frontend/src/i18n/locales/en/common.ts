@@ -49,6 +49,7 @@ export default {
     active: 'Active',
     inactive: 'Inactive',
     more: 'More',
+    moreLinks: 'More links',
     close: 'Close',
     toggleMenu: 'Toggle menu',
     userMenu: 'User menu',

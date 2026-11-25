@@ -72,14 +72,14 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
 
   // Brushed architectural chassis & gold optical accents
   const stageMat = new THREE.MeshStandardMaterial({
-    color: 0x100e16,
+    color: 0x131311,
     metalness: 0.72,
     roughness: 0.42,
     envMapIntensity: 0.45,
   })
   const goldTrimMat = new THREE.MeshStandardMaterial({
-    color: 0xfbbf24,
-    emissive: 0xd97706,
+    color: 0xb08a5c,
+    emissive: 0x9c7742,
     emissiveIntensity: 0.92,
     metalness: 0.82,
     roughness: 0.18,
@@ -115,8 +115,8 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
     side: THREE.FrontSide,
   })
   const imaxBezelMat = new THREE.MeshStandardMaterial({
-    color: 0x161224,
-    emissive: 0x78350f,
+    color: 0x1a1a17,
+    emissive: 0x4f3a23,
     emissiveIntensity: 0.2,
     metalness: 0.88,
     roughness: 0.22,
@@ -170,7 +170,7 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
   // Warm ambient optical glow behind IMAX
   const imaxGlowMat = new THREE.SpriteMaterial({
     map: softGlowTex,
-    color: 0xf59e0b,
+    color: 0x9c7742,
     transparent: true,
     opacity: 0.42,
     depthWrite: false,
@@ -312,7 +312,7 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
         float r2 = dot(c, c);
         if (r2 > 0.25) discard;
         float glow = smoothstep(0.25, 0.01, r2);
-        vec3 warmLantern = mix(vec3(1.0, 0.68, 0.18), vec3(1.0, 0.92, 0.68), glow);
+        vec3 warmLantern = mix(vec3(0.69, 0.54, 0.35), vec3(0.85, 0.80, 0.68), glow);
         gl_FragColor = vec4(warmLantern, glow * vPulse * mix(0.92, 0.42, uThemeT));
       }
     `,
@@ -372,8 +372,8 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
         new THREE.Vector3(1.6, 6.85, -0.9),
         new THREE.Vector3(5.2, 5.1, 1.4),
       ],
-      colorA: new THREE.Color(0xfbbf24),
-      colorB: new THREE.Color(0xfef08a),
+      colorA: new THREE.Color(0xb08a5c),
+      colorB: new THREE.Color(0xd9cba8),
       speed: 0.24,
     },
     {
@@ -383,8 +383,8 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
         new THREE.Vector3(2.4, 6.2, -1.6),
         new THREE.Vector3(5.6, 2.8, -0.4),
       ],
-      colorA: new THREE.Color(0xc084fc),
-      colorB: new THREE.Color(0xf472b6),
+      colorA: new THREE.Color(0x9a9384),
+      colorB: new THREE.Color(0xab6055),
       speed: 0.31,
     },
   ]
@@ -398,7 +398,7 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
   const filamentRunners: FilamentRunner[] = []
   const sparkGeo = new THREE.OctahedronGeometry(0.11, 0)
   geometries.push(sparkGeo)
-  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xfef3c7 })
+  const sparkMat = new THREE.MeshBasicMaterial({ color: 0xe6ded0 })
   materials.push(sparkMat)
 
   filamentDefs.forEach((def, fIdx) => {
@@ -510,17 +510,17 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
         vec3 n = normalize(vNormalW);
         float lightMix = clamp(dot(n, normalize(vec3(-0.4, 0.85, 0.55))) * 0.5 + 0.5, 0.0, 1.0);
 
-        vec3 darkStone = mix(vec3(0.032, 0.025, 0.068), vec3(0.088, 0.065, 0.14), lightMix);
-        vec3 lightStone = mix(vec3(0.86, 0.83, 0.88), vec3(0.98, 0.96, 0.94), lightMix);
+        vec3 darkStone = mix(vec3(0.045, 0.042, 0.038), vec3(0.105, 0.098, 0.086), lightMix);
+        vec3 lightStone = mix(vec3(0.85, 0.84, 0.82), vec3(0.96, 0.95, 0.93), lightMix);
         vec3 baseBody = mix(darkStone, lightStone, uThemeT);
 
-        vec3 goldGlow = vec3(1.0, 0.74, 0.22);
-        vec3 violetGlow = vec3(0.84, 0.36, 0.94);
+        vec3 goldGlow = vec3(0.69, 0.57, 0.40);
+        vec3 violetGlow = vec3(0.60, 0.55, 0.48);
         vec3 pulseColor = mix(goldGlow, violetGlow, fract(vInstPhase * 0.43));
 
         float energy = (edgeStrip * 0.38 + centerSlot * flowWave * 1.15) * isVerticalSide * heightFade;
         vec3 darkCol = baseBody + pulseColor * energy * 1.15;
-        vec3 lightCol = mix(baseBody, vec3(0.82, 0.52, 0.08), clamp(energy * 0.46, 0.0, 0.65));
+        vec3 lightCol = mix(baseBody, vec3(0.51, 0.40, 0.26), clamp(energy * 0.46, 0.0, 0.65));
 
         gl_FragColor = vec4(mix(darkCol, lightCol, uThemeT), 1.0);
       }
@@ -613,8 +613,8 @@ export function buildQimuStudioWorld(renderer: THREE.WebGLRenderer, highTier: bo
       }
     }
 
-    stageMat.color.setHex(themeT > 0.5 ? 0xece9e4 : 0x100e16)
-    imaxBezelMat.color.setHex(themeT > 0.5 ? 0xd6d3d1 : 0x161224)
+    stageMat.color.setHex(themeT > 0.5 ? 0xece9e4 : 0x131311)
+    imaxBezelMat.color.setHex(themeT > 0.5 ? 0xd6d3d1 : 0x1a1a17)
     goldTrimMat.emissiveIntensity = THREE.MathUtils.lerp(0.92, 0.38, themeT)
     imaxGlowMat.opacity = THREE.MathUtils.lerp(0.42, 0.16, themeT) * (0.85 + 0.15 * focusWeight)
   }

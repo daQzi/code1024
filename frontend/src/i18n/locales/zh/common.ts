@@ -49,6 +49,7 @@ export default {
     active: '启用',
     inactive: '禁用',
     more: '更多',
+    moreLinks: '更多入口',
     close: '关闭',
     toggleMenu: '切换菜单',
     userMenu: '用户菜单',
