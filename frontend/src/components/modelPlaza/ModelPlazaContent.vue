@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-5">
+  <div class="space-y-3.5">
     <!-- 页头(独立形态下展示标题;后台形态 AppHeader 已有页面标题) -->
     <div v-if="!embedded">
       <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">{{ t('modelPlaza.title') }}</h1>
@@ -33,21 +33,57 @@
       {{ t('modelPlaza.loadFailed') }}
     </div>
     <template v-else>
-      <!-- 近期模型状态监控面板（时间窗口切换 + 颜色阈值图例） -->
+      <!-- 近期模型状态监控面板（单行紧凑态：时间窗口切换 + 颜色阈值图例 + 悬浮说明） -->
       <section
-        class="rounded-2xl border border-gray-200/80 bg-white/80 px-5 py-4 shadow-card backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-800/60"
+        class="relative z-20 rounded-2xl border border-gray-200/80 bg-white/80 px-4 py-2.5 shadow-card backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-800/60"
         data-testid="plaza-status-banner"
       >
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <div>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div class="flex items-center gap-1.5">
             <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
               {{ t('modelPlaza.catalog.recentStatusTitle') }}
             </h2>
-            <p class="mt-1 max-w-4xl text-xs leading-5 text-gray-500 dark:text-dark-400">
-              {{ t('modelPlaza.catalog.recentStatusDesc') }}
-            </p>
+            <div class="group/status-hint relative inline-flex items-center">
+              <button
+                type="button"
+                class="inline-flex h-5 w-5 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-dark-400 dark:hover:bg-dark-700 dark:hover:text-gray-200"
+                :aria-label="t('modelPlaza.catalog.recentStatusDesc')"
+                :title="t('modelPlaza.catalog.recentStatusDesc')"
+              >
+                <Icon name="infoCircle" size="xs" class="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+              <div
+                role="tooltip"
+                class="pointer-events-none invisible absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-gray-200/90 bg-white/95 p-3 text-xs leading-5 text-gray-600 opacity-0 shadow-lg backdrop-blur-md transition-opacity duration-150 group-hover/status-hint:visible group-hover/status-hint:opacity-100 group-focus-within/status-hint:visible group-focus-within/status-hint:opacity-100 dark:border-dark-600 dark:bg-dark-800/95 dark:text-dark-300 sm:w-80"
+              >
+                {{ t('modelPlaza.catalog.recentStatusDesc') }}
+              </div>
+            </div>
           </div>
-          <div class="flex flex-wrap items-center gap-3 text-[11px] text-gray-500 dark:text-dark-400">
+
+          <div
+            class="inline-flex flex-wrap items-center gap-0.5 rounded-xl border border-gray-200/80 bg-gray-100/70 p-0.5 dark:border-dark-700 dark:bg-dark-900/50"
+            role="group"
+            :aria-label="t('modelPlaza.catalog.recentStatusTitle')"
+            data-testid="plaza-window-selector"
+          >
+            <button
+              v-for="win in WINDOW_OPTIONS"
+              :key="win"
+              type="button"
+              class="min-w-[40px] rounded-lg px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500"
+              :class="selectedWindow === win
+                ? 'bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-500/30 dark:bg-dark-800 dark:text-emerald-300 dark:ring-emerald-400/30'
+                : 'text-gray-600 hover:text-gray-900 dark:text-dark-300 dark:hover:text-white'"
+              :aria-pressed="selectedWindow === win"
+              :data-testid="`plaza-window-${win}`"
+              @click="selectedWindow = win"
+            >
+              {{ t(`modelPlaza.catalog.windows.${win}`) }}
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-dark-400 xl:ml-auto">
             <span class="inline-flex items-center gap-1.5">
               <i class="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
               {{ t('modelPlaza.catalog.legendHealthy') }}
@@ -64,63 +100,110 @@
               <i class="h-2 w-2 rounded-full bg-gray-300 dark:bg-dark-600" aria-hidden="true" />
               {{ t('modelPlaza.catalog.legendNoData') }}
             </span>
-          </div>
-        </div>
-        <div class="mt-3 flex flex-wrap items-center gap-2">
-          <div class="flex flex-wrap items-center gap-1.5" role="group" :aria-label="t('modelPlaza.catalog.recentStatusTitle')" data-testid="plaza-window-selector">
-            <button
-              v-for="win in WINDOW_OPTIONS"
-              :key="win"
-              type="button"
-              class="min-w-[44px] rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500"
-              :class="selectedWindow === win
-                ? 'border-emerald-500 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400 dark:bg-emerald-500/15 dark:text-emerald-300'
-                : 'border-gray-200 bg-white/70 text-gray-600 hover:border-gray-300 hover:text-gray-900 dark:border-dark-600 dark:bg-dark-900/40 dark:text-dark-300 dark:hover:border-dark-500 dark:hover:text-white'"
-              :aria-pressed="selectedWindow === win"
-              :data-testid="`plaza-window-${win}`"
-              @click="selectedWindow = win"
+            <span
+              v-if="formattedUpdatedAt"
+              class="border-l border-gray-200 pl-3 tabular-nums text-gray-400 dark:border-dark-700 dark:text-dark-400"
+              data-testid="plaza-updated-at"
             >
-              {{ t(`modelPlaza.catalog.windows.${win}`) }}
-            </button>
+              {{ t('modelPlaza.catalog.updatedAt', { time: formattedUpdatedAt }) }}
+            </span>
           </div>
-          <span
-            v-if="formattedUpdatedAt"
-            class="ml-auto text-xs tabular-nums text-gray-400 dark:text-dark-400"
-            data-testid="plaza-updated-at"
-          >
-            {{ t('modelPlaza.catalog.updatedAt', { time: formattedUpdatedAt }) }}
-          </span>
         </div>
       </section>
 
-      <!-- 筛选区:平台 → 分组 → 倍率 -->
-      <PlazaFilterBar
-        :platforms="platforms"
-        :groups="groupOptions"
-        :rates="rates"
-        :platform="selectedPlatform"
-        :group-id="selectedGroupId"
-        :rate="selectedRate"
-        :search="searchQuery"
-        @update:platform="selectedPlatform = $event"
-        @update:group-id="selectedGroupId = $event"
-        @update:rate="selectedRate = $event"
-        @update:search="searchQuery = $event"
-      />
-      <div class="flex flex-wrap items-end gap-3">
-        <div class="w-full sm:w-40">
-          <span class="input-label">{{ t('modelPlaza.catalog.kind') }}</span>
-          <Select v-model="selectedKind" :options="kindOptions" :aria-label="t('modelPlaza.catalog.kind')" />
+      <!-- 统一筛选与搜索卡片:顶部工具栏(搜索 + 计费类型 + 声明协议 + 统计/视图) + 平台/倍率/分组筛选 -->
+      <section
+        class="rounded-2xl border border-gray-200/80 bg-white/80 shadow-card backdrop-blur-md dark:border-dark-700/70 dark:bg-dark-800/60"
+        data-testid="plaza-filter-panel"
+      >
+        <div class="plaza-toolbar flex flex-wrap items-center gap-2 border-b border-gray-200/70 px-4 py-2.5 dark:border-dark-700/70">
+          <div class="relative min-w-[200px] flex-1 sm:max-w-sm lg:max-w-md">
+            <Icon
+              name="search"
+              size="sm"
+              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-dark-500"
+            />
+            <input
+              v-model="searchQuery"
+              type="text"
+              :aria-label="t('modelPlaza.filters.searchPlaceholder')"
+              :placeholder="t('modelPlaza.filters.searchPlaceholder')"
+              class="plaza-search-input input h-9 w-full rounded-xl py-0 pl-9 pr-8 text-sm"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600 dark:text-dark-500 dark:hover:text-gray-300"
+              :aria-label="t('common.clear')"
+              @click="searchQuery = ''"
+            >
+              <Icon name="x" size="xs" class="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div class="plaza-compact-select w-full sm:w-auto sm:min-w-[148px]">
+            <Select v-model="selectedKind" :options="kindOptions" :aria-label="t('modelPlaza.catalog.kind')">
+              <template #selected>
+                <span class="inline-flex items-center gap-1.5 truncate">
+                  <span class="text-gray-400 dark:text-dark-400">{{ t('modelPlaza.catalog.kind') }}</span>
+                  <span :class="selectedKind !== 'all' ? 'font-medium text-primary-700 dark:text-primary-300' : 'text-gray-800 dark:text-gray-100'">
+                    {{ selectedKindLabel }}
+                  </span>
+                </span>
+              </template>
+            </Select>
+          </div>
+
+          <div class="plaza-compact-select w-full sm:w-auto sm:min-w-[164px]">
+            <Select v-model="selectedProtocol" :options="protocolOptions" :aria-label="t('modelPlaza.catalog.protocol')">
+              <template #selected>
+                <span class="inline-flex items-center gap-1.5 truncate">
+                  <span class="text-gray-400 dark:text-dark-400">{{ t('modelPlaza.catalog.protocol') }}</span>
+                  <span :class="selectedProtocol !== 'all' ? 'font-medium text-primary-700 dark:text-primary-300' : 'text-gray-800 dark:text-gray-100'">
+                    {{ selectedProtocolLabel }}
+                  </span>
+                </span>
+              </template>
+            </Select>
+          </div>
+
+          <div class="ml-auto flex items-center gap-2.5">
+            <p role="status" class="whitespace-nowrap text-xs tabular-nums text-gray-500 dark:text-dark-400">
+              {{ t('modelPlaza.catalog.modelCount', { count: modelCount }) }}
+            </p>
+            <div
+              class="inline-flex h-9 items-center gap-0.5 rounded-xl border border-gray-200/80 bg-gray-100/70 p-0.5 dark:border-dark-700 dark:bg-dark-900/50"
+              :aria-label="t('modelPlaza.catalog.view')"
+            >
+              <button
+                v-for="option in ['cards', 'table'] as const"
+                :key="option"
+                type="button"
+                class="h-full rounded-[9px] px-2.5 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500"
+                :class="view === option ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-800 dark:text-primary-300' : 'text-gray-500 hover:text-gray-800 dark:text-dark-400 dark:hover:text-gray-200'"
+                :aria-pressed="view === option"
+                @click="view = option"
+              >
+                {{ t(`modelPlaza.catalog.${option}`) }}
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="w-full sm:w-48">
-          <span class="input-label">{{ t('modelPlaza.catalog.protocol') }}</span>
-          <Select v-model="selectedProtocol" :options="protocolOptions" :aria-label="t('modelPlaza.catalog.protocol')" />
+
+        <div class="px-4 py-2.5">
+          <PlazaFilterBar
+            :platforms="platforms"
+            :groups="groupOptions"
+            :rates="rates"
+            :platform="selectedPlatform"
+            :group-id="selectedGroupId"
+            :rate="selectedRate"
+            @update:platform="selectedPlatform = $event"
+            @update:group-id="selectedGroupId = $event"
+            @update:rate="selectedRate = $event"
+          />
         </div>
-        <p role="status" class="pb-2 text-xs text-gray-500">{{ t('modelPlaza.catalog.modelCount', { count: modelCount }) }}</p>
-        <div class="ml-auto flex gap-1 rounded-lg border border-gray-200 p-1 dark:border-dark-700" :aria-label="t('modelPlaza.catalog.view')">
-          <button v-for="option in ['cards', 'table'] as const" :key="option" type="button" class="rounded-md px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500" :class="view === option ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : 'text-gray-500'" :aria-pressed="view === option" @click="view = option">{{ t(`modelPlaza.catalog.${option}`) }}</button>
-        </div>
-      </div>
+      </section>
 
       <!-- 分组分节的模型清单(默认按生效倍率升序) -->
       <div v-if="filteredGroups.length > 0" class="space-y-5">
@@ -211,6 +294,12 @@ const protocolOptions = computed(() => [
   { value: 'all', label: t('modelPlaza.filters.all') },
   ...protocols.value.map(value => ({ value, label: value }))
 ])
+const selectedKindLabel = computed(() =>
+  kindOptions.value.find((o) => o.value === selectedKind.value)?.label ?? t('modelPlaza.filters.all')
+)
+const selectedProtocolLabel = computed(() =>
+  protocolOptions.value.find((o) => o.value === selectedProtocol.value)?.label ?? t('modelPlaza.filters.all')
+)
 const modelCount = computed(() => new Set(filteredGroups.value.flatMap(group => group.models.map(model => model.id ?? JSON.stringify([model.platform, model.name])))).size)
 
 const searchActive = computed(() => searchQuery.value.trim() !== '')
@@ -314,5 +403,25 @@ const filteredGroups = computed(() => {
 
 .plaza-description :deep(blockquote) {
   @apply my-2 border-l-4 border-gray-300 pl-3 text-gray-600 dark:border-dark-600 dark:text-dark-300;
+}
+
+.plaza-toolbar .plaza-search-input {
+  height: 2.25rem;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: 0.75rem;
+}
+
+.plaza-toolbar .plaza-compact-select :deep(.select-trigger) {
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+.plaza-toolbar .plaza-compact-select :deep(.select-icon svg) {
+  width: 1rem;
+  height: 1rem;
 }
 </style>
